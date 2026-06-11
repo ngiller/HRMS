@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Mockups — HRMS Application</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#1A56DB', 600: '#1e40af', 700: '#1e3a8a', 800: '#1e3a8a', 900: '#172554' },
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: #f3f4f6; }
+    .mockup-container { max-width: 1400px; margin: 0 auto; }
+    .screen-preview { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); overflow: hidden; }
+    .screen-tab { transition: all 0.2s; cursor: pointer; border-bottom: 3px solid transparent; }
+    .screen-tab.active { border-bottom-color: #1A56DB; color: #1A56DB; font-weight: 600; }
+    .screen-tab:hover { background: #f9fafb; }
+    .wireframe-label { position: absolute; top: 8px; left: 12px; font-size: 11px; color: #9ca3af; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 500; background: rgba(255,255,255,0.9); padding: 2px 8px; border-radius: 4px; border: 1px solid #e5e7eb; }
+    .mockup-content { display: none; }
+    .mockup-content.active { display: block; }
+    .sidebar-item { padding: 10px 16px; border-radius: 8px; cursor: pointer; transition: all 0.15s; font-size: 14px; }
+    .sidebar-item:hover { background: #f3f4f6; }
+    .sidebar-item.active { background: #dbeafe; color: #1A56DB; font-weight: 600; }
+    .overview-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; }
+
+    /* Toast notification */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #10b981; color: white; padding: 12px 24px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: none; z-index: 9999; font-size: 14px; }
+
+    /* Mock scrollbar */
+    .mock-scroll::-webkit-scrollbar { width: 6px; }
+    .mock-scroll::-webkit-scrollbar-track { background: #f3f4f6; }
+    .mock-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    /* Print styles for saving as PDF */
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white; }
+      .screen-preview { box-shadow: none; border: 1px solid #e5e7eb; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast" id="toast">✅ Ini adalah wireframe — tampilan final akan dikembangkan saat implementasi</div>
+
+<div class="flex h-screen">
+  <!-- Sidebar Navigation -->
+  <div class="no-print w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+    <div class="p-5 border-b border-gray-200">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-primary-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">HR</div>
+        <div>
+          <div class="font-bold text-gray-900 text-base">HRMS</div>
+          <div class="text-xs text-gray-400">UI Mockups v1.0</div>
+        </div>
+      </div>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3 space-y-1 mock-scroll">
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-3 pb-1">Overview</div>
+      <div class="sidebar-item active" onclick="showMockup('overview')">
+        <span class="mr-3">📋</span> Overview Semua Screen
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Auth</div>
+      <div class="sidebar-item" onclick="showMockup('login')">
+        <span class="mr-3">🔐</span> Login
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Dashboard</div>
+      <div class="sidebar-item" onclick="showMockup('dashboard')">
+        <span class="mr-3">📊</span> Dashboard
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Karyawan</div>
+      <div class="sidebar-item" onclick="showMockup('employee-list')">
+        <span class="mr-3">👥</span> Daftar Karyawan
+      </div>
+      <div class="sidebar-item" onclick="showMockup('employee-detail')">
+        <span class="mr-3">👤</span> Detail Karyawan
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Absensi</div>
+      <div class="sidebar-item" onclick="showMockup('attendance-checkin')">
+        <span class="mr-3">📸</span> Check-in (Mobile)
+      </div>
+      <div class="sidebar-item" onclick="showMockup('attendance-history')">
+        <span class="mr-3">📅</span> Riwayat Absensi
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Payroll</div>
+      <div class="sidebar-item" onclick="showMockup('payslip')">
+        <span class="mr-3">💰</span> Slip Gaji
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Request</div>
+      <div class="sidebar-item" onclick="showMockup('leave')">
+        <span class="mr-3">🏖️</span> Pengajuan Cuti
+      </div>
+      <div class="sidebar-item" onclick="showMockup('shift-change')">
+        <span class="mr-3">🔄</span> Shift Change
+      </div>
+
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">Mobile</div>
+      <div class="sidebar-item" onclick="showMockup('mobile')">
+        <span class="mr-3">📱</span> Mobile Navigation
+      </div>
+    </div>
+    <div class="p-4 border-t border-gray-200 text-xs text-gray-400 text-center">
+      <span class="inline-flex items-center gap-1">⚡ Desain untuk implementasi</span>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="flex-1 overflow-y-auto mock-scroll">
+    <div class="mockup-container p-6">
+
+      <!-- OVERVIEW -->
+      <div id="mockup-overview" class="mockup-content active">
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-gray-900">UI Mockups — HRMS Application</h1>
+          <p class="text-gray-500 mt-1">Wireframe untuk layar kritis aplikasi. Klik sidebar kiri untuk melihat detail setiap screen.</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div class="overview-card">
+            <div class="text-3xl mb-1">🔐</div>
+            <div class="text-lg font-bold text-gray-900">Auth</div>
+            <div class="text-sm text-gray-400">Login screen</div>
+          </div>
+          <div class="overview-card">
+            <div class="text-3xl mb-1">📊</div>
+            <div class="text-lg font-bold text-gray-900">2 Screens</div>
+            <div class="text-sm text-gray-400">Dashboard + Employee List</div>
+          </div>
+          <div class="overview-card">
+            <div class="text-3xl mb-1">📱</div>
+            <div class="text-lg font-bold text-gray-900">Mobile</div>
+            <div class="text-sm text-gray-400">Check-in + Tab navigation</div>
+          </div>
+          <div class="overview-card">
+            <div class="text-3xl mb-1">📄</div>
+            <div class="text-lg font-bold text-gray-900">Forms</div>
+            <div class="text-sm text-gray-400">Cuti, Shift, Payslip</div>
+          </div>
+        </div>
+
+        <!-- Grid of thumbnails -->
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('login')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">🔐</div>
+            <div class="font-semibold text-gray-900">Login</div>
+            <div class="text-xs text-gray-400">Email + password + lupa password</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('dashboard')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">📊</div>
+            <div class="font-semibold text-gray-900">Dashboard</div>
+            <div class="text-xs text-gray-400">Cards, charts, pending approvals</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('employee-list')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">👥</div>
+            <div class="font-semibold text-gray-900">Daftar Karyawan</div>
+            <div class="text-xs text-gray-400">AG Grid table + filter</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('employee-detail')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">👤</div>
+            <div class="font-semibold text-gray-900">Detail Karyawan</div>
+            <div class="text-xs text-gray-400">Profile + tabs + history</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('attendance-checkin')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">📸</div>
+            <div class="font-semibold text-gray-900">Check-in Mobile</div>
+            <div class="text-xs text-gray-400">Face detection + GPS</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('payslip')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">💰</div>
+            <div class="font-semibold text-gray-900">Slip Gaji</div>
+            <div class="text-xs text-gray-400">Income, deductions, net salary</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('leave')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">🏖️</div>
+            <div class="font-semibold text-gray-900">Pengajuan Cuti</div>
+            <div class="text-xs text-gray-400">Form + sisa kuota</div>
+          </div>
+          <div class="overview-card cursor-pointer hover:shadow-md transition" onclick="showMockup('shift-change')">
+            <div class="aspect-[4/3] bg-gray-50 rounded-lg mb-3 flex items-center justify-center text-4xl border border-gray-200">🔄</div>
+            <div class="font-semibold text-gray-900">Shift Change</div>
+            <div class="text-xs text-gray-400">Individual + Swap request</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== LOGIN ====== -->
+      <div id="mockup-login" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Login</div>
+          <span class="badge bg-gray-100 text-gray-600">Desktop & Mobile</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Desktop -->
+          <div class="screen-preview relative">
+            <div class="wireframe-label">Desktop View</div>
+            <div class="min-h-[500px] flex">
+              <!-- Left decorative panel -->
+              <div class="hidden md:flex w-2/5 bg-gradient-to-br from-primary-500 to-primary-800 p-8 flex-col justify-between text-white relative">
+                <div>
+                  <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center font-bold text-lg mb-8">HR</div>
+                  <h2 class="text-2xl font-bold leading-tight">Sistem Informasi<br>Sumber Daya Manusia</h2>
+                  <p class="text-white/70 text-sm mt-3">HRMS terintegrasi untuk perusahaan Indonesia</p>
+                </div>
+                <div class="text-white/50 text-xs">© 2026 HRMS Application</div>
+              </div>
+              <!-- Right form -->
+              <div class="w-full md:w-3/5 p-8 flex flex-col justify-center">
+                <div class="max-w-xs mx-auto w-full">
+                  <h1 class="text-xl font-bold text-gray-900">Masuk</h1>
+                  <p class="text-sm text-gray-500 mt-1">Silakan login dengan akun Anda</p>
+                  <div class="mt-6 space-y-4">
+                    <div>
+                      <label class="text-sm font-medium text-gray-700">Email</label>
+                      <input type="email" value="budi@company.com" class="w-full mt-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-gray-50/50" placeholder="nama@company.com" readonly>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-gray-700">Password</label>
+                      <input type="password" value="••••••••" class="w-full mt-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-gray-50/50" readonly>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                      <label class="flex items-center gap-2 text-gray-500"><input type="checkbox" checked class="rounded"><span>Ingat saya</span></label>
+                      <a href="#" class="text-primary-500 hover:underline text-sm">Lupa password?</a>
+                    </div>
+                    <button class="w-full py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm hover:bg-primary-600 transition">Masuk</button>
+                    <div class="relative my-4">
+                      <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
+                      <div class="relative flex justify-center text-xs"><span class="bg-white px-2 text-gray-400">atau</span></div>
+                    </div>
+                    <button class="w-full py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-50 transition flex items-center justify-center gap-2">
+                      <span class="text-lg">Ⓜ️</span> Masuk dengan Microsoft
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Mobile -->
+          <div class="screen-preview relative">
+            <div class="wireframe-label">Mobile View (PWA)</div>
+            <div class="flex justify-center p-4">
+              <div class="w-[280px] bg-white border-2 border-gray-200 rounded-[32px] overflow-hidden shadow-lg">
+                <div class="bg-primary-500 px-5 pt-10 pb-6 text-white text-center">
+                  <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-bold text-xl mx-auto mb-3">HR</div>
+                  <h2 class="font-bold text-lg">HRMS</h2>
+                  <p class="text-white/70 text-xs">Masuk ke akun Anda</p>
+                </div>
+                <div class="p-5 space-y-3">
+                  <input type="email" value="budi@company.com" class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none" readonly>
+                  <input type="password" value="••••••••" class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none" readonly>
+                  <button class="w-full py-2.5 bg-primary-500 text-white rounded-xl font-medium text-sm">Masuk</button>
+                  <a href="#" class="block text-center text-xs text-primary-500">Lupa password?</a>
+                  <!-- Bottom nav placeholder -->
+                  <div class="pt-4 flex justify-center gap-6 text-gray-300">
+                    <span>🏠</span> <span>📋</span> <span class="text-primary-500">📍</span> <span>👤</span> <span>⚙️</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== DASHBOARD ====== -->
+      <div id="mockup-dashboard" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Dashboard</div>
+          <span class="badge bg-green-100 text-green-700">Desktop</span>
+        </div>
+        <div class="screen-preview relative">
+          <div class="wireframe-label" style="position:static;display:inline-block;margin:12px 0 0 12px">Executive Dashboard — PT Maju Jaya</div>
+          <div class="p-6 pt-4">
+            <!-- Top bar -->
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+              <div class="relative w-72"><input type="text" class="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none" placeholder="Cari karyawan..." readonly></div>
+              <div class="flex items-center gap-4">
+                <span class="relative"><span class="w-2 h-2 bg-red-500 rounded-full absolute top-0 right-0"></span>🔔</span>
+                <div class="flex items-center gap-2"><div class="w-8 h-8 bg-gray-200 rounded-full"></div><span class="text-sm font-medium">Budi Hartono</span></div>
+              </div>
+            </div>
+            <!-- Stats cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="flex items-center justify-between"><div><div class="text-xs text-gray-400 font-medium">TOTAL KARYAWAN</div><div class="text-2xl font-bold text-gray-900 mt-1">150</div><div class="text-xs text-green-600 mt-1">↑ 3 dari bulan lalu</div></div><div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl">👥</div></div></div>
+              <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="flex items-center justify-between"><div><div class="text-xs text-gray-400 font-medium">HADIR HARI INI</div><div class="text-2xl font-bold text-gray-900 mt-1">142</div><div class="text-xs text-gray-500 mt-1">dari 150 karyawan</div></div><div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl">✅</div></div></div>
+              <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="flex items-center justify-between"><div><div class="text-xs text-gray-400 font-medium">PENDING APPROVAL</div><div class="text-2xl font-bold text-amber-600 mt-1">12</div><div class="text-xs text-amber-600 mt-1">↓ Perlu ditindaklanjuti</div></div><div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-2xl">⏳</div></div></div>
+              <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="flex items-center justify-between"><div><div class="text-xs text-gray-400 font-medium">PAYROLL BULAN INI</div><div class="text-2xl font-bold text-gray-900 mt-1">Rp425 Jt</div><div class="text-xs text-gray-500 mt-1">Take home pay</div></div><div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-2xl">💰</div></div></div>
+            </div>
+            <!-- Charts row -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              <div class="bg-white border border-gray-200 rounded-xl p-4 lg:col-span-2">
+                <div class="text-sm font-semibold text-gray-900 mb-3">Kehadiran Bulan Ini</div>
+                <div class="h-44 bg-gray-50 rounded-lg flex items-end justify-around px-4 pb-3 gap-2">
+                  <div class="flex flex-col items-center"><div class="w-8 bg-green-400 rounded-t" style="height:80px"></div><span class="text-xs mt-1">Sen</span><span class="text-xs text-gray-400">20</span></div>
+                  <div class="flex flex-col items-center"><div class="w-8 bg-green-400 rounded-t" style="height:92px"></div><span class="text-xs mt-1">Sel</span><span class="text-xs text-gray-400">23</span></div>
+                  <div class="flex flex-col items-center"><div class="w-8 bg-green-400 rounded-t" style="height:88px"></div><span class="text-xs mt-1">Rab</span><span class="text-xs text-gray-400">22</span></div>
+                  <div class="flex flex-col items-center"><div class="w-8 bg-amber-400 rounded-t" style="height:72px"></div><span class="text-xs mt-1">Kam</span><span class="text-xs text-gray-400">18</span></div>
+                  <div class="flex flex-col items-center"><div class="w-8 bg-green-400 rounded-t" style="height:96px"></div><span class="text-xs mt-1">Jum</span><span class="text-xs text-gray-400">24</span></div>
+                  <div class="flex flex-col items-center"><div class="w-8 bg-blue-300 rounded-t" style="height:60px"></div><span class="text-xs mt-1">Sab</span><span class="text-xs text-gray-400">15</span></div>
+                </div>
+              </div>
+              <div class="bg-white border border-gray-200 rounded-xl p-4">
+                <div class="text-sm font-semibold text-gray-900 mb-3">Komposisi Karyawan</div>
+                <div class="space-y-3">
+                  <div><div class="flex justify-between text-xs mb-1"><span>Tetap</span><span>100</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-primary-500 h-2 rounded-full" style="width:67%"></div></div></div>
+                  <div><div class="flex justify-between text-xs mb-1"><span>Kontrak</span><span>30</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-amber-500 h-2 rounded-full" style="width:20%"></div></div></div>
+                  <div><div class="flex justify-between text-xs mb-1"><span>Percobaan</span><span>15</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width:10%"></div></div></div>
+                  <div><div class="flex justify-between text-xs mb-1"><span>Harian</span><span>5</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-purple-500 h-2 rounded-full" style="width:3%"></div></div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Tables row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div class="bg-white border border-gray-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold text-gray-900">Pending Approval</span><span class="text-xs text-primary-500 hover:underline cursor-pointer">Lihat semua</span></div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between py-2 border-b border-gray-50"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 rounded-full"></div><div><div class="text-sm font-medium">Cuti Sakit</div><div class="text-xs text-gray-400">Budi Hartono — 3 hari</div></div></div><span class="badge bg-amber-100 text-amber-700">Menunggu</span></div>
+                  <div class="flex items-center justify-between py-2 border-b border-gray-50"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 rounded-full"></div><div><div class="text-sm font-medium">Reimbursement</div><div class="text-xs text-gray-400">Siti Rahayu — Rp500.000</div></div></div><span class="badge bg-amber-100 text-amber-700">Menunggu</span></div>
+                  <div class="flex items-center justify-between py-2"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 rounded-full"></div><div><div class="text-sm font-medium">Lembur</div><div class="text-xs text-gray-400">Andi Wijaya — 3 jam</div></div></div><span class="badge bg-amber-100 text-amber-700">Menunggu</span></div>
+                </div>
+              </div>
+              <div class="bg-white border border-gray-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold text-gray-900">Karyawan Baru</span><span class="text-xs text-primary-500 hover:underline cursor-pointer">Lihat semua</span></div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between py-2 border-b border-gray-50"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 rounded-full"></div><div><div class="text-sm font-medium">Rudi Hartono</div><div class="text-xs text-gray-400">Staff IT — Bergabung 01 Jun</div></div></div><span class="badge bg-green-100 text-green-700">Percobaan</span></div>
+                  <div class="flex items-center justify-between py-2 border-b border-gray-50"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 rounded-full"></div><div><div class="text-sm font-medium">Dewi Lestari</div><div class="text-xs text-gray-400">Finance Staff — Bergabung 01 Jun</div></div></div><span class="badge bg-green-100 text-green-700">Percobaan</span></div>
+                  <div class="flex items-center justify-between py-2"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 rounded-full"></div><div><div class="text-sm font-medium">Ahmad Fauzi</div><div class="text-xs text-gray-400">Sales — Bergabung 15 Mei</div></div></div><span class="badge bg-green-100 text-green-700">Percobaan</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== EMPLOYEE LIST ====== -->
+      <div id="mockup-employee-list" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Daftar Karyawan</div>
+          <span class="badge bg-blue-100 text-blue-700">AG Grid</span>
+        </div>
+        <div class="screen-preview relative">
+          <div class="p-5">
+            <!-- Toolbar -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <input type="text" class="w-64 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-gray-50" placeholder="🔍 Cari nama, NIP, email..." readonly>
+                <select class="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 outline-none"><option>Semua Departemen</option></select>
+                <select class="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 outline-none"><option>Semua Status</option></select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="px-3 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium">+ Tambah Karyawan</button>
+                <button class="px-3 py-2 border border-gray-200 rounded-lg text-sm">📥 Import</button>
+                <button class="px-3 py-2 border border-gray-200 rounded-lg text-sm">📤 Export</button>
+              </div>
+            </div>
+            <!-- AG Grid style table -->
+            <div class="border border-gray-200 rounded-xl overflow-hidden">
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider"><input type="checkbox"></th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-900">NIP ↕</th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-900">Nama Lengkap ↕</th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider">Departemen</th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider">Posisi</th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider">Status</th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider">Join Date</th>
+                    <th class="text-right py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wider">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr class="hover:bg-gray-50 cursor-pointer transition">
+                    <td class="py-3 px-4"><input type="checkbox"></td>
+                    <td class="py-3 px-4 font-mono text-xs text-gray-500">NIP-001</td>
+                    <td class="py-3 px-4"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-200 rounded-full"></div><span class="font-medium text-gray-900">Budi Hartono</span></div></td>
+                    <td class="py-3 px-4 text-gray-600">IT</td>
+                    <td class="py-3 px-4 text-gray-600">Staff IT</td>
+                    <td class="py-3 px-4"><span class="badge bg-green-100 text-green-700">Tetap</span></td>
+                    <td class="py-3 px-4 text-gray-500">15 Jan 2024</td>
+                    <td class="py-3 px-4 text-right"><span class="text-gray-400 cursor-pointer hover:text-gray-600">✏️</span></td>
+                  </tr>
+                  <tr class="hover:bg-gray-50 cursor-pointer transition">
+                    <td class="py-3 px-4"><input type="checkbox"></td>
+                    <td class="py-3 px-4 font-mono text-xs text-gray-500">NIP-002</td>
+                    <td class="py-3 px-4"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-200 rounded-full"></div><span class="font-medium text-gray-900">Siti Rahayu</span></div></td>
+                    <td class="py-3 px-4 text-gray-600">HR</td>
+                    <td class="py-3 px-4 text-gray-600">HR Manager</td>
+                    <td class="py-3 px-4"><span class="badge bg-green-100 text-green-700">Tetap</span></td>
+                    <td class="py-3 px-4 text-gray-500">01 Mar 2022</td>
+                    <td class="py-3 px-4 text-right"><span class="text-gray-400 cursor-pointer hover:text-gray-600">✏️</span></td>
+                  </tr>
+                  <tr class="hover:bg-gray-50 cursor-pointer transition">
+                    <td class="py-3 px-4"><input type="checkbox"></td>
+                    <td class="py-3 px-4 font-mono text-xs text-gray-500">NIP-003</td>
+                    <td class="py-3 px-4"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-200 rounded-full"></div><span class="font-medium text-gray-900">Andi Wijaya</span></div></td>
+                    <td class="py-3 px-4 text-gray-600">Finance</td>
+                    <td class="py-3 px-4 text-gray-600">Finance Manager</td>
+                    <td class="py-3 px-4"><span class="badge bg-green-100 text-green-700">Tetap</span></td>
+                    <td class="py-3 px-4 text-gray-500">01 Jan 2021</td>
+                    <td class="py-3 px-4 text-right"><span class="text-gray-400 cursor-pointer hover:text-gray-600">✏️</span></td>
+                  </tr>
+                  <tr class="hover:bg-gray-50 cursor-pointer transition">
+                    <td class="py-3 px-4"><input type="checkbox"></td>
+                    <td class="py-3 px-4 font-mono text-xs text-gray-500">NIP-004</td>
+                    <td class="py-3 px-4"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-200 rounded-full"></div><span class="font-medium text-gray-900">Rudi Hartono</span></div></td>
+                    <td class="py-3 px-4 text-gray-600">IT</td>
+                    <td class="py-3 px-4 text-gray-600">Staff IT</td>
+                    <td class="py-3 px-4"><span class="badge bg-amber-100 text-amber-700">Percobaan</span></td>
+                    <td class="py-3 px-4 text-gray-500">01 Jun 2026</td>
+                    <td class="py-3 px-4 text-right"><span class="text-gray-400 cursor-pointer hover:text-gray-600">✏️</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <!-- Pagination -->
+              <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+                <div class="text-sm text-gray-500">Menampilkan 1-10 dari 150 karyawan</div>
+                <div class="flex items-center gap-1">
+                  <button class="px-3 py-1 border border-gray-200 rounded text-sm bg-white text-gray-400">«</button>
+                  <button class="px-3 py-1 border border-primary-500 rounded text-sm bg-primary-500 text-white">1</button>
+                  <button class="px-3 py-1 border border-gray-200 rounded text-sm bg-white">2</button>
+                  <button class="px-3 py-1 border border-gray-200 rounded text-sm bg-white">3</button>
+                  <button class="px-3 py-1 border border-gray-200 rounded text-sm bg-white text-gray-400">»</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== EMPLOYEE DETAIL ====== -->
+      <div id="mockup-employee-detail" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Detail Karyawan</div>
+        </div>
+        <div class="screen-preview relative">
+          <div class="p-6">
+            <!-- Profile header -->
+            <div class="flex items-start gap-6 pb-6 border-b border-gray-100">
+              <div class="w-20 h-20 bg-gray-200 rounded-full shrink-0"></div>
+              <div class="flex-1">
+                <h2 class="text-xl font-bold text-gray-900">Budi Hartono</h2>
+                <p class="text-gray-500">Staff IT — Departemen IT</p>
+                <div class="flex items-center gap-3 mt-2">
+                  <span class="badge bg-green-100 text-green-700">Aktif</span>
+                  <span class="badge bg-blue-100 text-blue-700">NIP-001</span>
+                  <span class="text-xs text-gray-400">Bergabung 15 Jan 2024</span>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium">✏️ Edit</button>
+                <button class="px-4 py-2 border border-gray-200 rounded-lg text-sm">⚙️</button>
+              </div>
+            </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-200 mt-4 gap-6 text-sm">
+              <span class="pb-3 border-b-2 border-primary-500 text-primary-500 font-medium cursor-pointer">Informasi Pribadi</span>
+              <span class="pb-3 text-gray-500 cursor-pointer hover:text-gray-700">Pekerjaan</span>
+              <span class="pb-3 text-gray-500 cursor-pointer hover:text-gray-700">Keuangan</span>
+              <span class="pb-3 text-gray-500 cursor-pointer hover:text-gray-700">Dokumen</span>
+              <span class="pb-3 text-gray-500 cursor-pointer hover:text-gray-700">Riwayat</span>
+            </div>
+            <!-- Content -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+              <div class="space-y-4">
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">Nama Lengkap</label><p class="text-sm font-medium mt-1">Budi Hartono</p></div>
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">NIK</label><p class="text-sm font-medium mt-1 font-mono">3273 0115 0590 0001</p><span class="text-xs text-green-600">🔒 Terenkripsi</span></div>
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">Tempat & Tanggal Lahir</label><p class="text-sm font-medium mt-1">Jakarta, 15 Mei 1990</p></div>
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">Email</label><p class="text-sm font-medium mt-1">budi@company.com</p></div>
+              </div>
+              <div class="space-y-4">
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">Jenis Kelamin</label><p class="text-sm font-medium mt-1">Laki-laki</p></div>
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">Agama</label><p class="text-sm font-medium mt-1">Islam</p></div>
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">Status Pernikahan</label><p class="text-sm font-medium mt-1">Menikah — 2 Tanggungan (K2)</p></div>
+                <div><label class="text-xs text-gray-400 uppercase tracking-wider">No. Telepon</label><p class="text-sm font-medium mt-1">0812-3456-7890</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== ATTENDANCE CHECK-IN (Mobile) ====== -->
+      <div id="mockup-attendance-checkin" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Check-in Mobile</div>
+          <span class="badge bg-purple-100 text-purple-700">Mobile PWA</span>
+        </div>
+        <div class="flex justify-center">
+          <div class="screen-preview relative inline-block">
+            <div class="wireframe-label">Mobile Phone Simulation</div>
+            <div class="w-[320px] bg-white rounded-[32px] overflow-hidden shadow-lg border-2 border-gray-200 my-3 mx-auto">
+              <!-- Status bar -->
+              <div class="bg-gray-900 text-white text-xs px-6 py-2 flex justify-between">
+                <span>09:41</span>
+                <span class="flex gap-1">📶 📶 🔋</span>
+              </div>
+              <!-- Camera preview placeholder -->
+              <div class="bg-gray-900 h-56 flex items-center justify-center relative">
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div class="w-40 h-40 border-2 border-white/50 rounded-2xl"></div>
+                </div>
+                <div class="text-white/50 text-xs text-center">
+                  <div class="text-3xl mb-2">😐</div>
+                  <div>Arahkan wajah ke kamera</div>
+                </div>
+                <!-- GPS indicator -->
+                <div class="absolute bottom-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                  <span>📍</span> GPS: Terdeteksi
+                </div>
+              </div>
+              <!-- Form -->
+              <div class="p-5 space-y-4">
+                <div class="text-center">
+                  <div class="text-lg font-bold">Absen Masuk</div>
+                  <div class="text-sm text-gray-500">11 Juni 2026</div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between text-sm">
+                  <span class="text-gray-500">Lokasi</span>
+                  <span class="font-medium">Kantor Pusat — Sudirman</span>
+                  <span class="text-green-600 text-xs">✅ Valid</span>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between text-sm">
+                  <span class="text-gray-500">Jam Masuk</span>
+                  <span class="font-medium">08:02 WIB</span>
+                  <span class="text-amber-600 text-xs">⚠️ Terlambat 2 menit</span>
+                </div>
+                <button class="w-full py-3 bg-primary-500 text-white rounded-xl font-semibold text-sm">✅ Konfirmasi Absen Masuk</button>
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                  ⚠️ Pastikan foto wajah jelas dan berada dalam radius absensi
+                </div>
+              </div>
+              <!-- Bottom Tab -->
+              <div class="border-t border-gray-100 flex justify-around py-2 px-2 text-xs text-gray-400">
+                <span class="text-center"><span class="block text-lg mb-0.5">🏠</span>Home</span>
+                <span class="text-center"><span class="block text-lg mb-0.5">📋</span>Request</span>
+                <span class="text-center text-primary-500"><span class="block text-lg mb-0.5">📍</span>Absen</span>
+                <span class="text-center"><span class="block text-lg mb-0.5">💰</span>Gaji</span>
+                <span class="text-center"><span class="block text-lg mb-0.5">⚙️</span>Lainnya</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== ATTENDANCE HISTORY ====== -->
+      <div id="mockup-attendance-history" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Riwayat Absensi</div>
+        </div>
+        <div class="screen-preview relative">
+          <div class="p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2"><span class="text-lg font-bold">Juni 2026</span><span class="text-gray-400">◀ ▶</span></div>
+              <div class="flex gap-2">
+                <select class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"><option>Budi Hartono</option></select>
+                <button class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">📥 Export</button>
+              </div>
+            </div>
+            <!-- Summary cards -->
+            <div class="grid grid-cols-5 gap-3 mb-4 text-center text-sm">
+              <div class="bg-green-50 rounded-xl p-3"><div class="text-2xl font-bold text-green-600">18</div><div class="text-green-700 text-xs">Hadir</div></div>
+              <div class="bg-amber-50 rounded-xl p-3"><div class="text-2xl font-bold text-amber-600">2</div><div class="text-amber-700 text-xs">Terlambat</div></div>
+              <div class="bg-blue-50 rounded-xl p-3"><div class="text-2xl font-bold text-blue-600">1</div><div class="text-blue-700 text-xs">Izin</div></div>
+              <div class="bg-red-50 rounded-xl p-3"><div class="text-2xl font-bold text-red-600">0</div><div class="text-red-700 text-xs">Alpa</div></div>
+              <div class="bg-purple-50 rounded-xl p-3"><div class="text-2xl font-bold text-purple-600">8.2</div><div class="text-purple-700 text-xs">Rata² Jam</div></div>
+            </div>
+            <!-- Table -->
+            <div class="border border-gray-200 rounded-xl overflow-hidden">
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50"><tr>
+                  <th class="text-left py-2.5 px-4 font-semibold text-gray-600 text-xs uppercase">Tanggal</th>
+                  <th class="text-left py-2.5 px-4 font-semibold text-gray-600 text-xs uppercase">Check-in</th>
+                  <th class="text-left py-2.5 px-4 font-semibold text-gray-600 text-xs uppercase">Check-out</th>
+                  <th class="text-left py-2.5 px-4 font-semibold text-gray-600 text-xs uppercase">Jam Kerja</th>
+                  <th class="text-left py-2.5 px-4 font-semibold text-gray-600 text-xs uppercase">Status</th>
+                </tr></thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr class="hover:bg-gray-50"><td class="py-2.5 px-4">11 Jun 2026</td><td class="py-2.5 px-4">08:02</td><td class="py-2.5 px-4">17:00</td><td class="py-2.5 px-4">8.0</td><td class="py-2.5 px-4"><span class="badge bg-amber-100 text-amber-700">Terlambat</span></td></tr>
+                  <tr class="hover:bg-gray-50"><td class="py-2.5 px-4">10 Jun 2026</td><td class="py-2.5 px-4">07:55</td><td class="py-2.5 px-4">17:05</td><td class="py-2.5 px-4">8.2</td><td class="py-2.5 px-4"><span class="badge bg-green-100 text-green-700">Hadir</span></td></tr>
+                  <tr class="hover:bg-gray-50"><td class="py-2.5 px-4">09 Jun 2026</td><td class="py-2.5 px-4">07:58</td><td class="py-2.5 px-4">17:00</td><td class="py-2.5 px-4">8.0</td><td class="py-2.5 px-4"><span class="badge bg-green-100 text-green-700">Hadir</span></td></tr>
+                  <tr class="hover:bg-gray-50"><td class="py-2.5 px-4">08 Jun 2026</td><td class="py-2.5 px-4">—</td><td class="py-2.5 px-4">—</td><td class="py-2.5 px-4">—</td><td class="py-2.5 px-4"><span class="badge bg-blue-100 text-blue-700">Izin</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== PAYSLIP ====== -->
+      <div id="mockup-payslip" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Slip Gaji</div>
+          <span class="badge bg-green-100 text-green-700">Payslip Digital</span>
+        </div>
+        <div class="screen-preview relative">
+          <div class="wireframe-label" style="position:static;display:inline-block;margin:12px 0 0 12px">Payslip Preview — Juni 2026</div>
+          <div class="p-6">
+            <div class="max-w-2xl mx-auto border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
+              <!-- Header -->
+              <div class="text-center pb-4 border-b border-gray-200">
+                <div class="text-lg font-bold">PT Maju Jaya</div>
+                <div class="text-sm text-gray-500">Slip Gaji — Juni 2026</div>
+              </div>
+              <!-- Employee info -->
+              <div class="grid grid-cols-2 gap-4 py-4 text-sm border-b border-gray-100">
+                <div><span class="text-gray-400">Nama</span><p class="font-medium">Budi Hartono</p></div>
+                <div><span class="text-gray-400">NIP</span><p class="font-medium">NIP-001</p></div>
+                <div><span class="text-gray-400">Departemen</span><p class="font-medium">IT</p></div>
+                <div><span class="text-gray-400">Posisi</span><p class="font-medium">Staff IT</p></div>
+              </div>
+              <!-- Income -->
+              <div class="py-3 border-b border-gray-100">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Pendapatan</div>
+                <div class="space-y-1.5 text-sm">
+                  <div class="flex justify-between"><span>Gaji Pokok</span><span>Rp5.000.000</span></div>
+                  <div class="flex justify-between"><span>Tunj. Jabatan</span><span>Rp500.000</span></div>
+                  <div class="flex justify-between"><span>Tunj. Transport</span><span>Rp300.000</span></div>
+                  <div class="flex justify-between"><span>Uang Lembur</span><span>Rp450.000</span></div>
+                  <div class="flex justify-between font-semibold text-gray-900 pt-2 border-t border-gray-100"><span>Total Pendapatan</span><span>Rp6.250.000</span></div>
+                </div>
+              </div>
+              <!-- Deductions -->
+              <div class="py-3 border-b border-gray-100">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Potongan</div>
+                <div class="space-y-1.5 text-sm">
+                  <div class="flex justify-between text-red-600"><span>PPh 21</span><span>-Rp25.000</span></div>
+                  <div class="flex justify-between"><span>BPJS Kesehatan</span><span>-Rp50.000</span></div>
+                  <div class="flex justify-between"><span>BPJS JHT</span><span>-Rp100.000</span></div>
+                  <div class="flex justify-between"><span>BPJS JP</span><span>-Rp50.000</span></div>
+                  <div class="flex justify-between"><span>Pinjaman</span><span>-Rp200.000</span></div>
+                  <div class="flex justify-between font-semibold text-gray-900 pt-2 border-t border-gray-100"><span>Total Potongan</span><span>-Rp425.000</span></div>
+                </div>
+              </div>
+              <!-- Net -->
+              <div class="py-4">
+                <div class="flex justify-between text-lg font-bold"><span>Take Home Pay</span><span class="text-primary-600">Rp5.825.000</span></div>
+              </div>
+              <!-- Actions -->
+              <div class="flex gap-2 pt-3 border-t border-gray-100">
+                <button class="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium flex-1">📥 Download PDF</button>
+                <button class="px-4 py-2 border border-gray-200 rounded-lg text-sm">🔒 Kirim ke Email</button>
+              </div>
+              <div class="text-xs text-gray-400 text-center mt-3">⚠️ Slip gaji ini adalah dokumen rahasia. Jangan bagikan ke pihak lain.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== LEAVE REQUEST ====== -->
+      <div id="mockup-leave" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Pengajuan Cuti</div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Form -->
+          <div class="screen-preview relative">
+            <div class="p-5">
+              <h3 class="font-bold text-gray-900 mb-4">Form Pengajuan Cuti</h3>
+              <div class="space-y-4">
+                <div>
+                  <label class="text-sm font-medium text-gray-700">Jenis Cuti</label>
+                  <select class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none"><option selected>Cuti Tahunan</option></select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700">Tanggal Mulai</label>
+                    <input type="text" value="15 Jun 2026" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly>
+                  </div>
+                  <div>
+                    <label class="text-sm font-medium text-gray-700">Tanggal Akhir</label>
+                    <input type="text" value="17 Jun 2026" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly>
+                  </div>
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-gray-700">Total Hari</label>
+                  <input type="text" value="3 Hari" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly>
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-gray-700">Alasan</label>
+                  <textarea class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none h-20" readonly>Liburan keluarga ke Bali</textarea>
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-gray-700">No. HP selama cuti</label>
+                  <input type="text" value="0812-3456-7890" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly>
+                </div>
+                <button class="w-full py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm">Ajukan Cuti</button>
+              </div>
+            </div>
+          </div>
+          <!-- Sisa Cuti -->
+          <div class="screen-preview relative">
+            <div class="p-5">
+              <h3 class="font-bold text-gray-900 mb-4">Sisa Cuti 2026</h3>
+              <div class="space-y-3">
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4"><div class="flex justify-between items-center"><div><div class="font-semibold text-green-800">Cuti Tahunan</div><div class="text-xs text-green-600">12 hari/tahun</div></div><div><span class="text-2xl font-bold text-green-700">9</span><span class="text-green-500 text-sm">/12</span></div></div><div class="w-full bg-green-200 rounded-full h-1.5 mt-2"><div class="bg-green-600 h-1.5 rounded-full" style="width:75%"></div></div></div>
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4"><div class="flex justify-between items-center"><div><div class="font-semibold text-blue-800">Cuti Sakit</div><div class="text-xs text-blue-600">14 hari/tahun</div></div><div><span class="text-2xl font-bold text-blue-700">14</span><span class="text-blue-500 text-sm">/14</span></div></div><div class="w-full bg-blue-200 rounded-full h-1.5 mt-2"><div class="bg-blue-600 h-1.5 rounded-full" style="width:100%"></div></div></div>
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4"><div class="flex justify-between items-center"><div><div class="font-semibold text-gray-700">Cuti Menikah</div><div class="text-xs text-gray-500">3 hari (per kejadian)</div></div><div><span class="text-2xl font-bold text-gray-700">3</span><span class="text-gray-400 text-sm">/3</span></div></div><div class="w-full bg-gray-200 rounded-full h-1.5 mt-2"><div class="bg-gray-400 h-1.5 rounded-full" style="width:100%"></div></div></div>
+              </div>
+              <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                ⏰ Sisa cuti tahunan akan hangus akhir tahun (max rollover 6 hari)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== SHIFT CHANGE ====== -->
+      <div id="mockup-shift-change" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Request Shift Change</div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Individual -->
+          <div class="screen-preview relative">
+            <div class="p-5">
+              <div class="flex items-center gap-2 mb-4"><span class="text-xl">🔄</span><h3 class="font-bold text-gray-900">Ganti Shift (Individu)</h3></div>
+              <div class="space-y-4">
+                <div><label class="text-sm font-medium text-gray-700">Tanggal</label><input type="text" value="17 Juni 2026" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly></div>
+                <div><label class="text-sm font-medium text-gray-700">Shift Saat Ini</label>
+                  <div class="mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500">🌙 Shift Malam (23:00 - 07:00)</div>
+                </div>
+                <div><label class="text-sm font-medium text-gray-700">Shift Tujuan</label>
+                  <select class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none"><option selected>☀️ Shift Pagi (07:00 - 15:00)</option><option>🌤️ Shift Siang (15:00 - 23:00)</option></select>
+                </div>
+                <div><label class="text-sm font-medium text-gray-700">Alasan</label>
+                  <textarea class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none h-16" readonly>Ada acara keluarga malam hari</textarea>
+                </div>
+                <button class="w-full py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm">Ajukan Perubahan Shift</button>
+                <div class="text-xs text-gray-400 mt-2">Sisa kuota bulan ini: 2/3</div>
+              </div>
+            </div>
+          </div>
+          <!-- Swap -->
+          <div class="screen-preview relative">
+            <div class="p-5">
+              <div class="flex items-center gap-2 mb-4"><span class="text-xl">🔄</span><h3 class="font-bold text-gray-900">Tukar Shift (Swap)</h3></div>
+              <div class="space-y-4">
+                <div><label class="text-sm font-medium text-gray-700">Tanggal Shift Anda</label><input type="text" value="17 Juni 2026" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly></div>
+                <div><label class="text-sm font-medium text-gray-700">Shift Anda Saat Ini</label>
+                  <div class="mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500">🌙 Shift Malam (23:00 - 07:00)</div>
+                </div>
+                <div><label class="text-sm font-medium text-gray-700">Cari Karyawan Partner</label>
+                  <div class="mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 flex items-center justify-between">
+                    <span>🔍 Ketik nama rekan kerja...</span>
+                    <span class="text-xs text-gray-400">(departemen sama)</span>
+                  </div>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
+                  <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">RD</div>
+                  <div><div class="font-medium text-sm">Rudi Hartono</div><div class="text-xs text-gray-500">Staff IT — Sisa kuota: 3/3</div></div>
+                  <button class="ml-auto px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-medium">Pilih</button>
+                </div>
+                <div><label class="text-sm font-medium text-gray-700">Tanggal Shift Partner</label><input type="text" value="17 Juni 2026 (sama)" class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none" readonly></div>
+                <div><label class="text-sm font-medium text-gray-700">Alasan</label>
+                  <textarea class="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none h-16" readonly>Tukar shift dengan Rudi karena ada keperluan</textarea>
+                </div>
+                <button class="w-full py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm">Ajukan Tukar Shift</button>
+                <div class="text-xs text-gray-400 mt-2">⏳ Partner punya 24 jam untuk konfirmasi</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== MOBILE NAVIGATION ====== -->
+      <div id="mockup-mobile" class="mockup-content">
+        <div class="flex items-center gap-3 mb-6">
+          <button class="no-print text-sm text-primary-500 hover:underline" onclick="showMockup('overview')">← Kembali</button>
+          <div class="text-2xl font-bold text-gray-900">Mobile Navigation</div>
+          <span class="badge bg-purple-100 text-purple-700">PWA</span>
+        </div>
+        <div class="flex justify-center gap-6">
+          <!-- Tab 1: Home -->
+          <div class="w-[280px] bg-white rounded-[32px] overflow-hidden shadow-lg border-2 border-gray-200">
+            <div class="bg-gray-900 text-white text-xs px-5 py-2 flex justify-between"><span>09:41</span><span>📶 🔋</span></div>
+            <div class="p-4">
+              <div class="text-sm font-bold">Halo, Budi 👋</div>
+              <div class="text-xs text-gray-400">11 Juni 2026</div>
+              <!-- Quick stats -->
+              <div class="grid grid-cols-2 gap-2 mt-4">
+                <div class="bg-blue-50 rounded-xl p-3 text-center"><div class="text-lg font-bold text-blue-600">18</div><div class="text-xs text-blue-700">Hadir</div></div>
+                <div class="bg-green-50 rounded-xl p-3 text-center"><div class="text-lg font-bold text-green-600">9</div><div class="text-xs text-green-700">Sisa Cuti</div></div>
+              </div>
+              <!-- Quick actions -->
+              <div class="mt-4 space-y-2">
+                <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"><span class="text-xl">📍</span><div><div class="text-sm font-medium">Absen Sekarang</div><div class="text-xs text-gray-400">Check-in / Check-out</div></div></div>
+                <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"><span class="text-xl">🏖️</span><div><div class="text-sm font-medium">Ajukan Cuti</div><div class="text-xs text-gray-400">Sisa: 9 hari</div></div></div>
+                <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"><span class="text-xl">💰</span><div><div class="text-sm font-medium">Slip Gaji</div><div class="text-xs text-gray-400">Juni 2026 tersedia</div></div></div>
+              </div>
+            </div>
+            <div class="border-t border-gray-100 flex justify-around py-2 px-2 text-xs text-gray-400 bg-white">
+              <span class="text-center text-primary-500"><span class="block text-lg mb-0.5">🏠</span>Home</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">📋</span>Request</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">📍</span>Absen</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">💰</span>Gaji</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">⚙️</span>Lainnya</span>
+            </div>
+          </div>
+
+          <!-- Tab 5: Lainnya -->
+          <div class="w-[280px] bg-white rounded-[32px] overflow-hidden shadow-lg border-2 border-gray-200">
+            <div class="bg-gray-900 text-white text-xs px-5 py-2 flex justify-between"><span>09:41</span><span>📶 🔋</span></div>
+            <div class="p-4">
+              <div class="text-sm font-bold mb-4">⚙️ Lainnya</div>
+              <div class="space-y-1">
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>📅</span><span class="text-sm">Kalender Hari Libur</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>📢</span><span class="text-sm">Pengumuman</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>👤</span><span class="text-sm">Profil Saya</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>📄</span><span class="text-sm">Dokumen Saya</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>🔄</span><span class="text-sm">Request Shift Change</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>📊</span><span class="text-sm">KPI Saya</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><span>❓</span><span class="text-sm">Bantuan / FAQ</span></div>
+                <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer text-red-500"><span>🚪</span><span class="text-sm">Keluar</span></div>
+              </div>
+            </div>
+            <div class="border-t border-gray-100 flex justify-around py-2 px-2 text-xs text-gray-400 bg-white">
+              <span class="text-center"><span class="block text-lg mb-0.5">🏠</span>Home</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">📋</span>Request</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">📍</span>Absen</span>
+              <span class="text-center"><span class="block text-lg mb-0.5">💰</span>Gaji</span>
+              <span class="text-center text-primary-500"><span class="block text-lg mb-0.5">⚙️</span>Lainnya</span>
+            </div>
+          </div>
+        </div>
+        <div class="text-center mt-4 text-sm text-gray-400">Tab navigasi mobile: Home · Request · Absen · Gaji · Lainnya</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function showMockup(id) {
+  // Hide all
+  document.querySelectorAll('.mockup-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  // Show selected
+  document.getElementById('mockup-' + id).classList.add('active');
+  // Highlight sidebar
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(id)) {
+      el.classList.add('active');
+    }
+  });
+}
+
+// Show toast once
+setTimeout(() => {
+  const toast = document.getElementById('toast');
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 4000);
+}, 1000);
+</script>
+
+</body>
+</html>

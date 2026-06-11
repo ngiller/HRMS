@@ -1,0 +1,51 @@
+# Air hot reload configuration for HRMS Backend
+# Documentation: https://github.com/air-verse/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Build command
+  cmd = "go build -o ./tmp/hrms-server ."
+  # Binary to run after build
+  bin = "./tmp/hrms-server"
+  # Files to watch for changes
+  include_ext = ["go", "env", "mod", "sum"]
+  # Directories to exclude from watching
+  exclude_dir = ["tmp", "vendor"]
+  # Directories to include (root "." for main.go, internal/ and cmd/ for packages)
+  include_dir = [".", "internal", "cmd"]
+  # Exclude specific files
+  exclude_file = []
+  # Exclude regex patterns
+  exclude_regex = ["_test\\.go"]
+  # Exclude unchanged files
+  exclude_unchanged = true
+  # Follow symlinks
+  follow_symlink = false
+  # Log detailed build info
+  log = "build-errors.log"
+  # Delay before restart (ms)
+  delay = 1000
+  # Stop on build error
+  stop_on_error = true
+  # Send interrupt signal before killing (graceful shutdown)
+  send_interrupt = true
+  # Kill delay (ms)
+  kill_delay = 500
+
+[log]
+  # Show time in logs
+  time = true
+  # Only show main log
+  main_only = false
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  # Delete tmp_dir on exit
+  clean_on_exit = true

@@ -1,0 +1,26 @@
+# ─── Backend ───────────────────────────────────────────────
+backend/tmp/
+backend/build-errors.log
+backend/.env
+
+# ─── Frontend ──────────────────────────────────────────────
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+frontend/.env
+frontend/.env.local
+
+# ─── IDE & Editor ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.~lock.*
+
+# ─── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Logs ──────────────────────────────────────────────────
+*.log
