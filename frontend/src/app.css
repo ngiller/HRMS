@@ -2,3 +2,282 @@
 @import "flowbite/src/themes/default.css";
 @plugin "flowbite/plugin";
 @source "../node_modules/flowbite-svelte/dist";
+
+/* Class-based dark mode for toggle control */
+@variant dark (&:where(.dark, .dark *));
+
+/* Custom dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+	background-color: #374151;
+	border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-track {
+	background-color: #1f2937;
+}
+
+/* Smooth theme transition */
+html {
+	transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark {
+	background-color: #111827;
+	color-scheme: dark;
+}
+
+/* ============================================
+   Dark Mode Overlay — retrofits ALL existing
+   pages without modifying hundreds of classes.
+   :where(.dark) has same specificity as a single
+   class so it won't override more specific rules.
+   ============================================ */
+
+/* Surface & background */
+:where(.dark) .bg-white { background-color: rgb(31 41 55); }
+:where(.dark) .bg-gray-50 { background-color: rgb(31 41 55); }
+:where(.dark) .bg-gray-50\/50 { background-color: rgb(31 41 55 / 0.5); }
+:where(.dark) .bg-gray-50\/30 { background-color: rgb(31 41 55 / 0.3); }
+:where(.dark) .bg-gray-50\/40 { background-color: rgb(31 41 55 / 0.4); }
+
+/* Text colors */
+:where(.dark) .text-gray-900 { color: rgb(243 244 246); }
+:where(.dark) .text-gray-800 { color: rgb(229 231 235); }
+:where(.dark) .text-gray-700 { color: rgb(209 213 219); }
+:where(.dark) .text-gray-600 { color: rgb(156 163 175); }
+:where(.dark) .text-gray-500 { color: rgb(156 163 175); }
+:where(.dark) .text-gray-400 { color: rgb(107 114 128); }
+
+/* Borders */
+:where(.dark) .border-gray-200 { border-color: rgb(55 65 81); }
+:where(.dark) .border-gray-100 { border-color: rgb(55 65 81); }
+:where(.dark) .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(55 65 81); }
+:where(.dark) .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(55 65 81); }
+
+/* Ring (for status badges) */
+:where(.dark) .ring-gray-200 { --tw-ring-color: rgb(75 85 99); }
+:where(.dark) .ring-gray-600\/20 { --tw-ring-color: rgb(75 85 99 / 0.3); }
+
+/* Shadows */
+:where(.dark) .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3); }
+:where(.dark) .shadow-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3); }
+:where(.dark) .shadow-xl { box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.3); }
+
+/* Hover states */
+:where(.dark) .hover\:bg-gray-100:hover { background-color: rgb(55 65 81); }
+:where(.dark) .hover\:bg-gray-50:hover { background-color: rgb(55 65 81); }
+:where(.dark) .hover\:bg-blue-50\/40:hover { background-color: rgb(30 64 175 / 0.15); }
+:where(.dark) .hover\:bg-blue-50\/50:hover { background-color: rgb(30 64 175 / 0.2); }
+:where(.dark) .hover\:bg-amber-50\/50:hover { background-color: rgb(120 53 15 / 0.2); }
+:where(.dark) .hover\:bg-emerald-50\/50:hover { background-color: rgb(6 78 59 / 0.2); }
+:where(.dark) .hover\:bg-gray-50\/50:hover { background-color: rgb(55 65 81 / 0.5); }
+:where(.dark) .hover\:text-gray-900:hover { color: rgb(243 244 246); }
+
+/* Inputs, selects, textareas */
+:where(.dark) input:not([type="checkbox"]):not([type="radio"]),
+:where(.dark) select,
+:where(.dark) textarea {
+	background-color: rgb(55 65 81) !important;
+	border-color: rgb(75 85 99) !important;
+	color: rgb(243 244 246) !important;
+}
+:where(.dark) input:focus,
+:where(.dark) select:focus,
+:where(.dark) textarea:focus {
+	background-color: rgb(31 41 55) !important;
+	border-color: rgb(59 130 246) !important;
+}
+:where(.dark) input::placeholder,
+:where(.dark) textarea::placeholder {
+	color: rgb(107 114 128) !important;
+}
+
+/* Search input native cancel button in dark mode */
+.dark input[type="search"]::-webkit-search-cancel-button {
+	filter: invert(1);
+	opacity: 0.7;
+}
+.dark input[type="search"]::-webkit-search-cancel-button:hover {
+	opacity: 1;
+}
+
+/* Disabled input */
+:where(.dark) input:disabled,
+:where(.dark) select:disabled {
+	background-color: rgb(55 65 81) !important;
+	color: rgb(107 114 128) !important;
+	opacity: 0.6;
+}
+
+/* Table header backgrounds */
+:where(.dark) thead tr {
+	background-color: rgb(31 41 55 / 0.5);
+}
+
+/* Modal overlays */
+:where(.dark) .bg-black\/50 { background-color: rgb(0 0 0 / 0.7); }
+
+/* Badge/ring overrides for dark mode */
+:where(.dark) .bg-emerald-50 { background-color: rgb(6 78 59 / 0.3); }
+:where(.dark) .bg-emerald-50\/80 { background-color: rgb(6 78 59 / 0.6); }
+:where(.dark) .bg-emerald-50\/50 { background-color: rgb(6 78 59 / 0.4); }
+:where(.dark) .bg-blue-50 { background-color: rgb(30 64 175 / 0.3); }
+:where(.dark) .bg-blue-50\/40 { background-color: rgb(30 64 175 / 0.2); }
+:where(.dark) .bg-red-50 { background-color: rgb(127 29 29 / 0.3); }
+:where(.dark) .bg-red-50\/80 { background-color: rgb(127 29 29 / 0.6); }
+:where(.dark) .bg-red-50\/50 { background-color: rgb(127 29 29 / 0.4); }
+:where(.dark) .bg-amber-50 { background-color: rgb(120 53 15 / 0.3); }
+:where(.dark) .bg-purple-50 { background-color: rgb(88 28 135 / 0.3); }
+:where(.dark) .bg-indigo-50 { background-color: rgb(30 58 138 / 0.3); }
+:where(.dark) .bg-violet-50 { background-color: rgb(46 16 101 / 0.3); }
+:where(.dark) .bg-green-50 { background-color: rgb(6 78 59 / 0.3); }
+:where(.dark) .bg-cyan-50 { background-color: rgb(21 94 117 / 0.3); }
+:where(.dark) .bg-gray-100 { background-color: rgb(55 65 81); }
+
+/* Gradient stop overrides for dark mode (from-/to- classes) */
+:where(.dark) .from-gray-50 { --tw-gradient-from: rgb(31 41 55); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .from-gray-100 { --tw-gradient-from: rgb(55 65 81); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .from-gray-200 { --tw-gradient-from: rgb(75 85 99); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-gray-200 { --tw-gradient-to: rgb(75 85 99); }
+:where(.dark) .to-gray-300 { --tw-gradient-to: rgb(107 114 128); }
+:where(.dark) .to-white { --tw-gradient-to: rgb(31 41 55); }
+
+:where(.dark) .from-blue-50 { --tw-gradient-from: rgb(30 64 175 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-blue-100 { --tw-gradient-to: rgb(30 64 175 / 0.5); }
+:where(.dark) .from-indigo-50 { --tw-gradient-from: rgb(30 58 138 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-indigo-50 { --tw-gradient-to: rgb(30 58 138 / 0.3); }
+:where(.dark) .to-indigo-100 { --tw-gradient-to: rgb(30 58 138 / 0.5); }
+
+:where(.dark) .from-sky-50 { --tw-gradient-from: rgb(12 74 110 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-sky-100 { --tw-gradient-to: rgb(12 74 110 / 0.4); }
+
+:where(.dark) .from-cyan-50 { --tw-gradient-from: rgb(21 94 117 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-cyan-100 { --tw-gradient-to: rgb(21 94 117 / 0.5); }
+
+:where(.dark) .from-teal-50 { --tw-gradient-from: rgb(19 78 74 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-teal-100 { --tw-gradient-to: rgb(19 78 74 / 0.5); }
+
+:where(.dark) .from-amber-50 { --tw-gradient-from: rgb(120 53 15 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-amber-100 { --tw-gradient-to: rgb(120 53 15 / 0.5); }
+
+:where(.dark) .from-purple-50 { --tw-gradient-from: rgb(88 28 135 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-purple-100 { --tw-gradient-to: rgb(88 28 135 / 0.5); }
+
+:where(.dark) .from-emerald-50 { --tw-gradient-from: rgb(6 78 59 / 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.dark) .to-emerald-100 { --tw-gradient-to: rgb(6 78 59 / 0.5); }
+
+/* Colored border overrides for dark mode */
+:where(.dark) .border-emerald-100 { border-color: rgb(6 78 59 / 0.5); }
+:where(.dark) .border-red-100 { border-color: rgb(127 29 29 / 0.5); }
+:where(.dark) .border-blue-200 { border-color: rgb(30 64 175 / 0.6); }
+:where(.dark) .border-emerald-200 { border-color: rgb(5 150 105 / 0.4); }
+:where(.dark) .border-red-200 { border-color: rgb(185 28 28 / 0.4); }
+:where(.dark) .border-blue-100 { border-color: rgb(30 64 175 / 0.4); }
+:where(.dark) .border-green-200 { border-color: rgb(5 150 105 / 0.4); }
+:where(.dark) .border-amber-200 { border-color: rgb(217 119 6 / 0.3); }
+
+/* Sky colors for avatar initials in dark mode */
+:where(.dark) .text-sky-600 { color: rgb(38 198 249); }
+:where(.dark) .text-indigo-600 { color: rgb(129 140 248); }
+:where(.dark) .text-indigo-500 { color: rgb(129 140 248); }
+:where(.dark) .text-cyan-600 { color: rgb(34 211 238); }
+:where(.dark) .text-teal-600 { color: rgb(45 212 191); }
+
+/* Ring colors for avatar initials in dark mode */
+:where(.dark) .ring-sky-200 { --tw-ring-color: rgb(38 198 249 / 0.3); }
+:where(.dark) .ring-teal-200 { --tw-ring-color: rgb(45 212 191 / 0.3); }
+
+/* Badge text colors in dark mode */
+:where(.dark) .text-emerald-700 { color: rgb(52 211 153); }
+:where(.dark) .text-blue-700 { color: rgb(96 165 250); }
+:where(.dark) .text-red-700 { color: rgb(248 113 113); }
+:where(.dark) .text-amber-700 { color: rgb(251 191 36); }
+:where(.dark) .text-purple-700 { color: rgb(192 132 252); }
+:where(.dark) .text-indigo-700 { color: rgb(129 140 248); }
+:where(.dark) .text-cyan-700 { color: rgb(34 211 238); }
+:where(.dark) .text-emerald-600 { color: rgb(52 211 153); }
+:where(.dark) .text-blue-600 { color: rgb(96 165 250); }
+:where(.dark) .text-red-600 { color: rgb(248 113 113); }
+:where(.dark) .text-amber-600 { color: rgb(251 191 36); }
+:where(.dark) .text-purple-600 { color: rgb(192 132 252); }
+:where(.dark) .text-green-600 { color: rgb(52 211 153); }
+:where(.dark) .text-violet-600 { color: rgb(167 139 250); }
+
+/* Badge ring colors in dark mode */
+:where(.dark) .ring-emerald-600\/20 { --tw-ring-color: rgb(52 211 153 / 0.3); }
+:where(.dark) .ring-red-600\/20 { --tw-ring-color: rgb(248 113 113 / 0.3); }
+:where(.dark) .ring-blue-600\/20 { --tw-ring-color: rgb(96 165 250 / 0.3); }
+:where(.dark) .ring-amber-600\/20 { --tw-ring-color: rgb(251 191 36 / 0.3); }
+:where(.dark) .ring-purple-600\/20 { --tw-ring-color: rgb(192 132 252 / 0.3); }
+
+/* Ring gradient backgrounds */
+:where(.dark) .ring-blue-200 { --tw-ring-color: rgb(96 165 250 / 0.3); }
+:where(.dark) .ring-amber-200 { --tw-ring-color: rgb(251 191 36 / 0.3); }
+:where(.dark) .ring-indigo-200 { --tw-ring-color: rgb(129 140 248 / 0.3); }
+:where(.dark) .ring-purple-200 { --tw-ring-color: rgb(192 132 252 / 0.3); }
+:where(.dark) .ring-emerald-200 { --tw-ring-color: rgb(52 211 153 / 0.3); }
+:where(.dark) .ring-cyan-200 { --tw-ring-color: rgb(34 211 238 / 0.3); }
+
+/* Table border */
+:where(.dark) .divide-gray-50 { --tw-divide-opacity: 1; border-color: rgb(55 65 81); }
+
+/* History timeline vertical line — handled by divide rules above */
+
+/* AG Grid dark theme integration (Theming API v33+) */
+/* Higher specificity to override default Theming API styles */
+.dark .ag-theme-quartz {
+	--ag-background-color: rgb(31 41 55);
+	--ag-header-background-color: rgb(31 41 55);
+	--ag-odd-row-background-color: rgb(55 65 81 / 0.4);
+	--ag-border-color: rgb(55 65 81);
+	--ag-row-hover-color: rgb(30 64 175 / 0.2);
+	--ag-header-foreground-color: rgb(156 163 175);
+	--ag-foreground-color: rgb(243 244 246);
+	--ag-secondary-foreground-color: rgb(156 163 175);
+	--ag-selected-row-background-color: rgb(30 64 175 / 0.3);
+	--ag-row-border-color: rgb(55 65 81);
+	--ag-font-family: inherit;
+	--ag-font-size: 13px;
+}
+
+/* Additional AG Grid element-level overrides for dark mode */
+.dark .ag-theme-quartz .ag-header-row {
+	background-color: rgb(31 41 55 / 0.8);
+}
+
+.dark .ag-theme-quartz .ag-header-cell::after,
+.dark .ag-theme-quartz .ag-header-group-cell::after {
+	background-color: rgb(55 65 81);
+}
+
+.dark .ag-theme-quartz .ag-input-field-input {
+	background-color: rgb(55 65 81) !important;
+	color: rgb(243 244 246) !important;
+	border-color: rgb(75 85 99) !important;
+}
+
+.dark .ag-theme-quartz .ag-filter {
+	background-color: rgb(31 41 55);
+	border-color: rgb(55 65 81);
+}
+
+.dark .ag-theme-quartz .ag-menu {
+	background-color: rgb(31 41 55);
+	border-color: rgb(55 65 81);
+}
+
+.dark .ag-theme-quartz .ag-paging-panel {
+	color: rgb(156 163 175);
+	border-top-color: rgb(55 65 81);
+}
+
+.dark .ag-theme-quartz .ag-popup {
+	background-color: rgb(31 41 55);
+	border-color: rgb(55 65 81);
+}
+
+.dark .ag-theme-quartz .ag-tooltip {
+	background-color: rgb(31 41 55);
+	border-color: rgb(55 65 81);
+	color: rgb(243 244 246);
+}

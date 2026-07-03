@@ -43,6 +43,7 @@ Setiap field opsional — hanya override yang disebutkan.' ;
 -- Per-employee override via employees.bpjs_config.
 -- ============================================================
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION calculate_employee_payroll(
     p_payroll_period_id UUID,
     p_employee_id UUID,
@@ -323,6 +324,7 @@ BEGIN
     RETURN v_payroll_item_id;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- +goose Down
 -- ============================================================
@@ -332,6 +334,7 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE employees DROP COLUMN IF EXISTS bpjs_config;
 
 -- Restore function ke versi sebelumnya (hardcoded rates)
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION calculate_employee_payroll(
     p_payroll_period_id UUID,
     p_employee_id UUID,
@@ -449,3 +452,4 @@ BEGIN
     RETURN v_payroll_item_id;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd

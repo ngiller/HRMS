@@ -102,6 +102,7 @@ CREATE TRIGGER set_kpi_reviews_updated_at
 -- ============================================================
 -- Function: Calculate final KPI score & category
 -- ============================================================
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION calculate_kpi_final_score()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -132,6 +133,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trg_kpi_reviews_calculate_score
     BEFORE INSERT OR UPDATE OF hr_reviewed_at ON kpi_reviews

@@ -121,12 +121,14 @@
 						<input
 							id="new-password"
 							type="password"
+							name="new-password"
 							bind:value={newPassword}
 							class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] outline-none transition"
 							placeholder="Minimal 6 karakter"
 							required
 							minlength={6}
 							disabled={isLoading}
+							autocomplete="new-password"
 						/>
 					</div>
 
@@ -135,12 +137,14 @@
 						<input
 							id="confirm-password"
 							type="password"
+							name="confirm-password"
 							bind:value={confirmPassword}
 							class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] outline-none transition"
 							placeholder="Ketik ulang password baru"
 							required
 							minlength={6}
 							disabled={isLoading}
+							autocomplete="new-password"
 						/>
 					</div>
 
@@ -205,24 +209,30 @@
 						</div>
 					{/if}
 					<div>
-						<input
-							type="password"
-							bind:value={newPassword}
-							class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
-							placeholder="Password baru"
-							required
-							minlength={6}
-						/>
+					<input
+						id="mobile-new-password"
+						type="password"
+						name="new-password"
+						bind:value={newPassword}
+						class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
+						placeholder="Password baru"
+						required
+						minlength={6}
+						autocomplete="new-password"
+					/>
 					</div>
 					<div>
-						<input
-							type="password"
-							bind:value={confirmPassword}
-							class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
-							placeholder="Konfirmasi password"
-							required
-							minlength={6}
-						/>
+					<input
+						id="mobile-confirm-password"
+						type="password"
+						name="confirm-password"
+						bind:value={confirmPassword}
+						class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
+						placeholder="Konfirmasi password"
+						required
+						minlength={6}
+						autocomplete="new-password"
+					/>
 					</div>
 					<button type="submit" class="w-full py-3 bg-[#1A56DB] text-white rounded-xl font-semibold text-sm hover:bg-[#1e40af] transition cursor-pointer" disabled={isLoading}>
 						{isLoading ? 'Menyimpan...' : 'Simpan'}

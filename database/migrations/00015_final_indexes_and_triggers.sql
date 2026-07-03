@@ -11,6 +11,7 @@
 -- ============================================================
 -- Function: Calculate payroll (to be called by application)
 -- ============================================================
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION calculate_employee_payroll(
     p_payroll_period_id UUID,
     p_employee_id UUID,
@@ -140,6 +141,7 @@ BEGIN
     RETURN v_payroll_item_id;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- ============================================================
 -- Additional Composite Indexes for Query Performance
@@ -147,7 +149,7 @@ $$ LANGUAGE plpgsql;
 
 -- Attendance queries: by employee + month
 CREATE INDEX idx_attendance_records_employee_month_status
-    ON attendance_records(employee_id, (DATE_TRUNC('month', date)), status);
+    ON attendance_records(employee_id, date, status);
 
 -- Leave queries: overlapping date check
 CREATE INDEX idx_leave_requests_date_range
@@ -210,7 +212,7 @@ SELECT
 FROM employees e
 JOIN attendance_records ar ON ar.employee_id = e.id
 LEFT JOIN departments d ON d.id = e.department_id
-WHERE e.deleted_at IS NULL AND ar.deleted_at IS NULL
+WHERE e.deleted_at IS NULL
 GROUP BY e.id, e.employee_id, e.full_name, d.name, DATE_TRUNC('month', ar.date);
 
 -- Leave Balance Summary View
@@ -243,6 +245,7 @@ ALTER TABLE departments
 -- ============================================================
 -- Function: Auto-create leave balances at the start of each year
 -- ============================================================
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION auto_create_leave_balances()
 RETURNS VOID AS $$
 DECLARE
@@ -259,6 +262,7 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- +goose Down
 DROP VIEW IF EXISTS v_leave_balance_summary;

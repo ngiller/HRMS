@@ -2,13 +2,13 @@
  * HRMS Frontend Configuration
  * 
  * Ubah API_BASE_URL sesuai dengan alamat backend server.
- * Untuk development: http://localhost:8080
+ * Untuk development: http://localhost:8900
  * Untuk production: https://api.hrms.company.com
  */
 
 const config = {
 	// Backend API URL
-	API_BASE_URL: 'http://localhost:8080',
+	API_BASE_URL: 'http://localhost:8590',
 
 	// JWT Token keys (localStorage)
 	ACCESS_TOKEN_KEY: 'hrms_access_token',

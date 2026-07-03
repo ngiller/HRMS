@@ -79,7 +79,7 @@ CREATE TRIGGER set_notification_preferences_updated_at
 
 -- Seed default notification preferences
 INSERT INTO notification_preferences (user_id, notification_type, in_app, push, email)
-SELECT e.id, nt.type_name, TRUE, TRUE, TRUE
+SELECT e.id, nt.type_name::notification_type, TRUE, TRUE, TRUE
 FROM employees e
 CROSS JOIN (VALUES 
     ('approval_request'), ('approved'), ('rejected'), 
@@ -107,6 +107,7 @@ CREATE INDEX idx_user_sessions_refresh_token ON user_sessions(refresh_token);
 -- ============================================================
 -- Audit Trail Trigger Function (auto-log changes)
 -- ============================================================
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION audit_trigger_function()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -137,6 +138,7 @@ BEGIN
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- Apply audit trigger to employees table
 CREATE TRIGGER audit_employees

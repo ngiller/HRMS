@@ -187,7 +187,7 @@ JOIN payroll_periods pp ON pp.id = pi.payroll_period_id
 JOIN employees e ON e.id = pi.employee_id
 LEFT JOIN departments d ON d.id = e.department_id
 LEFT JOIN positions pos ON pos.id = e.position_id
-WHERE pi.deleted_at IS NULL AND e.deleted_at IS NULL;
+WHERE e.deleted_at IS NULL;
 
 -- Indexes
 CREATE INDEX idx_payroll_periods_date ON payroll_periods(year DESC, month DESC);

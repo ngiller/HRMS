@@ -71,6 +71,24 @@
 | 18 | `00018_flexible_overtime_rates.sql` | position_grade_overtime_rates, employee_overtime_rates, updated overtime_calculation view | **3-level flexible overtime rate configuration (company default → position grade → per employee), updated calculation view** |
 | 19 | `00019_flexible_bpjs_config.sql` | bpjs_config on employees, updated calculate_employee_payroll() | **Flexible BPJS configuration — semua rate & ceiling bisa dikonfigurasi via hr_settings, plus override per employee via bpjs_config JSONB** |
 | 20 | `00020_shift_change_requests.sql` | shift_change_requests, 2 new ENUMs | **Shift Change Request — employee dapat mengajukan ganti shift individu atau tukar shift dengan approval workflow (pending → partner_pending → approved/rejected)** |
+| 21 | `00021_fix_triggers_and_audit.sql` | — | Fix audit trigger function (handle DELETE OLD), fix log_salary_component_change, add audit triggers to 9 key tables, add refresh_attendance_summary() function |
+| 22 | `00022_partial_unique_indexes.sql` | — | Drop UNIQUE constraints on email & employee_id → partial unique indexes WHERE deleted_at IS NULL |
+| 23 | `00023_add_missing_role_permissions.sql` | — | Add position_grade, position, work_schedule, attendance_location, shift_change modules to super_admin role permissions |
+| 24 | `00024_flexible_schedules.sql` | schedule_templates, schedule_template_days, employee_schedules, employee_schedule_locations, resolve_employee_schedule() function | **Flexible schedule templates (Level 2: weekly, Level 3: date-based), employee schedule with priority-based resolution, multi-location per schedule** |
+| 25 | `00025_add_daily_wage_to_employees.sql` | — | Add daily_wage column to employees table (DECIMAL(15,2), DEFAULT NULL) |
+| 26 | `00026_fix_payroll_daily_wage_gross.sql` | — | Fix calculate_employee_payroll() to include p_daily_wage in gross salary calculation |
+| 27 | `00027_add_base_salary_to_employees.sql` | — | Add base_salary column to employees table, backfill from employee_salary_histories (latest per employee) |
+| 28 | `00028_add_reimbursement_missing_columns.sql` | reimbursements | Add rejection_reason, cancelled_by, cancelled_at to reimbursements |
+| 29 | `00029_fix_audit_trigger_zero_uuid.sql` | — | Fix audit_trigger_function: set user_id=NULL if zero UUID '0000...0000' to avoid FK violation |
+| 30 | `00030_add_paid_to_leave_status_enum.sql` | — | Add 'paid' to leave_status enum (for reimbursement pay workflow) |
+| 31 | `00031_auto_deduct_reimbursement_from_payroll.sql` | — | Auto-deduct paid payroll-method reimbursements from payroll calculation, update calculate_employee_payroll() |
+| 32 | `00032_add_rejection_reason_to_leave_requests.sql` | leave_requests | Add rejection_reason, rejected_at, rejected_by columns (missing from migration 00007) |
+| 33 | `00033_add_overtime_missing_columns.sql` | overtime_requests | Add rejection_reason, rejected_at, rejected_by, cancelled_by, cancelled_at columns (missing from 00008) |
+| 34 | `00034_add_attendance_permissions_to_roles.sql` | roles | Add attendance create/update permissions to employee, manager, director, finance roles |
+| 35 | `00035_add_calculated_payroll_status.sql` | — | Add 'calculated' to payroll_status enum for payroll_items calculation workflow (NO TRANSACTION) || 36 | `00036_assign_all_employee_work_schedules.sql`     | employees | Assign default work_schedule ('5 Hari Kerja') to all active employees without one (NO TRANSACTION + DISABLE TRIGGER) |
+| 37 | `00037_add_position_grade_salary_range.sql`         | position_grades | Add min_salary/max_salary columns (10-level salary ranges) |
+| 38 | `00038_cleanup_payroll_status_enum.sql`              | — | Remove unused 'completed' from payroll_status ENUM (NO TRANSACTION) |
+| 39 | `00039_transaction_safety_documentation.sql`         | — | Documentation: transaction wrapping & optimistic locking — no schema changes |
 
 ---
 
@@ -204,7 +222,7 @@ Hierarki: `bpjs_config per employee` → `hr_settings.bpjs` → `Default pemerin
 
 ---
 
-## 5. ENUM Types (29 Total)
+## 5. ENUM Types (25 Total)
 
 | ENUM | Values |
 |------|--------|
@@ -215,9 +233,9 @@ Hierarki: `bpjs_config per employee` → `hr_settings.bpjs` → `Default pemerin
 | `ptkp_status` | TK0-TK3, K0-K3, KIT0-KIT3 |
 | `tax_method` | gross, gross_up, nett |
 | `attendance_status` | hadir, terlambat, izin, sakit, tanpa_keterangan, cuti, libur |
-| `leave_status` | pending, approved, rejected, cancelled |
+| `leave_status` | pending, approved, rejected, cancelled, paid |
 | `loan_status` | pending, approved, active, completed, rejected, defaulted |
-| `payroll_status` | draft, completed, approved, paid |
+| `payroll_status` | draft, completed, approved, paid, calculated |
 | `kpi_review_status` | draft, self_review, manager_review, hr_review, completed |
 | `reprimand_type` | verbal, sp1, sp2, sp3 |
 | `reprimand_status` | issued, acknowledged, expired |
@@ -345,15 +363,74 @@ database/
 │   ├── 00017_employee_salary_components.sql              # Salary component master data
 │   ├── 00018_flexible_overtime_rates.sql                 # 3-level overtime rate config
 │   ├── 00019_flexible_bpjs_config.sql                    # Flexible BPJS rate config
-│   └── 00020_shift_change_requests.sql                  # Shift change requests with approval
-├── seeds/
-│   └── (optional additional seed data)
-└── schema-overview.md                        # This document
+│   ├── 00020_shift_change_requests.sql                  # Shift change requests with approval
+│   ├── 00021_fix_triggers_and_audit.sql                 # Audit trigger fixes, add audit to 9 tables
+│   ├── 00022_partial_unique_indexes.sql                 # Partial unique indexes for soft delete
+│   ├── 00023_add_missing_role_permissions.sql           # Add missing modules to super_admin
+│   ├── 00024_flexible_schedules.sql                     # Schedule templates & employee schedules
+│   ├── 00025_add_daily_wage_to_employees.sql            # daily_wage column on employees
+│   ├── 00026_fix_payroll_daily_wage_gross.sql           # Fix payroll gross with daily wage
+├── 00027_add_base_salary_to_employees.sql            # base_salary column on employees
+├── 00028_add_reimbursement_missing_columns.sql       # rejection_reason, cancelled columns
+├── 00029_fix_audit_trigger_zero_uuid.sql             # Fix zero UUID in audit trigger
+├── 00030_add_paid_to_leave_status_enum.sql           # Add 'paid' to leave_status
+├── 00031_auto_deduct_reimbursement_from_payroll.sql  # Auto-deduct reimbursement in payroll
+├── 00032_add_rejection_reason_to_leave_requests.sql  # rejection_reason on leave_requests
+├── 00033_add_overtime_missing_columns.sql            # Missing columns on overtime_requests
+├── 00034_add_attendance_permissions_to_roles.sql     # Attendance permissions for roles
+├── 00035_add_calculated_payroll_status.sql           # 'calculated' in payroll_status
+├── 00036_assign_all_employee_work_schedules.sql      # Assign work_schedule to all employees
+├── 00037_add_position_grade_salary_range.sql         # Add min_salary/max_salary ranges
+├── 00038_cleanup_payroll_status_enum.sql             # Remove unused payroll_status value
+├── 00039_transaction_safety_documentation.sql        # Transaction wrapping & optimistic locking
+└── schema-overview.md                                # This document
+
+---
+
+## 11. Transaction Safety & Optimistic Locking
+
+### 11.1 Transaction Wrapping
+
+Semua write operations dibungkus dalam `database.WithUserContext()` yang menyediakan:
+- Transaksi PostgreSQL atomik (BEGIN/COMMIT/ROLLBACK)
+- Audit trail via `SET LOCAL app.current_user_id`
+
+19 repositori sudah di-wrap. Lihat migration `00039` untuk daftar lengkap.
+
+### 11.2 Optimistic Locking — Double-Approve Prevention
+
+Approval functions memiliki `AND status = 'pending'` di WHERE clause untuk mencegah race condition:
+
+| Modul | Fungsi | Lock |
+|-------|--------|------|
+| leave | UpdateLeaveStatus | `AND status = 'pending'` |
+| reimbursement | UpdateReimbursementStatus | `AND status = 'pending'` |
+| reimbursement | PayReimbursement | `AND status = 'approved'` |
+| loan | UpdateLoanStatus | `AND status = 'pending'` |
+| overtime | UpdateOvertimeStatus | `AND status = 'pending'` |
+| shift_change | UpdateShiftChangeStatus | `AND status IN ('pending','partner_pending')` |
+| shift_change | ConfirmSwapPartner | `AND status = 'partner_pending'` |
+
+Error handling: `pgx.ErrNoRows` atau `tag.RowsAffected() == 0` -> pesan error Bahasa Indonesia.
+
+### 11.3 Integration Tests
+
+File: `backend/internal/repository/approval_locking_test.go` (build tag: `integration`)
+
+Jalankan:
+```bash
+# Setup DB
+go install github.com/pressly/goose/v3/cmd/goose@latest
+docker compose up -d db migrate
+
+# Run integration tests
+export RUN_INTEGRATION_TESTS=true
+go test -tags=integration -v -run TestOptimisticLocking ./internal/repository/
 ```
 
 ---
 
-## 11. Notes for sqlc Integration
+## 12. Notes for sqlc Integration
 
 sqlc akan membaca file SQL migration untuk generate Go code:
 

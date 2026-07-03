@@ -79,11 +79,13 @@
 					<input
 						id="email"
 						type="email"
+						name="email"
 						bind:value={email}
 						class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] outline-none transition"
 						placeholder="nama@company.com"
 						required
 						disabled={isLoading}
+						autocomplete="email"
 					/>
 				</div>
 
@@ -92,11 +94,13 @@
 					<input
 						id="password"
 						type="password"
+						name="password"
 						bind:value={password}
 						class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] outline-none transition"
 						placeholder="••••••••"
 						required
 						disabled={isLoading}
+						autocomplete="current-password"
 					/>
 				</div>
 
@@ -170,22 +174,28 @@
 			{/if}
 			<div>
 				<input
+					id="mobile-email"
 					type="email"
+					name="email"
 					bind:value={email}
 					class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition disabled:opacity-50"
 					placeholder="Email"
 					required
 					disabled={isLoading}
+					autocomplete="email"
 				/>
 			</div>
 			<div>
 				<input
+					id="mobile-password"
 					type="password"
+					name="password"
 					bind:value={password}
 					class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition disabled:opacity-50"
 					placeholder="Password"
 					required
 					disabled={isLoading}
+					autocomplete="current-password"
 				/>
 			</div>
 			<button

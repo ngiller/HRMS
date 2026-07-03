@@ -13,6 +13,7 @@
 -- ============================================================
 -- ENUM: shift_change_status
 -- ============================================================
+-- +goose StatementBegin
 DO $$ BEGIN
     CREATE TYPE shift_change_status AS ENUM (
         'pending',            -- Menunggu approval atasan (individual) atau konfirmasi partner (swap)
@@ -24,10 +25,12 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
+-- +goose StatementEnd
 
 -- ============================================================
 -- ENUM: shift_change_type
 -- ============================================================
+-- +goose StatementBegin
 DO $$ BEGIN
     CREATE TYPE shift_change_type AS ENUM (
         'individual',   -- Ganti shift individu
@@ -36,6 +39,7 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
+-- +goose StatementEnd
 
 -- ============================================================
 -- Table: shift_change_requests

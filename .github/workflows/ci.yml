@@ -1,0 +1,141 @@
+# ============================================================
+# GitHub Actions CI — HRMS Application
+# Stack: Go 1.26 + PostgreSQL 16 + SvelteKit + Node 22
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "22"
+  DB_HOST: localhost
+  DB_PORT: 5432
+  DB_USER: magnum
+  DB_PASSWORD: Pass@w0rd
+  DB_NAME: hrms_test
+  DB_SSLMODE: disable
+  JWT_SECRET: ci-test-secret-key
+  JWT_ACCESS_EXPIRY: 15m
+  JWT_REFRESH_EXPIRY: 168h
+  ENCRYPTION_KEY: ci-encryption-key-for-testing-32bytes
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: magnum
+          POSTGRES_PASSWORD: Pass@w0rd
+          POSTGRES_DB: hrms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Install Goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -U magnum -d hrms_test && break
+            sleep 1
+          done
+
+      - name: Run Migrations
+        run: |
+          goose -dir database/migrations postgres \
+            "postgres://magnum:Pass%40w0rd@localhost:5432/hrms_test?sslmode=disable" up
+        working-directory: ${{ github.workspace }}
+
+      - name: Download Go Dependencies
+        run: go mod download
+        working-directory: ${{ github.workspace }}/backend
+
+      - name: Go Build
+        run: go build ./...
+        working-directory: ${{ github.workspace }}/backend
+
+      - name: Go Vet
+        run: go vet ./...
+        working-directory: ${{ github.workspace }}/backend
+
+      - name: Go Test (Unit)
+        run: go test -count=1 -short ./...
+        working-directory: ${{ github.workspace }}/backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: magnum
+          DB_PASSWORD: Pass@w0rd
+          DB_NAME: hrms_test
+          DB_SSLMODE: disable
+          JWT_SECRET: ci-test-secret-key
+          JWT_ACCESS_EXPIRY: 15m
+          JWT_REFRESH_EXPIRY: 168h
+          ENCRYPTION_KEY: ci-encryption-key-for-testing-32bytes
+
+      - name: Go Test (Integration + Optimistic Locking)
+        run: go test -count=1 -tags=integration -v -run "TestOptimisticLocking" ./internal/repository/
+        working-directory: ${{ github.workspace }}/backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: magnum
+          DB_PASSWORD: Pass@w0rd
+          DB_NAME: hrms_test
+          DB_SSLMODE: disable
+          JWT_SECRET: ci-test-secret-key
+          JWT_ACCESS_EXPIRY: 15m
+          JWT_REFRESH_EXPIRY: 168h
+          ENCRYPTION_KEY: ci-encryption-key-for-testing-32bytes
+          RUN_INTEGRATION_TESTS: "true"
+
+  frontend:
+    name: Frontend (SvelteKit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ${{ github.workspace }}/frontend
+
+      - name: Svelte Check
+        run: npm run check
+        working-directory: ${{ github.workspace }}/frontend
+
+      - name: Build
+        run: npm run build
+        working-directory: ${{ github.workspace }}/frontend

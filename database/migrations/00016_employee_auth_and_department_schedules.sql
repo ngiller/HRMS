@@ -79,6 +79,7 @@ CREATE INDEX idx_departments_work_schedule_id ON departments(work_schedule_id);
 INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
     ('Super Admin', 'super_admin', 'Administrator sistem dengan akses penuh ke semua modul dan konfigurasi', TRUE, '{
         "employee": {"create": true, "read": true, "update": true, "delete": true},
+        "department": {"create": true, "read": true, "update": true, "delete": true},
         "sensitive_data": {"read": true},
         "attendance": {"create": true, "read": true, "update": true, "delete": true},
         "payroll": {"create": true, "read": true, "update": true, "delete": true},
@@ -98,6 +99,7 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 
     ('HR Manager', 'hr_manager', 'Manajer HR yang mengelola seluruh operasional SDM', TRUE, '{
         "employee": {"create": true, "read": true, "update": true, "delete": true},
+        "department": {"create": true, "read": true, "update": true, "delete": true},
         "sensitive_data": {"read": true},
         "attendance": {"create": true, "read": true, "update": true, "delete": true},
         "payroll": {"create": true, "read": true, "update": true},
@@ -117,6 +119,7 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 
     ('HR Staff', 'hr_staff', 'Staf HR yang menjalankan operasional harian SDM', TRUE, '{
         "employee": {"create": true, "read": true, "update": true, "delete": true},
+        "department": {"create": true, "read": true, "update": true, "delete": true},
         "sensitive_data": {"read": true},
         "attendance": {"create": true, "read": true, "update": true, "delete": true},
         "payroll": {"update": true},
@@ -134,6 +137,7 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 
     ('Finance', 'finance', 'Tim finance yang mengelola penggajian, pinjaman, dan reimbursement', TRUE, '{
         "employee": {"read": true},
+        "department": {"read": true},
         "sensitive_data": {"read": true},
         "attendance": {"read": true},
         "payroll": {"create": true, "read": true, "update": true, "delete": true},
@@ -150,6 +154,7 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 
     ('Manager', 'manager', 'Manajer / atasan yang menyetujui permintaan bawahan', TRUE, '{
         "employee": {"read": true},
+        "department": {"read": true},
         "attendance": {"read": true},
         "leave": {"approve": true},
         "reimbursement": {"approve": true},
@@ -165,6 +170,7 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 
     ('Karyawan', 'employee', 'Karyawan reguler dengan akses self-service', TRUE, '{
         "employee": {"read": true},
+        "department": {"read": true},
         "attendance": {"read": true},
         "leave": {"create": true, "read": true},
         "reimbursement": {"create": true, "read": true},
@@ -179,6 +185,7 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 
     ('Direktur', 'director', 'Pimpinan perusahaan dengan akses dashboard & laporan', TRUE, '{
         "employee": {"read": true},
+        "department": {"read": true},
         "sensitive_data": {"read": true},
         "attendance": {"read": true},
         "payroll": {"read": true},
@@ -203,6 +210,9 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
 INSERT INTO companies (name, address, npwp)
 SELECT 'Perusahaan Saya', 'Alamat Perusahaan', '00.000.000.0-000.000'
 WHERE NOT EXISTS (SELECT 1 FROM companies LIMIT 1);
+
+-- Disable audit trigger during seeding
+ALTER TABLE employees DISABLE TRIGGER audit_employees;
 
 -- Create default admin
 INSERT INTO employees (
@@ -238,6 +248,8 @@ UPDATE employees
 SET role_id = (SELECT id FROM roles WHERE slug = 'employee')
 WHERE role_id IS NULL AND employee_id != 'ADMIN-001' AND is_active = TRUE;
 
+ALTER TABLE employees ENABLE TRIGGER audit_employees;
+
 -- +goose Down
 -- ============================================================
 -- Rollback migration 00016
@@ -260,7 +272,9 @@ DROP INDEX IF EXISTS idx_employees_email;
 DROP INDEX IF EXISTS idx_employees_role_id;
 
 -- Delete default admin
+ALTER TABLE employees DISABLE TRIGGER audit_employees;
 DELETE FROM employees WHERE employee_id = 'ADMIN-001';
+ALTER TABLE employees ENABLE TRIGGER audit_employees;
 
 -- Drop roles table
 DROP TABLE IF EXISTS roles;

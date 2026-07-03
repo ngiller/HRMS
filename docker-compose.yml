@@ -1,0 +1,116 @@
+# ============================================================
+# Docker Compose — HRMS Application
+# Stack: PostgreSQL 16 + Go/Fiber (Air) + SvelteKit
+# ============================================================
+
+services:
+  # ---------- PostgreSQL 16 ----------
+  db:
+    image: postgres:16-alpine
+    container_name: hrms-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-magnum}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-Pass@w0rd}
+      POSTGRES_DB: ${DB_NAME:-hrms}
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-magnum} -d ${DB_NAME:-hrms}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------- Database Migration (Goose) ----------
+  migrate:
+    build:
+      context: .
+      target: base
+      dockerfile: Dockerfile
+    container_name: hrms-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-magnum}
+      DB_PASSWORD: ${DB_PASSWORD:-Pass@w0rd}
+      DB_NAME: ${DB_NAME:-hrms}
+      DB_SSLMODE: disable
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+    volumes:
+      - ./database/migrations:/app/database/migrations
+    command: |
+      sh -c '
+        PASSWORD="${DB_PASSWORD:-Pass@w0rd}"
+        PASSWORD_ENCODED=$$(echo "$$PASSWORD" | sed "s|/|%2F|g")
+        goose -dir /app/database/migrations postgres "postgres://${DB_USER:-magnum}:$${PASSWORD_ENCODED}@db:5432/${DB_NAME:-hrms}?sslmode=disable" up
+      '
+
+  # ---------- Go/Fiber API (with Air hot reload) ----------
+  api:
+    build:
+      context: .
+      target: dev
+      dockerfile: Dockerfile
+    container_name: hrms-api
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-magnum}
+      DB_PASSWORD: ${DB_PASSWORD:-Pass@w0rd}
+      DB_NAME: ${DB_NAME:-hrms}
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:-hrms-super-secret-key}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-168h}
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      # Bind mount for hot reload — source code changes trigger rebuild
+      - ./backend:/app
+      # Exclude tmp directory from bind mount (Air output)
+      - /app/tmp
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------- SvelteKit Frontend (HMR) ----------
+  web:
+    build:
+      context: .
+      target: dev
+      dockerfile: frontend/Dockerfile
+    container_name: hrms-web
+    restart: unless-stopped
+    ports:
+      - "5177:5173"
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8080}
+    volumes:
+      # Bind mount for HMR
+      - ./frontend:/app
+      # Exclude node_modules (use container's own)
+      - /app/node_modules
+
+volumes:
+  pgdata:

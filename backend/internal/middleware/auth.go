@@ -15,7 +15,8 @@ func AuthMiddleware(authService *service.AuthService) fiber.Handler {
 		if authHeader == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
-				"error":   "Authorization header diperlukan",
+				"data":    fiber.Map{},
+				"message": "Authorization header diperlukan",
 			})
 		}
 
@@ -24,7 +25,8 @@ func AuthMiddleware(authService *service.AuthService) fiber.Handler {
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
-				"error":   "Format token tidak valid",
+				"data":    fiber.Map{},
+				"message": "Format token tidak valid",
 			})
 		}
 
@@ -32,7 +34,8 @@ func AuthMiddleware(authService *service.AuthService) fiber.Handler {
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
-				"error":   "Token tidak valid atau sudah kadaluarsa",
+				"data":    fiber.Map{},
+				"message": "Token tidak valid atau sudah kadaluarsa",
 			})
 		}
 
@@ -48,7 +51,12 @@ func AuthMiddleware(authService *service.AuthService) fiber.Handler {
 
 func CORSConfig(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		c.Set("Access-Control-Allow-Origin", cfg.FrontendURL)
+		origin := c.Get("Origin")
+
+		// Echo back origin for development (supports any port)
+		if origin != "" {
+			c.Set("Access-Control-Allow-Origin", origin)
+		}
 		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 		c.Set("Access-Control-Allow-Credentials", "true")

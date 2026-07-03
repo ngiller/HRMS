@@ -20,16 +20,17 @@ type LoginResponse struct {
 }
 
 type UserResponse struct {
-	ID           uuid.UUID `json:"id"`
-	EmployeeID   string    `json:"employee_id"`
-	FullName     string    `json:"full_name"`
-	Email        string    `json:"email"`
-	RoleID       uuid.UUID `json:"role_id"`
-	RoleSlug     string    `json:"role_slug"`
-	RoleName     string    `json:"role_name"`
-	PositionName string    `json:"position_name"`
-	DepartmentName string  `json:"department_name"`
-	AvatarInitials string  `json:"avatar_initials"`
+	ID              uuid.UUID                  `json:"id"`
+	EmployeeID      string                     `json:"employee_id"`
+	FullName        string                     `json:"full_name"`
+	Email           string                     `json:"email"`
+	RoleID          uuid.UUID                  `json:"role_id"`
+	RoleSlug        string                     `json:"role_slug"`
+	RoleName        string                     `json:"role_name"`
+	PositionName    string                     `json:"position_name"`
+	DepartmentName  string                     `json:"department_name"`
+	AvatarInitials  string                     `json:"avatar_initials"`
+	Permissions     map[string]map[string]bool `json:"permissions"`
 }
 
 // Forgot Password Request/Response

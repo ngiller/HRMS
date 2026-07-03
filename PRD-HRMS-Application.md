@@ -1,9 +1,8 @@
 # Product Requirements Document (PRD)
 ## Sistem Informasi Manajemen Sumber Daya Manusia (HRMS)
 
-**Versi Dokumen:** 1.0
-**Tanggal:** 10 Juni 2026
-**Status:** Draft
+**Versi Dokumen: 1.1
+**Tanggal: 2 Juli 2026 (Update: UI Fixes & Transaction DB)**
 
 ---
 
@@ -2084,13 +2083,13 @@ notifications
 1. ✅ Setup project: SvelteKit SPA + PWA + Go Fiber + PostgreSQL
 2. ✅ Authentication & Role Management
 3. ✅ Master Data: Employee CRUD + Department + Position
-4. ✅ Dokumen Karyawan (upload, verify)
+4. ⬜ Dokumen Karyawan (upload, verify) — *DB Siap*
 5. ✅ Schedule Kerja (5/6 hari)
 6. ✅ Absensi Mobile (Face Detection + GPS Check-in/out)
-7. ✅ Manajemen Cuti (alur dasar)
+7. ⬜ Manajemen Cuti (alur dasar) — *DB Siap*
 8. ✅ Dashboard dasar & struktur organisasi
-9. ✅ Pengumuman
-10. ✅ Kalender Hari Libur
+9. ⬜ Pengumuman — *DB Siap*
+10. ⬜ Kalender Hari Libur — *DB Siap*
 
 ### Fase 2 — Payroll & Financial (2–3 bulan)
 
@@ -2098,28 +2097,28 @@ notifications
 2. ✅ PPh 21 TER (Jan–Nov + Dec recap)
 3. ✅ BPJS Kesehatan & Ketenagakerjaan
 4. ✅ THR (Tunjangan Hari Raya)
-5. ✅ Slip Gaji (Payslip)
-6. ✅ Reimbursement
-7. ✅ Lembur (Overtime)
-8. ✅ Pinjaman Karyawan
+5. 🚧 Slip Gaji (Payslip) — *Frontend 80%*
+6. ⬜ Reimbursement — *DB Siap*
+7. ⬜ Lembur (Overtime) — *DB Siap*
+8. ⬜ Pinjaman Karyawan — *DB Siap*
 
 ### Fase 3 — Advanced HR (2–3 bulan)
 
-1. ✅ KPI & Performance Review
-2. ✅ Reprimand / Surat Peringatan
-3. ✅ Mutasi & Promosi
-4. ✅ Resign & Exit Management
-5. ✅ Laporan & Analytics Lengkap
-6. ✅ Notifikasi (In-app, Email, Push)
-7. ✅ Audit Trail Enhanced
+1. ⬜ KPI & Performance Review
+2. ⬜ Reprimand / Surat Peringatan
+3. ⬜ Mutasi & Promosi
+4. ⬜ Resign & Exit Management
+5. ⬜ Laporan & Analytics Lengkap
+6. ⬜ Notifikasi (In-app, Email, Push)
+7. ⬜ Audit Trail Enhanced
 
 ### Fase 4 — Optimization & Integration (2 bulan)
 
-1. ✅ Integrasi WhatsApp Notification
-2. ✅ Coretax DJP Integration
-3. ✅ Performance Optimization
-4. ✅ User Acceptance Testing
-5. ✅ Deployment & Go-Live
+1. ⬜ Integrasi WhatsApp Notification
+2. ⬜ Coretax DJP Integration
+3. ⬜ Performance Optimization
+4. ⬜ User Acceptance Testing
+5. 🚧 Deployment & Go-Live — *Infrastructure Selesai*
 
 ---
 

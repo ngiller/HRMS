@@ -9,11 +9,13 @@
 -- ============================================================
 -- 1. Create salary_component_type enum
 -- ============================================================
+-- +goose StatementBegin
 DO $$ BEGIN
     CREATE TYPE salary_component_type AS ENUM ('allowance', 'deduction');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
+-- +goose StatementEnd
 
 -- ============================================================
 -- 2. Employee Salary Components
@@ -61,6 +63,7 @@ CREATE TABLE employee_salary_component_histories (
 -- ============================================================
 -- 4. Function: Auto-log salary component changes
 -- ============================================================
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION log_salary_component_change()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -105,6 +108,7 @@ BEGIN
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- Apply trigger
 CREATE TRIGGER log_salary_component_changes

@@ -19,6 +19,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Fungsi untuk mengenkripsi data sensitif
 -- Key diambil dari current_setting('app.encryption_key')
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION encrypt_sensitive(data TEXT)
 RETURNS BYTEA AS $$
 BEGIN
@@ -32,26 +33,37 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+-- +goose StatementEnd
 
 -- Fungsi untuk mendekripsi data sensitif
+-- Key diambil dari current_setting('app.encryption_key')
+-- Jika key salah atau data corrupt, return NULL (dengan warning) agar query tidak gagal.
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION decrypt_sensitive(encrypted_data BYTEA)
 RETURNS TEXT AS $$
 BEGIN
     IF encrypted_data IS NULL THEN
         RETURN NULL;
     END IF;
-    RETURN pgp_sym_decrypt(
-        encrypted_data,
-        current_setting('app.encryption_key'),
-        'cipher-algo=aes256, compress-algo=2'
-    );
+    BEGIN
+        RETURN pgp_sym_decrypt(
+            encrypted_data,
+            current_setting('app.encryption_key'),
+            'cipher-algo=aes256, compress-algo=2'
+        );
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING 'decrypt_sensitive failed: %, SQLSTATE: %', SQLERRM, SQLSTATE;
+        RETURN NULL;
+    END;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+-- +goose StatementEnd
 
 -- ============================================================
 -- Generic updated_at trigger function
 -- Digunakan oleh semua tabel. HARUS ada sebelum migrasi tabel.
 -- ============================================================
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -59,6 +71,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- ============================================================
 -- ENUM Types

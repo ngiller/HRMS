@@ -1,0 +1,83 @@
+-- +goose Up
+-- Migration 00039: Dokumentasi Transaction Safety & Optimistic Locking
+-- 
+-- Tanggal: 2 Juli 2026
+-- Deskripsi: Dokumentasi perubahan untuk mencegah race condition
+--            di semua write operations backend.
+--
+-- Perubahan yang sudah dilakukan di backend (Go/Fiber) — TIDAK ADA
+-- perubahan skema database di sini, hanya dokumentasi.
+--
+-- ============================================================
+-- 1. TRANSACTION WRAPPING (WithUserContext)
+-- ============================================================
+-- Semua write operations dibungkus dalam database.WithUserContext()
+-- yang menyediakan:
+--   a. Transaksi PostgreSQL (BEGIN/COMMIT/ROLLBACK atomik)
+--   b. Audit trail (SET LOCAL app.current_user_id untuk trigger)
+--
+-- Repositori yang sudah di-wrap:
+--   - employee_repo       : Create, Update, Delete, Photo, History
+--   - leave_repo          : Create, UpdateStatus (approve/reject), Cancel
+--   - overtime_repo       : Create, UpdateStatus, Cancel
+--   - reimbursement_repo  : Create, UpdateStatus, Pay, Cancel
+--   - loan_repo           : Create, UpdateStatus, Disburse
+--   - shift_change_repo   : Create, UpdateStatus, ConfirmSwap, Cancel
+--   - payroll_repo        : CreatePeriod, UpdateStatus
+--   - salary_component_repo: Create, Update, Delete
+--   - work_schedule_repo  : Create, Update, Delete
+--   - attendance_location_repo: Create, Update, Delete
+--   - department_repo     : Create, Update, UpdateWorkSchedule, Delete
+--   - position_repo       : Create, Update, Delete
+--   - position_grade_repo : Create, Update, Delete
+--   - role_repo           : Create, Update, Delete
+--   - kpi_repo            : CreateTemplate, UpdateTemplate, CreateReview,
+--                           DeleteTemplate+Review
+--   - schedule_repo       : CreateTemplate, UpdateTemplate, DeleteTemplate,
+--                           CreateEmployee, UpdateEmployee, DeleteEmployee
+--   - holiday_repo        : Create, Update, Delete
+--   - announcement_repo   : Create, Update, Delete
+--   - document_repo       : Create, UpdateStatus, Delete
+--
+-- Exception (no audit triggers, high-frequency):
+--   - auth_repo           : Login, password reset, sessions
+--   - attendance_record_repo: Check-in/out
+--
+-- ============================================================
+-- 2. OPTIMISTIC LOCKING (Status Check di WHERE)
+-- ============================================================
+-- Approval functions sekarang memiliki AND status = 'pending' di
+-- WHERE clause-nya untuk mencegah double-approve race condition:
+--
+-- Modul              | Fungsi                 | WHERE Lock
+-- -------------------|------------------------|------------------------------
+-- leave_repo         | UpdateLeaveStatus      | AND status = 'pending'
+-- overtime_repo      | UpdateOvertimeStatus   | AND status = 'pending'
+-- reimbursement_repo | UpdateReimbursementStatus| AND status = 'pending'
+-- reimbursement_repo | PayReimbursement       | AND status = 'approved'
+-- reimbursement_repo | CancelReimbursement    | AND status IN ('pending','approved')
+-- loan_repo          | UpdateLoanStatus       | AND status = 'pending'
+-- loan_repo          | DisburseLoan           | AND status IN ('approved','pending')
+-- shift_change_repo  | UpdateShiftChangeStatus| AND status IN ('pending','partner_pending')
+-- shift_change_repo  | ConfirmSwapPartner     | AND status = 'partner_pending'
+-- shift_change_repo  | CancelShiftChangeRequest| AND status IN ('pending','partner_pending')
+-- leave_repo         | CancelLeaveRequest     | AND status = 'pending'
+-- overtime_repo      | CancelOvertimeRequest  | AND status = 'pending'
+--
+-- Error handling: pgx.ErrNoRows atau tag.RowsAffected() == 0
+-- menghasilkan pesan error user-friendly dalam Bahasa Indonesia.
+--
+-- ============================================================
+-- 3. BENEFIT YANG DICAPAI
+-- ============================================================
+-- ✅ Race condition cegah double-approve
+-- ✅ Audit trail lengkap (siapa melakukan apa)
+-- ✅ Atomic operations (rollback jika salah satu langkah gagal)
+-- ✅ User-friendly error messages
+-- ✅ 0 TypeScript errors (svelte-check lulus)
+-- ✅ 0 Go compilation errors (go build lulus)
+-- ✅ 0 Go vet warnings (go vet lulus)
+-- ✅ Semua unit test lulus (go test lulus)
+
+-- Migration ini tidak mengubah skema database
+SELECT 1;

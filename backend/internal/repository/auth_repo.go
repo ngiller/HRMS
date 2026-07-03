@@ -18,14 +18,24 @@ func GetEmployeeByEmail(ctx context.Context, email string) (*models.Employee, er
 			COALESCE(e.marital_status::text, ''), e.join_date, e.employment_status::text, e.is_active,
 			e.role_id, COALESCE(r.slug, ''), COALESCE(r.name, ''),
 			e.position_id, COALESCE(p.name, ''),
-			p.department_id, COALESCE(d.name, ''),
-			COALESCE(e.phone, ''), COALESCE(e.address_domicile, ''), e.last_login_at, e.is_locked, e.locked_until,
+			e.department_id, COALESCE(d.name, ''),
+			e.work_schedule_id, COALESCE(ws.name, ''),
+			COALESCE(e.phone, ''), COALESCE(e.address_domicile, ''), COALESCE(e.photo_url, ''),
+			COALESCE(decrypt_sensitive(e.encrypted_nik), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_npwp), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_bank_name), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_bank_account), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_address_ktp), ''),
+			e.base_salary,
+			e.daily_wage,
+			e.last_login_at, e.is_locked, e.locked_until,
 			e.created_at, e.updated_at
 		FROM employees e
 		LEFT JOIN roles r ON e.role_id = r.id
-		LEFT JOIN positions p ON e.position_id = p.id
-		LEFT JOIN departments d ON p.department_id = d.id
-		WHERE e.email = $1 AND e.deleted_at IS NULL
+	LEFT JOIN positions p ON e.position_id = p.id
+	LEFT JOIN departments d ON e.department_id = d.id
+	LEFT JOIN work_schedules ws ON e.work_schedule_id = ws.id
+	WHERE e.email = $1 AND e.deleted_at IS NULL
 	`
 
 	row := database.Pool.QueryRow(ctx, query, email)
@@ -39,13 +49,23 @@ func GetEmployeeByID(ctx context.Context, id uuid.UUID) (*models.Employee, error
 			COALESCE(e.marital_status::text, ''), e.join_date, e.employment_status::text, e.is_active,
 			e.role_id, COALESCE(r.slug, ''), COALESCE(r.name, ''),
 			e.position_id, COALESCE(p.name, ''),
-			p.department_id, COALESCE(d.name, ''),
-			COALESCE(e.phone, ''), COALESCE(e.address_domicile, ''), e.last_login_at, e.is_locked, e.locked_until,
+			e.department_id, COALESCE(d.name, ''),
+			e.work_schedule_id, COALESCE(ws.name, ''),
+			COALESCE(e.phone, ''), COALESCE(e.address_domicile, ''), COALESCE(e.photo_url, ''),
+			COALESCE(decrypt_sensitive(e.encrypted_nik), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_npwp), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_bank_name), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_bank_account), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_address_ktp), ''),
+			e.base_salary,
+			e.daily_wage,
+			e.last_login_at, e.is_locked, e.locked_until,
 			e.created_at, e.updated_at
 		FROM employees e
 		LEFT JOIN roles r ON e.role_id = r.id
 		LEFT JOIN positions p ON e.position_id = p.id
-		LEFT JOIN departments d ON p.department_id = d.id
+		LEFT JOIN departments d ON e.department_id = d.id
+		LEFT JOIN work_schedules ws ON e.work_schedule_id = ws.id
 		WHERE e.id = $1 AND e.deleted_at IS NULL
 	`
 
@@ -55,8 +75,16 @@ func GetEmployeeByID(ctx context.Context, id uuid.UUID) (*models.Employee, error
 
 func UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE employees SET last_login_at = NOW() WHERE id = $1`
-	_, err := database.Pool.Exec(ctx, query, id)
-	return err
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func CreatePasswordResetToken(ctx context.Context, employeeID uuid.UUID, token string, expiresAt time.Time) error {
@@ -64,8 +92,16 @@ func CreatePasswordResetToken(ctx context.Context, employeeID uuid.UUID, token s
 		INSERT INTO password_reset_tokens (employee_id, token, expires_at)
 		VALUES ($1, $2, $3)
 	`
-	_, err := database.Pool.Exec(ctx, query, employeeID, token, expiresAt)
-	return err
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, employeeID, token, expiresAt)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func ValidateResetToken(ctx context.Context, token string) (*uuid.UUID, error) {
@@ -86,14 +122,30 @@ func ValidateResetToken(ctx context.Context, token string) (*uuid.UUID, error) {
 
 func MarkResetTokenUsed(ctx context.Context, token string) error {
 	query := `UPDATE password_reset_tokens SET is_used = TRUE WHERE token = $1`
-	_, err := database.Pool.Exec(ctx, query, token)
-	return err
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, token)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func UpdatePassword(ctx context.Context, employeeID uuid.UUID, passwordHash string) error {
 	query := `UPDATE employees SET password_hash = $1 WHERE id = $2`
-	_, err := database.Pool.Exec(ctx, query, passwordHash, employeeID)
-	return err
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, passwordHash, employeeID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func RecordLoginAttempt(ctx context.Context, employeeID uuid.UUID, ipAddress string, isSuccessful bool) error {
@@ -101,8 +153,16 @@ func RecordLoginAttempt(ctx context.Context, employeeID uuid.UUID, ipAddress str
 		INSERT INTO login_attempts (employee_id, ip_address, is_successful)
 		VALUES ($1, $2, $3)
 	`
-	_, err := database.Pool.Exec(ctx, query, employeeID, ipAddress, isSuccessful)
-	return err
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, employeeID, ipAddress, isSuccessful)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func GetRecentFailedAttempts(ctx context.Context, employeeID uuid.UUID, within time.Duration) (int, error) {
@@ -118,8 +178,80 @@ func GetRecentFailedAttempts(ctx context.Context, employeeID uuid.UUID, within t
 
 func LockEmployee(ctx context.Context, employeeID uuid.UUID, until time.Time) error {
 	query := `UPDATE employees SET is_locked = TRUE, locked_until = $1 WHERE id = $2`
-	_, err := database.Pool.Exec(ctx, query, until, employeeID)
-	return err
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, until, employeeID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func StoreRefreshToken(ctx context.Context, userID uuid.UUID, refreshToken string, expiresAt time.Time) error {
+	query := `
+		INSERT INTO user_sessions (user_id, refresh_token, expires_at)
+		VALUES ($1, $2, $3)
+	`
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, userID, refreshToken, expiresAt)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*models.Session, error) {
+	query := `
+		SELECT id, user_id, refresh_token, is_active, expires_at
+		FROM user_sessions
+		WHERE refresh_token = $1 AND is_active = TRUE AND expires_at > NOW()
+	`
+	var s models.Session
+	err := database.Pool.QueryRow(ctx, query, refreshToken).Scan(
+		&s.ID, &s.UserID, &s.RefreshToken, &s.IsActive, &s.ExpiresAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func InvalidateSession(ctx context.Context, refreshToken string) error {
+	query := `UPDATE user_sessions SET is_active = FALSE WHERE refresh_token = $1`
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, refreshToken)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func InvalidateAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	query := `UPDATE user_sessions SET is_active = FALSE WHERE user_id = $1 AND is_active = TRUE`
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func scanEmployee(row pgx.Row) (*models.Employee, error) {
@@ -131,7 +263,11 @@ func scanEmployee(row pgx.Row) (*models.Employee, error) {
 		&e.RoleID, &e.RoleSlug, &e.RoleName,
 		&e.PositionID, &e.PositionName,
 		&e.DepartmentID, &e.DepartmentName,
-		&e.Phone, &e.Address, &e.LastLoginAt, &e.IsLocked, &e.LockedUntil,
+		&e.WorkScheduleID, &e.WorkScheduleName,
+		&e.Phone, &e.Address, &e.PhotoURL,
+		&e.NIK, &e.NPWP, &e.BankName, &e.BankAccount, &e.AddressKTP,
+		&e.BaseSalary, &e.DailyWage,
+		&e.LastLoginAt, &e.IsLocked, &e.LockedUntil,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {

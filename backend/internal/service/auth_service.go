@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"hrms-backend/internal/config"
@@ -85,12 +86,24 @@ func (s *AuthService) Login(ctx context.Context, req models.LoginRequest, ipAddr
 		return nil, errors.New("gagal membuat refresh token")
 	}
 
+	// Store refresh token in database
+	refreshExpiry := time.Now().Add(s.cfg.JWTRefreshExpiry)
+	if err := repository.StoreRefreshToken(ctx, employee.ID, refreshToken, refreshExpiry); err != nil {
+		return nil, errors.New("gagal menyimpan session")
+	}
+
 	// Get initials for avatar
 	initials := getInitials(employee.FullName)
 
 	roleID := uuid.Nil
 	if employee.RoleID != nil {
 		roleID = *employee.RoleID
+	}
+
+	// Get permissions
+	perms, _ := repository.GetPermissionsByRoleSlug(ctx, employee.RoleSlug)
+	if perms == nil {
+		perms = make(map[string]map[string]bool)
 	}
 
 	return &models.LoginResponse{
@@ -108,6 +121,7 @@ func (s *AuthService) Login(ctx context.Context, req models.LoginRequest, ipAddr
 			PositionName:   employee.PositionName,
 			DepartmentName: employee.DepartmentName,
 			AvatarInitials: initials,
+			Permissions:    perms,
 		},
 	}, nil
 }
@@ -185,7 +199,7 @@ func (s *AuthService) GetUserByID(ctx context.Context, id string) (*models.UserR
 		if employee == nil {
 			return nil, errors.New("karyawan tidak ditemukan")
 		}
-		return employeeToUserResponse(employee), nil
+		return employeeToUserResponse(ctx, employee), nil
 	}
 
 	employee, err := repository.GetEmployeeByID(ctx, parsedID)
@@ -196,7 +210,7 @@ func (s *AuthService) GetUserByID(ctx context.Context, id string) (*models.UserR
 		return nil, errors.New("karyawan tidak ditemukan")
 	}
 
-	return employeeToUserResponse(employee), nil
+	return employeeToUserResponse(ctx, employee), nil
 }
 
 func (s *AuthService) generateAccessToken(employee *models.Employee) (string, int64, error) {
@@ -261,7 +275,100 @@ func (s *AuthService) ValidateAccessToken(tokenString string) (*models.Claims, e
 	}, nil
 }
 
-func employeeToUserResponse(employee *models.Employee) *models.UserResponse {
+func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*models.LoginResponse, error) {
+	// Validate refresh token from database
+	session, err := repository.GetSessionByRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return nil, errors.New("terjadi kesalahan sistem")
+	}
+	if session == nil {
+		return nil, ErrInvalidToken
+	}
+
+	// Get user by ID
+	employee, err := repository.GetEmployeeByID(ctx, session.UserID)
+	if err != nil {
+		return nil, errors.New("terjadi kesalahan sistem")
+	}
+	if employee == nil || !employee.IsActive {
+		return nil, errors.New("akun tidak ditemukan atau tidak aktif")
+	}
+
+	// Generate new access token
+	accessToken, expiresIn, err := s.generateAccessToken(employee)
+	if err != nil {
+		return nil, errors.New("gagal membuat token")
+	}
+
+	// Generate new refresh token (token rotation)
+	newRefreshToken, err := s.generateRefreshToken()
+	if err != nil {
+		return nil, errors.New("gagal membuat refresh token")
+	}
+
+	// Invalidate old session and create new one
+	refreshExpiry := time.Now().Add(s.cfg.JWTRefreshExpiry)
+	if err := repository.InvalidateSession(ctx, refreshToken); err != nil {
+		return nil, errors.New("gagal memperbarui session")
+	}
+	if err := repository.StoreRefreshToken(ctx, employee.ID, newRefreshToken, refreshExpiry); err != nil {
+		return nil, errors.New("gagal menyimpan session")
+	}
+
+	initials := getInitials(employee.FullName)
+	roleID := uuid.Nil
+	if employee.RoleID != nil {
+		roleID = *employee.RoleID
+	}
+
+	// Get permissions
+	perms, _ := repository.GetPermissionsByRoleSlug(ctx, employee.RoleSlug)
+	if perms == nil {
+		perms = make(map[string]map[string]bool)
+	}
+
+	return &models.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    expiresIn,
+		User: models.UserResponse{
+			ID:             employee.ID,
+			EmployeeID:     employee.EmployeeID,
+			FullName:       employee.FullName,
+			Email:          employee.Email,
+			RoleID:         roleID,
+			RoleSlug:       employee.RoleSlug,
+			RoleName:       employee.RoleName,
+			PositionName:   employee.PositionName,
+			DepartmentName: employee.DepartmentName,
+			AvatarInitials: initials,
+			Permissions:    perms,
+		},
+	}, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID, refreshToken string) error {
+	// Invalidate the specific session
+	if refreshToken != "" {
+		if err := repository.InvalidateSession(ctx, refreshToken); err != nil {
+			return errors.New("gagal logout")
+		}
+	} else {
+		// If no token specified, invalidate all sessions for user
+		if err := repository.InvalidateAllUserSessions(ctx, userID); err != nil {
+			return errors.New("gagal logout")
+		}
+	}
+	return nil
+}
+
+func employeeToUserResponse(ctx context.Context, employee *models.Employee) *models.UserResponse {
+	// Get permissions from database
+	perms, _ := repository.GetPermissionsByRoleSlug(ctx, employee.RoleSlug)
+	if perms == nil {
+		perms = make(map[string]map[string]bool)
+	}
+
 	return &models.UserResponse{
 		ID:              employee.ID,
 		EmployeeID:      employee.EmployeeID,
@@ -272,18 +379,64 @@ func employeeToUserResponse(employee *models.Employee) *models.UserResponse {
 		PositionName:    employee.PositionName,
 		DepartmentName:  employee.DepartmentName,
 		AvatarInitials:  getInitials(employee.FullName),
+		Permissions:     perms,
 	}
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID string, req models.ChangePasswordRequest) error {
+	// Get employee
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return errors.New("ID pengguna tidak valid")
+	}
+	employee, err := repository.GetEmployeeByID(ctx, id)
+	if err != nil {
+		return errors.New("terjadi kesalahan sistem")
+	}
+	if employee == nil {
+		return errors.New("karyawan tidak ditemukan")
+	}
+
+	// Verify current password
+	if employee.PasswordHash == "" || employee.PasswordHash == "PLACEHOLDER_HASH_RESET_ON_FIRST_LOGIN" {
+		return errors.New("password belum diatur, gunakan fitur reset password")
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(employee.PasswordHash), []byte(req.CurrentPassword))
+	if err != nil {
+		return errors.New("password saat ini salah")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("gagal mengenkripsi password")
+	}
+
+	// Update password
+	err = repository.UpdatePassword(ctx, id, string(hashedPassword))
+	if err != nil {
+		return errors.New("gagal mengupdate password")
+	}
+
+	return nil
 }
 
 func getInitials(name string) string {
 	if len(name) == 0 {
 		return "NA"
 	}
-	runes := []rune(name)
-	if len(runes) >= 2 {
-		return string(runes[0]) + string(runes[1])
+	words := strings.Fields(name)
+	if len(words) >= 2 {
+		a := []rune(words[0])[0]
+		b := []rune(words[1])[0]
+		return strings.ToUpper(string(a)) + strings.ToUpper(string(b))
 	}
-	return string(runes[0])
+	runes := []rune(words[0])
+	if len(runes) >= 2 {
+		return strings.ToUpper(string(runes[0]) + string(runes[1]))
+	}
+	return strings.ToUpper(string(runes[0]))
 }
 
 func getStringClaim(claims jwt.MapClaims, key string) string {

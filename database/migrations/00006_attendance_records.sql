@@ -92,7 +92,6 @@ SELECT
     AVG(total_work_hours) AS avg_work_hours,
     AVG(late_minutes) FILTER (WHERE is_late = TRUE) AS avg_late_minutes
 FROM attendance_records
-WHERE deleted_at IS NULL
 GROUP BY employee_id, DATE_TRUNC('month', date);
 
 CREATE UNIQUE INDEX idx_attendance_summary_employee_month
@@ -105,8 +104,7 @@ CREATE INDEX idx_attendance_records_date
     ON attendance_records(date);
 CREATE INDEX idx_attendance_records_status 
     ON attendance_records(status);
-CREATE INDEX idx_attendance_records_employee_month 
-    ON attendance_records(employee_id, (DATE_TRUNC('month', date)));
+-- Index on employee_id and date is already covered by idx_attendance_records_employee_date
 
 -- +goose Down
 DROP MATERIALIZED VIEW IF EXISTS attendance_summary;
