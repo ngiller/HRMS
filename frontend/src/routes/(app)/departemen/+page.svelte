@@ -489,8 +489,8 @@
 	<!-- Header Section -->
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 tracking-tight">Departemen</h1>
-			<p class="text-sm text-gray-500 mt-0.5">Kelola seluruh departemen dan sub-departemen perusahaan</p>
+			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Departemen</h1>
+			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Kelola seluruh departemen dan sub-departemen perusahaan</p>
 		</div>
 		{#if !showForm && hasPermission('department', 'create')}
 			<button
@@ -508,48 +508,48 @@
 	<!-- Summary Stats (sembunyikan saat form aktif) -->
 	{#if !showForm && !isLoading && !errorMessage && departments.length > 0}
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Total</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Total</span>
 					<div class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{total}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{total}</p>
 			</div>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Aktif</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Aktif</span>
 					<div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{totalActiveDepts}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{totalActiveDepts}</p>
 			</div>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Sub-Dept</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Sub-Dept</span>
 					<div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{totalSubDepts}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{totalSubDepts}</p>
 			</div>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Total Karyawan</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Total Karyawan</span>
 					<div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{totalEmployeesAll}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{totalEmployeesAll}</p>
 			</div>
 		</div>
 	{/if}
 
 	<!-- Search & Filter Bar (sembunyikan saat form aktif) -->
 	{#if !showForm}
-		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<div class="relative flex-1 max-w-md">
 				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -559,11 +559,11 @@
 					value={searchQuery}
 					placeholder="Cari berdasarkan nama atau kode..."
 					oninput={onSearchInput}
-					class="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white transition placeholder:text-gray-400"
+					class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400"
 					aria-label="Cari departemen"
 				/>
 			</div>
-			<div class="flex items-center gap-2 text-xs text-gray-400">
+			<div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
 				{total > 0 ? `${total} departemen ditemukan` : ''}
 			</div>
 		</div>
@@ -571,13 +571,13 @@
 
 	<!-- Inline Form (gantikan tabel) -->
 	<div class:hidden={!showForm}>
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			<!-- Form Header -->
-			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-				<h2 class="text-lg font-semibold text-gray-900">{formTitle}</h2>
+			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{formTitle}</h2>
 				<button
 					onclick={cancelForm}
-					class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+					class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
 					aria-label="Tutup"
 				>
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -589,28 +589,28 @@
 			<!-- Form Body -->
 			<div class="px-6 py-5 space-y-4">
 				{#if formError}
-					<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">
+					<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-2.5 rounded-lg">
 						{formError}
 					</div>
 				{/if}
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label for="dept-name" class="block text-sm font-medium text-gray-700 mb-1.5">Nama Departemen <span class="text-red-500">*</span></label>
+						<label for="dept-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nama Departemen <span class="text-red-500">*</span></label>
 						<input id="dept-name"
 							type="text"
 							bind:value={form.name}
-							class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 							placeholder="Contoh: Teknologi Informasi"
 						/>
 					</div>
 
 					<div>
-						<label for="dept-code" class="block text-sm font-medium text-gray-700 mb-1.5">Kode Departemen <span class="text-red-500">*</span></label>
+						<label for="dept-code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Kode Departemen <span class="text-red-500">*</span></label>
 						<input id="dept-code"
 							type="text"
 							bind:value={form.code}
-							class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 uppercase"
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 uppercase"
 							placeholder="Contoh: IT"
 						/>
 					</div>
@@ -618,10 +618,10 @@
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label for="dept-parent" class="block text-sm font-medium text-gray-700 mb-1.5">Departemen Induk</label>
+						<label for="dept-parent" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Departemen Induk</label>
 						<select id="dept-parent"
 							bind:value={form.parent_id}
-							class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white"
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900"
 						>
 							<option value="">Tidak ada (departemen utama)</option>
 							{#each allDepts as d}
@@ -633,10 +633,10 @@
 					</div>
 
 					<div>
-						<label for="dept-schedule" class="block text-sm font-medium text-gray-700 mb-1.5">Jadwal Kerja</label>
+						<label for="dept-schedule" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Jadwal Kerja</label>
 						<select id="dept-schedule"
 							bind:value={form.work_schedule_id}
-							class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white"
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900"
 						>
 							<option value="">Pilih jadwal (opsional)</option>
 							{#each workSchedules as ws}
@@ -647,11 +647,11 @@
 				</div>
 
 				<div>
-					<label for="dept-desc" class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
+					<label for="dept-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Deskripsi</label>
 					<textarea id="dept-desc"
 						bind:value={form.description}
 						rows="3"
-						class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 resize-none"
+						class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 resize-none"
 						placeholder="Deskripsi departemen (opsional)"
 					></textarea>
 				</div>
@@ -661,17 +661,17 @@
 						<label class="relative inline-flex items-center cursor-pointer">
 							<input type="checkbox" bind:checked={form.is_active} class="sr-only peer" />
 							<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1A56DB]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1A56DB]"></div>
-							<span class="ms-2 text-sm font-medium text-gray-700">Status Aktif</span>
+							<span class="ms-2 text-sm font-medium text-gray-700 dark:text-gray-300">Status Aktif</span>
 						</label>
 					</div>
 				{/if}
 			</div>
 
 			<!-- Form Footer -->
-			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50">
+			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
 				<button
 					onclick={cancelForm}
-					class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+					class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
 				>
 					Batal
 				</button>
@@ -693,7 +693,7 @@
 	</div>
 	<div class:hidden={showForm}>
 		<!-- Table Card -->
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
 				<!-- Loading Skeleton -->
 				<div class="p-6 animate-pulse">
@@ -701,12 +701,12 @@
 						{#each [1,2,3,4,5] as _}
 							<div class="flex items-center gap-4 py-2">
 								<div class="flex-1 space-y-1.5">
-									<div class="h-4 bg-gray-100 rounded w-44"></div>
-									<div class="h-3 bg-gray-50 rounded w-28"></div>
+									<div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div>
+									<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div>
 								</div>
-								<div class="h-3 bg-gray-50 rounded w-24 hidden md:block"></div>
-								<div class="h-3 bg-gray-50 rounded w-20 hidden md:block"></div>
-								<div class="h-8 bg-gray-100 rounded w-20"></div>
+								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-24 hidden md:block"></div>
+								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-20 hidden md:block"></div>
+								<div class="h-8 bg-gray-100 dark:bg-gray-800 rounded w-20"></div>
 							</div>
 						{/each}
 					</div>
@@ -714,13 +714,13 @@
 			{:else if errorMessage}
 				<!-- Error State -->
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
 						<svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
 						</svg>
 					</div>
-					<p class="text-sm font-medium text-gray-900 mb-1">Gagal memuat data</p>
-					<p class="text-sm text-gray-500 mb-4">{errorMessage}</p>
+					<p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Gagal memuat data</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{errorMessage}</p>
 					<button onclick={loadDepartments} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">
 						Muat Ulang
 					</button>
@@ -728,13 +728,13 @@
 			{:else if departments.length === 0}
 				<!-- Empty State -->
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center">
-						<svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+						<svg class="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
 						</svg>
 					</div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada data departemen</h3>
-					<p class="text-sm text-gray-500 max-w-xs mx-auto">
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada data departemen</h3>
+					<p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
 						{searchQuery
 							? `Tidak ditemukan departemen dengan kata kunci "${searchQuery}"`
 							: 'Data departemen akan muncul di sini setelah ditambahkan.'}
@@ -747,27 +747,27 @@
 				</div>
 
 			<!-- Mobile Cards -->
-			<div class="md:hidden divide-y divide-gray-100">
+			<div class="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
 				{#each departments as dept}
 					<div class="p-4 hover:bg-blue-50/40 transition-colors">
 						<div class="flex items-center gap-3 mb-2">
-							<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600 shrink-0 ring-1 ring-indigo-200">
+							<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/50 dark:to-indigo-800/50 flex items-center justify-center text-xs font-semibold text-indigo-600 dark:text-indigo-300 shrink-0 ring-1 ring-indigo-200 dark:ring-indigo-800">
 								{getInitials(dept.name)}
 							</div>
 							<div class="flex-1 min-w-0">
-								<div class="text-sm font-medium text-gray-900 truncate">{dept.name}</div>
-								<div class="text-xs text-gray-400">{dept.code}</div>
+								<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{dept.name}</div>
+								<div class="text-xs text-gray-400 dark:text-gray-500">{dept.code}</div>
 							</div>
 							<div class="flex items-center gap-1 shrink-0">
 								{#if hasPermission('department', 'update')}
-								<button onclick={() => openEditForm(dept)} class="p-1.5 rounded-lg text-gray-400 hover:text-[#1A56DB] hover:bg-blue-50 transition cursor-pointer" aria-label="Edit departemen">
+								<button onclick={() => openEditForm(dept)} class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-[#1A56DB] hover:bg-blue-50 dark:hover:bg-blue-900/30 transition cursor-pointer" aria-label="Edit departemen">
 									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 										<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
 									</svg>
 								</button>
 							{/if}
 								{#if hasPermission('department', 'delete')}
-									<button onclick={() => confirmDelete(dept.id, dept.name)} class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer" aria-label="Hapus departemen">
+									<button onclick={() => confirmDelete(dept.id, dept.name)} class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition cursor-pointer" aria-label="Hapus departemen">
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 											<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
 										</svg>
@@ -775,14 +775,14 @@
 								{/if}
 							</div>
 						</div>
-						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 ml-13">
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 dark:text-gray-500 ml-13">
 							{#if dept.head_name}
 								<span class="truncate">Kepala: {dept.head_name}</span>
-								<span class="w-1 h-1 bg-gray-300 rounded-full shrink-0"></span>
+								<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
 							{/if}
 							{#if dept.parent_name}
 								<span class="truncate">Induk: {dept.parent_name}</span>
-								<span class="w-1 h-1 bg-gray-300 rounded-full shrink-0"></span>
+								<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
 							{/if}
 							<span>{dept.employee_count} karyawan</span>
 							<span class="w-1 h-1 bg-gray-300 rounded-full shrink-0"></span>
@@ -797,15 +797,15 @@
 			</div>
 
 				<!-- Pagination -->
-				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
-					<div class="text-xs text-gray-500">
-						Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span>
+				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">
+					<div class="text-xs text-gray-500 dark:text-gray-400">
+						Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span>
 					</div>
 					<div class="flex items-center gap-1.5">
 						<button
 							onclick={() => goToPage(page - 1)}
 							disabled={page <= 1}
-							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
 						>
 							Sebelumnya
 						</button>
@@ -814,7 +814,7 @@
 							{#if pageNum <= totalPages}
 								<button
 									onclick={() => goToPage(pageNum)}
-									class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}"
+									class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 								>
 									{pageNum}
 								</button>
@@ -823,7 +823,7 @@
 						<button
 							onclick={() => goToPage(page + 1)}
 							disabled={page >= totalPages}
-							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
 						>
 							Selanjutnya
 						</button>
@@ -850,24 +850,24 @@
 			aria-modal="true"
 			aria-label="Hapus departemen"
 			tabindex="-1"
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-sm"
+			class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm"
 		>
 			<div class="px-6 py-6 text-center">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
 					<svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
 					</svg>
 				</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Hapus Departemen</h3>
-				<p class="text-sm text-gray-500 mb-1">
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Hapus Departemen</h3>
+				<p class="text-sm text-gray-500 dark:text-gray-400 mb-1">
 					Apakah Anda yakin ingin menghapus departemen
 				</p>
-				<p class="text-sm font-medium text-gray-900 mb-4">"{deletingName}"?</p>
-				<p class="text-xs text-gray-400 mb-6">Tindakan ini tidak dapat dibatalkan.</p>
+				<p class="text-sm font-medium text-gray-900 dark:text-white mb-4">"{deletingName}"?</p>
+				<p class="text-xs text-gray-400 dark:text-gray-500 mb-6">Tindakan ini tidak dapat dibatalkan.</p>
 				<div class="flex items-center justify-center gap-3">
 					<button
 						onclick={cancelDelete}
-						class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+						class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
 					>
 						Batal
 					</button>

@@ -773,3 +773,40 @@
     {@render children()}
   </main>
 </div>
+
+<style>
+  :global(.dark .ag-theme-quartz) {
+    --ag-foreground-color: #e5e7eb;
+    --ag-background-color: #1f2937;
+    --ag-header-background-color: #111827;
+    --ag-header-foreground-color: #9ca3af;
+    --ag-border-color: #374151;
+    --ag-secondary-border-color: #374151;
+    --ag-row-hover-color: #374151;
+    --ag-odd-row-background-color: #1f2937;
+    --ag-input-background-color: #374151;
+    --ag-input-border-color: #4b5563;
+    --ag-input-disabled-background-color: #374151;
+    --ag-control-panel-background-color: #1f2937;
+    --ag-side-button-selected-background-color: #374151;
+    --ag-selected-row-background-color: rgba(59, 130, 246, 0.15);
+    --ag-chip-background-color: #374151;
+    --ag-modal-overlay-background-color: rgba(0, 0, 0, 0.5);
+    --ag-tooltip-background-color: #1f2937;
+    --ag-tooltip-border-color: #374151;
+    --ag-range-selection-background-color: rgba(59, 130, 246, 0.2);
+    --ag-range-selection-border-color: #3b82f6;
+    --ag-range-selection-background-color-2: rgba(59, 130, 246, 0.36);
+    --ag-range-selection-background-color-3: rgba(59, 130, 246, 0.49);
+    --ag-range-selection-background-color-4: rgba(59, 130, 246, 0.59);
+    --ag-checkbox-checked-color: #3b82f6;
+    --ag-checkbox-unchecked-color: #6b7280;
+    --ag-toggle-button-off-background-color: #4b5563;
+    --ag-toggle-button-on-background-color: #3b82f6;
+    --ag-toggle-button-off-border-color: #6b7280;
+    --ag-toggle-button-on-border-color: #3b82f6;
+    --ag-header-column-resize-handle-color: #374151;
+    --ag-data-color: #e5e7eb;
+    --ag-secondary-foreground-color: #9ca3af;
+  }
+</style>

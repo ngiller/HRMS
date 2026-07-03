@@ -2,24 +2,24 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { activityLogs, employees, ApiError } from '$lib/api.js';
 
-	let loading = true;
-	let items: any[] = [];
-	let total = 0;
-	let pageNum = 1;
+	let loading = $state(true);
+	let items = $state<any[]>([]);
+	let total = $state(0);
+	let pageNum = $state(1);
 	const perPage = 25;
-	let error = '';
+	let error = $state('');
 
 	// Filters
-	let filterAction = '';
-	let filterEntityType = '';
-	let filterEmployeeId = '';
-	let filterStartDate = '';
-	let filterEndDate = '';
+	let filterAction = $state('');
+	let filterEntityType = $state('');
+	let filterEmployeeId = $state('');
+	let filterStartDate = $state('');
+	let filterEndDate = $state('');
 
 	// Dropdown options
-	let entityTypes: string[] = [];
-	let actions: string[] = [];
-	let employeeList: any[] = [];
+	let entityTypes = $state<string[]>([]);
+	let actions = $state<string[]>([]);
+	let employeeList = $state<any[]>([]);
 
 	async function loadEmployees() {
 		try {
@@ -102,7 +102,7 @@
 	// Skeleton loader array — Svelte doesn't support [...Array(n)] in template
 	const skeletonItems = [1, 2, 3, 4, 5, 6, 7, 8];
 
-	const totalPages = Math.max(1, Math.ceil(total / perPage));
+	let totalPages = $derived(Math.max(1, Math.ceil(total / perPage)));
 
 	onMount(() => {
 		load();
@@ -176,12 +176,12 @@
 		</div>
 		<div class="flex gap-2 mt-3">
 			<button
-				on:click={search}
-				class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+				onclick={search}
+				class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium cursor-pointer"
 			>Cari</button>
 			<button
-				on:click={resetFilters}
-				class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm"
+				onclick={resetFilters}
+				class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm cursor-pointer"
 			>Reset</button>
 		</div>
 	</div>
@@ -235,17 +235,17 @@
 		{#if totalPages > 1}
 			<div class="flex items-center justify-center gap-2 mt-6">
 				<button
-					on:click={() => { if (pageNum > 1) { pageNum--; load(); } }}
+					onclick={() => { if (pageNum > 1) { pageNum--; load(); } }}
 					disabled={pageNum <= 1}
-					class="px-3 py-1.5 rounded text-sm disabled:opacity-40 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+					class="px-3 py-1.5 rounded text-sm disabled:opacity-40 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer"
 				>Sebelumnya</button>
 				<span class="text-sm text-gray-500 dark:text-gray-400">
 					Halaman {pageNum} dari {totalPages}
 				</span>
 				<button
-					on:click={() => { if (pageNum < totalPages) { pageNum++; load(); } }}
+					onclick={() => { if (pageNum < totalPages) { pageNum++; load(); } }}
 					disabled={pageNum >= totalPages}
-					class="px-3 py-1.5 rounded text-sm disabled:opacity-40 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+					class="px-3 py-1.5 rounded text-sm disabled:opacity-40 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer"
 				>Selanjutnya</button>
 			</div>
 		{/if}

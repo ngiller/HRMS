@@ -113,22 +113,22 @@ let deleteId: string | null = null;
 				const initials = getInitials(params.value);
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600 shrink-0 ring-1 ring-indigo-200">${initials}</div>
-					<div class="text-sm font-medium text-gray-900">${params.value}</div>
+					<div class="text-sm font-medium text-gray-900 dark:text-white">${params.value}</div>
 				</div>`;
 			},
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'py-1',
 		},
 		{
 			field: 'title', headerName: 'Judul', minWidth: 180, flex: 1,
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-900 font-medium',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-900 dark:text-white font-medium',
 		},
 		{
 			field: 'doc_type', headerName: 'Tipe', minWidth: 120,
 			valueFormatter: (params: any) => docTypes[params.value] || params.value || '',
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-600',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-600 dark:text-gray-400',
 		},
 		{
 			field: 'status', headerName: 'Status', minWidth: 120, maxWidth: 140,
@@ -136,19 +136,19 @@ let deleteId: string | null = null;
 				const status = params.value || '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${statusLabels[status] || status}</span>`;
 			},
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 		},
 		{
 			field: 'expiry_date', headerName: 'Berakhir', minWidth: 120,
 			valueFormatter: (params: any) => params.value ? formatDate(params.value) : '-',
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-500',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 120,
 			valueFormatter: (params: any) => formatDate(params.value),
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-500',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 150, maxWidth: 150,
@@ -159,25 +159,25 @@ let deleteId: string | null = null;
 				container.className = 'flex items-center justify-end gap-1';
 
 				const viewBtn = createActionButton(iconView(),
-					'p-1.5 rounded-lg text-gray-400 hover:text-[#1A56DB] hover:bg-blue-50 transition cursor-pointer',
+					'p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-[#1A56DB] hover:bg-blue-50 dark:hover:bg-blue-900/30 transition cursor-pointer',
 					'Detail', () => openDetail(item.id));
 				container.appendChild(viewBtn);
 
 				if (item.status === 'pending' && hasPermission('document', 'update')) {
 					const verifyBtn = createActionButton(iconVerify(),
-						'p-1.5 rounded-lg text-green-500 hover:text-green-700 hover:bg-green-50 transition cursor-pointer',
+						'p-1.5 rounded-lg text-green-500 dark:text-green-400 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 transition cursor-pointer',
 						'Verifikasi', () => handleVerify(item.id));
 					container.appendChild(verifyBtn);
 
 					const rejectBtn = createActionButton(iconReject(),
-						'p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer',
+						'p-1.5 rounded-lg text-red-400 dark:text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition cursor-pointer',
 						'Tolak', () => openReject(item.id));
 					container.appendChild(rejectBtn);
 				}
 
 				if (hasPermission('document', 'delete')) {
 					const deleteBtn = createActionButton(iconDelete(),
-						'p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer',
+						'p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition cursor-pointer',
 						'Hapus', () => requestDelete(item.id));
 					container.appendChild(deleteBtn);
 				}
@@ -333,8 +333,8 @@ function cancelDelete() {
 <div class="w-full">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 tracking-tight">Dokumen Karyawan</h1>
-			<p class="text-sm text-gray-500 mt-0.5">Kelola dokumen karyawan dengan verifikasi</p>
+			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Dokumen Karyawan</h1>
+			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Kelola dokumen karyawan dengan verifikasi</p>
 		</div>
 		{#if !showForm && hasPermission('document', 'create')}
 			<button onclick={openCreateForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
@@ -345,39 +345,39 @@ function cancelDelete() {
 	</div>
 
 	{#if !showForm}
-		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<div class="flex flex-wrap items-center gap-2">
-				<button onclick={() => { statusFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!statusFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">Semua</button>
+				<button onclick={() => { statusFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!statusFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">Semua</button>
 				{#each Object.entries(statusLabels) as [key, label]}
-					<button onclick={() => { statusFilter = key; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {statusFilter === key ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{label}</button>
+					<button onclick={() => { statusFilter = key; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {statusFilter === key ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{label}</button>
 				{/each}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<select bind:value={typeFilter} onchange={() => { page = 1; load(); }} class="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none bg-white">
+				<select bind:value={typeFilter} onchange={() => { page = 1; load(); }} class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-800 rounded-lg outline-none bg-white dark:bg-gray-900">
 					<option value="">Semua Tipe</option>
 					{#each Object.entries(docTypes) as [key, label]}
 						<option value={key}>{label}</option>
 					{/each}
 				</select>
-				<span class="text-xs text-gray-400">{total > 0 ? `${total} dokumen` : ''}</span>
+				<span class="text-xs text-gray-400 dark:text-gray-500">{total > 0 ? `${total} dokumen` : ''}</span>
 			</div>
 		</div>
 	{/if}
 
 	{#if showForm}
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-				<h2 class="text-lg font-semibold text-gray-900">{formTitle}</h2>
-				<button onclick={cancelForm} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
+			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{formTitle}</h2>
+				<button onclick={cancelForm} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
 				</button>
 			</div>
 			<div class="px-6 py-5 space-y-4">
-				{#if formError}<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">{formError}</div>{/if}
+				{#if formError}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-2.5 rounded-lg">{formError}</div>{/if}
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label for="doc-employee" class="block text-sm font-medium text-gray-700 mb-1.5">Karyawan <span class="text-red-500">*</span></label>
-						<select id="doc-employee" bind:value={form.employee_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+						<label for="doc-employee" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Karyawan <span class="text-red-500">*</span></label>
+						<select id="doc-employee" bind:value={form.employee_id} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 							<option value="">Pilih Karyawan</option>
 							{#each allEmployees as emp}
 								<option value={emp.id}>{emp.full_name || emp.employee_name || '-'}</option>
@@ -385,8 +385,8 @@ function cancelDelete() {
 						</select>
 					</div>
 					<div>
-						<label for="doc-type" class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Dokumen <span class="text-red-500">*</span></label>
-						<select id="doc-type" bind:value={form.doc_type} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+						<label for="doc-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipe Dokumen <span class="text-red-500">*</span></label>
+						<select id="doc-type" bind:value={form.doc_type} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 							{#each Object.entries(docTypes) as [key, label]}
 								<option value={key}>{label}</option>
 							{/each}
@@ -394,22 +394,22 @@ function cancelDelete() {
 					</div>
 				</div>
 				<div>
-					<label for="doc-title" class="block text-sm font-medium text-gray-700 mb-1.5">Judul Dokumen <span class="text-red-500">*</span></label>
-					<input id="doc-title" type="text" bind:value={form.title} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="Misal: Scan KTP" />
+					<label for="doc-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Judul Dokumen <span class="text-red-500">*</span></label>
+					<input id="doc-title" type="text" bind:value={form.title} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="Misal: Scan KTP" />
 				</div>
 				<div>
-					<label for="doc-desc" class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
-					<textarea id="doc-desc" bind:value={form.description} rows="2" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition resize-none" placeholder="Keterangan tambahan..."></textarea>
+					<label for="doc-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Deskripsi</label>
+					<textarea id="doc-desc" bind:value={form.description} rows="2" class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition resize-none" placeholder="Keterangan tambahan..."></textarea>
 				</div>
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label for="doc-expiry" class="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Berakhir</label>
-						<input id="doc-expiry" type="date" bind:value={form.expiry_date} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
+						<label for="doc-expiry" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tanggal Berakhir</label>
+						<input id="doc-expiry" type="date" bind:value={form.expiry_date} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
 					</div>
 				</div>
 			</div>
-			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-				<button onclick={cancelForm} class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">Batal</button>
+			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+				<button onclick={cancelForm} class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Batal</button>
 				<button onclick={handleSave} disabled={isSaving} class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 cursor-pointer">
 					{#if isSaving}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{/if}
 					Simpan
@@ -417,40 +417,40 @@ function cancelDelete() {
 			</div>
 		</div>
 	{:else if showDetail}
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-				<h2 class="text-lg font-semibold text-gray-900">Detail Dokumen</h2>
-				<button onclick={closeDetail} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
+			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">Detail Dokumen</h2>
+				<button onclick={closeDetail} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
 				</button>
 			</div>
 			<div class="px-6 py-5">
 				{#if isDetailLoading}
-					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 rounded w-48"></div><div class="h-4 bg-gray-50 rounded w-64"></div><div class="h-4 bg-gray-50 rounded w-40"></div></div>
+					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-64"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-40"></div></div>
 				{:else if detailData}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
-							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Informasi Dokumen</h3>
+							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Informasi Dokumen</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400">Status</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[detailData.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[detailData.status] || detailData.status}</span></p></div>
-								<div><span class="text-xs text-gray-400">Tipe</span><p class="text-sm font-medium text-gray-900">{docTypes[detailData.doc_type] || detailData.doc_type}</p></div>
-								<div><span class="text-xs text-gray-400">Judul</span><p class="text-sm font-medium text-gray-900">{detailData.title || '-'}</p></div>
-								<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700">{detailData.description || '-'}</p></div>
-								<div><span class="text-xs text-gray-400">Nama File</span><p class="text-sm text-gray-700">{detailData.file_name || '-'}</p></div>
-								<div><span class="text-xs text-gray-400">Masa Berakhir</span><p class="text-sm text-gray-700">{detailData.expiry_date ? formatDate(detailData.expiry_date) : '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Status</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[detailData.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[detailData.status] || detailData.status}</span></p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Tipe</span><p class="text-sm font-medium text-gray-900 dark:text-white">{docTypes[detailData.doc_type] || detailData.doc_type}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.title || '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.description || '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Nama File</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.file_name || '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Masa Berakhir</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.expiry_date ? formatDate(detailData.expiry_date) : '-'}</p></div>
 							</div>
 						</div>
 						<div>
-							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Karyawan & Verifikasi</h3>
+							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Karyawan & Verifikasi</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900">{detailData.employee_name || '-'}</p></div>
-								{#if detailData.verified_by_name}<div><span class="text-xs text-gray-400">Diverifikasi Oleh</span><p class="text-sm text-gray-700">{detailData.verified_by_name}</p></div>{/if}
-								{#if detailData.verified_at}<div><span class="text-xs text-gray-400">Diverifikasi Pada</span><p class="text-sm text-gray-700">{formatDate(detailData.verified_at)}</p></div>{/if}
-								{#if detailData.rejection_reason}<div><span class="text-xs text-gray-400">Alasan Ditolak</span><p class="text-sm text-red-600">{detailData.rejection_reason}</p></div>{/if}
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.employee_name || '-'}</p></div>
+								{#if detailData.verified_by_name}<div><span class="text-xs text-gray-400 dark:text-gray-500">Diverifikasi Oleh</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.verified_by_name}</p></div>{/if}
+								{#if detailData.verified_at}<div><span class="text-xs text-gray-400 dark:text-gray-500">Diverifikasi Pada</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(detailData.verified_at)}</p></div>{/if}
+								{#if detailData.rejection_reason}<div><span class="text-xs text-gray-400 dark:text-gray-500">Alasan Ditolak</span><p class="text-sm text-red-600 dark:text-red-400">{detailData.rejection_reason}</p></div>{/if}
 							</div>
 							<div class="mt-4 flex gap-2">
 								{#if detailData.file_url}
-									<a href={detailData.file_url} target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+									<a href={detailData.file_url} target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition">
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
 										Download
 									</a>
@@ -463,63 +463,63 @@ function cancelDelete() {
 						</div>
 					</div>
 				{:else}
-					<p class="text-sm text-gray-500 text-center py-8">Gagal memuat detail dokumen</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400 text-center py-8">Gagal memuat detail dokumen</p>
 				{/if}
 			</div>
 		</div>
 	{:else}
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
+				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div><div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div></div><div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-20"></div><div class="h-8 bg-gray-100 dark:bg-gray-800 rounded w-24"></div></div>{/each}</div></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
-					<p class="text-sm font-medium text-gray-900 mb-1">Gagal memuat data</p>
-					<p class="text-sm text-gray-500 mb-4">{errorMessage}</p>
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
+					<p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Gagal memuat data</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{errorMessage}</p>
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada dokumen</h3>
-					<p class="text-sm text-gray-500">Belum ada dokumen yang diupload.</p>
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg></div>
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada dokumen</h3>
+					<p class="text-sm text-gray-500 dark:text-gray-400">Belum ada dokumen yang diupload.</p>
 				</div>
 			{:else}
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<div class="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
+						<div class="p-4 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
 							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600 ring-1 ring-indigo-200">{getInitials(item.employee_name)}</div>
+								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/50 dark:to-indigo-800/50 flex items-center justify-center text-xs font-semibold text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-800">{getInitials(item.employee_name)}</div>
 								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{item.title}</div>
-									<div class="text-xs text-gray-400">{docTypes[item.doc_type] || item.doc_type}</div>
+									<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</div>
+									<div class="text-xs text-gray-400 dark:text-gray-500">{docTypes[item.doc_type] || item.doc_type}</div>
 								</div>
 								<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[item.status] || item.status}</span>
 							</div>
 							<div class="flex items-center gap-1 mt-2">
-								<button onclick={() => openDetail(item.id)} class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition cursor-pointer">Detail</button>
+								<button onclick={() => openDetail(item.id)} class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Detail</button>
 								{#if item.status === 'pending' && hasPermission('document', 'update')}
-									<button onclick={() => handleVerify(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition cursor-pointer">Verifikasi</button>
-									<button onclick={() => openReject(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition cursor-pointer">Tolak</button>
+									<button onclick={() => handleVerify(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 transition cursor-pointer">Verifikasi</button>
+									<button onclick={() => openReject(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer">Tolak</button>
 								{/if}
 							</div>
 						</div>
 					{/each}
 				</div>
-				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
-					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
+				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">
+					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
-						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
+						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
 						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
-								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
+								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>
 							{/if}
 						{/each}
-						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
+						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
 					</div>
 				</div>
 			{/if}
@@ -532,16 +532,16 @@ function cancelDelete() {
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tolak dokumen" class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tolak dokumen" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
 			<div class="px-6 py-6">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
-				<h3 class="text-lg font-semibold text-gray-900 text-center mb-4">Tolak Dokumen</h3>
+				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white text-center mb-4">Tolak Dokumen</h3>
 				<div class="space-y-3">
-					<label for="doc-reject-reason" class="block text-sm font-medium text-gray-700">Alasan Penolakan</label>
-					<textarea id="doc-reject-reason" bind:value={rejectReason} rows="3" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition resize-none" placeholder="Masukkan alasan penolakan (opsional)"></textarea>
+					<label for="doc-reject-reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Alasan Penolakan</label>
+					<textarea id="doc-reject-reason" bind:value={rejectReason} rows="3" class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition resize-none" placeholder="Masukkan alasan penolakan (opsional)"></textarea>
 				</div>
 				<div class="flex items-center justify-center gap-3 mt-6">
-					<button onclick={cancelReject} class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">Batal</button>
+					<button onclick={cancelReject} class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Batal</button>
 					<button onclick={handleReject} disabled={isSaving} class="px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
 						{#if isSaving}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{/if}
 						Tolak
@@ -550,4 +550,16 @@ function cancelDelete() {
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showDeleteConfirm}
+	<ConfirmModal
+		title="Hapus Dokumen"
+		message="Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan."
+		confirmText="Hapus"
+		confirmColor="red"
+		onConfirm={confirmDelete}
+		onCancel={cancelDelete}
+		{isSaving}
+	/>
 {/if}

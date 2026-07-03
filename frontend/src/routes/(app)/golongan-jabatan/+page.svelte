@@ -215,7 +215,7 @@
 					<div><div class="text-sm font-medium text-gray-900">${params.value}</div>${desc ? `<div class="text-xs text-gray-400 truncate max-w-48">${desc}</div>` : ''}</div>
 				</div>`;
 			},
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'py-1',
 		},
 		{
@@ -225,21 +225,21 @@
 				if (val == null) return '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-blue-50 text-blue-700">${val}</span>`;
 			},
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-600',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-600 dark:text-gray-400',
 		},
 		{
 			field: 'min_salary', headerName: 'Min. Gaji', minWidth: 130,
 			valueFormatter: (params: any) => formatCurrency(params.value),
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-700 tabular-nums text-right',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-700 dark:text-gray-300 tabular-nums text-right',
 			type: 'rightAligned',
 		},
 		{
 			field: 'max_salary', headerName: 'Max. Gaji', minWidth: 130,
 			valueFormatter: (params: any) => formatCurrency(params.value),
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-700 tabular-nums text-right',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-700 dark:text-gray-300 tabular-nums text-right',
 			type: 'rightAligned',
 		},
 		{
@@ -255,8 +255,8 @@
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 130,
 			valueFormatter: (params: any) => formatDate(params.value),
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-500',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 100, maxWidth: 100,
@@ -335,8 +335,8 @@
 <div class="w-full">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 tracking-tight">Golongan Jabatan</h1>
-			<p class="text-sm text-gray-500 mt-0.5">Kelola golongan/level jabatan (Staff, Supervisor, Manager, dll)</p>
+			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Golongan Jabatan</h1>
+			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Kelola golongan/level jabatan (Staff, Supervisor, Manager, dll)</p>
 		</div>
 		{#if !showForm && hasPermission('position_grade', 'create')}
 			<button onclick={openCreateForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
@@ -347,56 +347,56 @@
 	</div>
 
 	{#if !showForm}
-		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<div class="relative flex-1 max-w-md">
 				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
-				<input type="search" value={searchQuery} placeholder="Cari golongan jabatan..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white transition placeholder:text-gray-400" />
+				<input type="search" value={searchQuery} placeholder="Cari golongan jabatan..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
 			</div>
-			<div class="text-xs text-gray-400">{total > 0 ? `${total} golongan ditemukan` : ''}</div>
+			<div class="text-xs text-gray-400 dark:text-gray-500">{total > 0 ? `${total} golongan ditemukan` : ''}</div>
 		</div>
 	{/if}
 
 	<div class:hidden={!showForm}>
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-				<h2 class="text-lg font-semibold text-gray-900">{formTitle}</h2>
-				<button onclick={cancelForm} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
+			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{formTitle}</h2>
+				<button onclick={cancelForm} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
 				</button>
 			</div>
 			<div class="px-6 py-5 space-y-4">
 				{#if formError}
-					<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">{formError}</div>
+					<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-2.5 rounded-lg">{formError}</div>
 				{/if}
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label for="gol-name" class="block text-sm font-medium text-gray-700 mb-1.5">Nama Golongan <span class="text-red-500">*</span></label>
-						<input id="gol-name" type="text" bind:value={form.name} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="Contoh: Staff" />
+						<label for="gol-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nama Golongan <span class="text-red-500">*</span></label>
+						<input id="gol-name" type="text" bind:value={form.name} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="Contoh: Staff" />
 					</div>
 					<div>
-						<label for="gol-level" class="block text-sm font-medium text-gray-700 mb-1.5">Level <span class="text-red-500">*</span></label>
-						<input id="gol-level" type="number" bind:value={form.level} min="1" max="99" class="w-24 px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="1" />
+						<label for="gol-level" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Level <span class="text-red-500">*</span></label>
+						<input id="gol-level" type="number" bind:value={form.level} min="1" max="99" class="w-24 px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="1" />
 					</div>
 					<div>
-						<label for="gol-min-salary" class="block text-sm font-medium text-gray-700 mb-1.5">Gaji Minimum (Rp)</label>
+						<label for="gol-min-salary" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Gaji Minimum (Rp)</label>
 						<input id="gol-min-salary" type="number" bind:value={form.min_salary} min="0" step="100000"
-							class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
 							placeholder="Contoh: 4000000" />
 					</div>
 					<div>
-						<label for="gol-max-salary" class="block text-sm font-medium text-gray-700 mb-1.5">Gaji Maksimum (Rp)</label>
+						<label for="gol-max-salary" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Gaji Maksimum (Rp)</label>
 						<input id="gol-max-salary" type="number" bind:value={form.max_salary} min="0" step="100000"
-							class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition"
 							placeholder="Contoh: 7000000" />
 					</div>
 				</div>
 				<div>
-					<label for="gol-desc" class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
-					<textarea id="gol-desc" bind:value={form.description} rows="3" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition resize-none" placeholder="Deskripsi golongan (opsional)"></textarea>
+					<label for="gol-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Deskripsi</label>
+					<textarea id="gol-desc" bind:value={form.description} rows="3" class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition resize-none" placeholder="Deskripsi golongan (opsional)"></textarea>
 				</div>
 			</div>
-			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-				<button onclick={cancelForm} class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">Batal</button>
+			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+				<button onclick={cancelForm} class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Batal</button>
 				<button onclick={handleSave} disabled={isSaving} class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 cursor-pointer">
 					{#if isSaving}
 						<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
@@ -407,35 +407,35 @@
 		</div>
 	</div>
 	<div class:hidden={showForm}>
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-3 bg-gray-50 rounded w-20 hidden md:block"></div><div class="h-8 bg-gray-100 rounded w-20"></div></div>{/each}</div></div>
+				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div><div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div></div><div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-20 hidden md:block"></div><div class="h-8 bg-gray-100 dark:bg-gray-800 rounded w-20"></div></div>{/each}</div></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
-					<p class="text-sm font-medium text-gray-900 mb-1">Gagal memuat data</p>
-					<p class="text-sm text-gray-500 mb-4">{errorMessage}</p>
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
+					<p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Gagal memuat data</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{errorMessage}</p>
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada data golongan jabatan</h3>
-					<p class="text-sm text-gray-500">{searchQuery ? `Tidak ditemukan dengan kata kunci "${searchQuery}"` : 'Data golongan jabatan akan muncul di sini setelah ditambahkan.'}</p>
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg></div>
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada data golongan jabatan</h3>
+					<p class="text-sm text-gray-500 dark:text-gray-400">{searchQuery ? `Tidak ditemukan dengan kata kunci "${searchQuery}"` : 'Data golongan jabatan akan muncul di sini setelah ditambahkan.'}</p>
 				</div>
 			{:else}
 				<div class="ag-theme-quartz" style="width:100%;" bind:this={gridContainer}></div>
-				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
-					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
+				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">
+					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
-						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
+						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
 						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
-								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
+								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>
 							{/if}
 						{/each}
-						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
+						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
 					</div>
 				</div>
 			{/if}
@@ -448,15 +448,15 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Hapus golongan jabatan" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Hapus golongan jabatan" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
 			<div class="px-6 py-6 text-center">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Hapus Golongan Jabatan</h3>
-				<p class="text-sm text-gray-500 mb-1">Apakah Anda yakin ingin menghapus</p>
-				<p class="text-sm font-medium text-gray-900 mb-4">"{deletingName}"?</p>
-				<p class="text-xs text-gray-400 mb-6">Data yang sudah dihapus tidak dapat dikembalikan.</p>
+				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Hapus Golongan Jabatan</h3>
+				<p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Apakah Anda yakin ingin menghapus</p>
+				<p class="text-sm font-medium text-gray-900 dark:text-white mb-4">"{deletingName}"?</p>
+				<p class="text-xs text-gray-400 dark:text-gray-500 mb-6">Data yang sudah dihapus tidak dapat dikembalikan.</p>
 				<div class="flex items-center justify-center gap-3">
-					<button onclick={cancelDelete} class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">Batal</button>
+					<button onclick={cancelDelete} class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Batal</button>
 					<button onclick={handleDelete} disabled={isSaving} class="px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
 						{#if isSaving}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{/if}
 						Ya, Hapus

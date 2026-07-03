@@ -332,7 +332,7 @@ const employmentStatusColors: Record<string, string> = {
 
 
 function getStatusBadge(status: string): string {
-    const cls = employmentStatusColors[status?.toLowerCase()] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300';
+    const cls = employmentStatusColors[status?.toLowerCase()] || 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 dark:bg-gray-900 dark:text-gray-300';
     const label = status?.charAt(0).toUpperCase() + status?.slice(1);
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${cls}">${label}</span>`;
 };
@@ -458,26 +458,26 @@ function getStatusBadge(status: string): string {
 				const initials = getInitials(params.value);
 				const email = params.data?.email || '';
 				return `<div class="flex items-center gap-3">
-					<div class="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0 ring-1 ring-gray-200">${initials}</div>
-					<div><div class="text-sm font-medium text-gray-900">${params.value}</div><div class="text-xs text-gray-400">${email}</div></div>
+					<div class="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-400 shrink-0 ring-1 ring-gray-200">${initials}</div>
+					<div><div class="text-sm font-medium text-gray-900 dark:text-white">${params.value}</div><div class="text-xs text-gray-400">${email}</div></div>
 				</div>`;
 			},
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'py-1',
 		},
-		{ field: 'position_name', headerName: 'Posisi', minWidth: 150, headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider', cellClass: 'text-sm text-gray-600' },
-		{ field: 'department_name', headerName: 'Departemen', minWidth: 150, headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider', cellClass: 'text-sm text-gray-600' },		{
+		{ field: 'position_name', headerName: 'Posisi', minWidth: 150, headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider', cellClass: 'text-sm text-gray-600 dark:text-gray-400' },
+		{ field: 'department_name', headerName: 'Departemen', minWidth: 150, headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider', cellClass: 'text-sm text-gray-600 dark:text-gray-400' },		{
 			field: 'base_salary', headerName: 'Gaji Pokok', minWidth: 140,
 			hide: !hasPermission('payroll', 'read'),
 			valueFormatter: (params: any) => params.value > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(params.value) : '-',
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-700 tabular-nums text-right',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-700 dark:text-gray-300 tabular-nums text-right',
 			type: 'rightAligned',
 		},
 		{ field: 'join_date', headerName: 'Bergabung', minWidth: 130,
 			valueFormatter: (params: any) => formatDate(params.value),
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
-			cellClass: 'text-sm text-gray-500',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'employment_status', headerName: 'Status', minWidth: 120,
@@ -489,7 +489,7 @@ function getStatusBadge(status: string): string {
 				}
 				return getStatusBadge(emp.employment_status);
 			},
-			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
+			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 140, maxWidth: 140,
@@ -598,8 +598,8 @@ function getStatusBadge(status: string): string {
 	<!-- Header Section -->
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 tracking-tight">Karyawan</h1>
-			<p class="text-sm text-gray-500 mt-0.5">Kelola seluruh data karyawan perusahaan</p>
+			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Karyawan</h1>
+			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Kelola seluruh data karyawan perusahaan</p>
 		</div>
 		{#if !showForm}
 			<div class="flex items-center gap-2 flex-wrap">
@@ -616,7 +616,7 @@ function getStatusBadge(status: string): string {
 				{/if}
 				{#if hasPermission('employee', 'read')}
 					<button onclick={handleExport} disabled={isExporting}
-						class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition shadow-sm cursor-pointer disabled:opacity-50">
+						class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:bg-gray-800 transition shadow-sm cursor-pointer disabled:opacity-50">
 						{#if isExporting}
 							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
 						{:else}
@@ -624,7 +624,7 @@ function getStatusBadge(status: string): string {
 						{/if}
 						{isExporting ? 'Mengexport...' : 'Export Excel'}
 					</button>
-					<label class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition shadow-sm cursor-pointer disabled:opacity-50">
+					<label class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:bg-gray-800 transition shadow-sm cursor-pointer disabled:opacity-50">
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
 						<span>{isImporting ? 'Mengimport...' : 'Import Excel'}</span>
 						<input type="file" accept=".xlsx,.xls" onchange={handleImport} class="hidden" disabled={isImporting} />
@@ -655,7 +655,7 @@ function getStatusBadge(status: string): string {
 				</div>
 			</div>
 			<button onclick={() => { importResult = null; }}
-				class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-white/50 transition cursor-pointer"
+				class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:text-gray-400 hover:bg-white/50 dark:bg-gray-900/50 transition cursor-pointer"
 				aria-label="Tutup hasil import">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
 			</button>
@@ -664,47 +664,47 @@ function getStatusBadge(status: string): string {
 
 	<!-- Summary Stats (sembunyikan saat form aktif) -->
 	<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" class:hidden={showForm}>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Total</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Total</span>
 					<div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{isLoading ? '-' : total}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : total}</p>
 			</div>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Aktif</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Aktif</span>
 					<div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{isLoading ? '-' : totalActive}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : totalActive}</p>
 			</div>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Kontrak</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Kontrak</span>
 					<div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{isLoading ? '-' : totalKontrak}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : totalKontrak}</p>
 			</div>
-			<div class="bg-white border border-gray-200 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500">Percobaan</span>
+					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Percobaan</span>
 					<div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
 						<svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 mt-1 tabular-nums">{isLoading ? '-' : totalPercobaan}</p>
+				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : totalPercobaan}</p>
 			</div>
 		</div>
 
 		<!-- Search & Filter Bar -->
 		{#if !showForm}
-		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
 			<div class="relative flex-1 min-w-0 max-w-md">
 				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -714,25 +714,25 @@ function getStatusBadge(status: string): string {
 					value={searchQuery}
 					placeholder="Cari berdasarkan nama atau email..."
 					oninput={onSearchInput}
-					class="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white transition placeholder:text-gray-400"
+					class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:bg-gray-900 transition placeholder:text-gray-400"
 					aria-label="Cari karyawan"
 				/>
 			</div>
 			<select bind:value={filterDepartment} onchange={() => { page = 1; loadEmployees(); }}
-				class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition">
+				class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition">
 				<option value="">Semua Departemen</option>
 				{#each departments as d}
 					<option value={d.id}>{d.name}</option>
 				{/each}
 			</select>
 			<select bind:value={filterStatus} onchange={() => { page = 1; loadEmployees(); }}
-			class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition">
+			class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition">
 				<option value="">Semua Status</option>
 				{#each Object.keys(employmentStatusColors) as st}
 					<option value={st}>{st.charAt(0).toUpperCase() + st.slice(1)}</option>
 				{/each}
 			</select>
-			<label class="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+			<label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
 				<input type="checkbox" bind:checked={showDeleted} onchange={() => { page = 1; loadEmployees(); }}
 					class="w-4 h-4 rounded border-gray-300 text-[#1A56DB] focus:ring-[#1A56DB]" />
 				<span class="text-xs">Tampilkan nonaktif</span>
@@ -744,13 +744,13 @@ function getStatusBadge(status: string): string {
 	{/if}
 
 	<!-- Inline Form (gantikan tabel + stats + search) -->
-	<div class="bg-white border border-gray-200 rounded-xl shadow-sm transition-all duration-300 transform {showForm ? 'opacity-100 translate-y-0 relative' : 'opacity-0 translate-y-4 hidden'}" class:hidden={!showForm}>
+	<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm transition-all duration-300 transform {showForm ? 'opacity-100 translate-y-0 relative' : 'opacity-0 translate-y-4 hidden'}" class:hidden={!showForm}>
 			<!-- Form Header -->
-			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-				<h2 class="text-lg font-semibold text-gray-900">{formTitle}</h2>
+			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{formTitle}</h2>
 				<button
 					onclick={cancelForm}
-					class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+					class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 transition cursor-pointer"
 					aria-label="Tutup"
 				>
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -767,23 +767,23 @@ function getStatusBadge(status: string): string {
 
 				<!-- Seksi 1: Informasi Pribadi -->
 				<section>
-					<h3 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Informasi Pribadi</h3>
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 pb-2 border-b border-gray-100">Informasi Pribadi</h3>
 					<div class="space-y-4">
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									NIK / NIP
 									<input type="text" bind:value={form.employee_id}
 										disabled={!!editingId}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 disabled:bg-gray-50 dark:bg-gray-800 disabled:text-gray-400"
 										placeholder="Auto-generate jika kosong" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Nama Lengkap <span class="text-red-500">*</span>
 									<input type="text" bind:value={form.full_name}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Contoh: John Doe" />
 								</label>
 							</div>
@@ -791,19 +791,19 @@ function getStatusBadge(status: string): string {
 						
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Email <span class="text-red-500">*</span>
 									<input type="email" bind:value={form.email}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Contoh: john@company.com" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Password {#if !editingId}<span class="text-red-500">*</span>{/if}
 									<input type="password" bind:value={form.password}
 										disabled={!!editingId}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400 disabled:bg-gray-50 dark:bg-gray-800 disabled:text-gray-400"
 										placeholder={editingId ? '(tidak diubah)' : 'Min. 6 karakter'} />
 								</label>
 							</div>
@@ -811,18 +811,18 @@ function getStatusBadge(status: string): string {
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									No. Telepon
 									<input type="tel" bind:value={form.phone}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Contoh: 08123456789" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Jenis Kelamin <span class="text-red-500">*</span>
 									<select bind:value={form.gender}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="laki_laki">Laki-laki</option>
 										<option value="perempuan">Perempuan</option>
 									</select>
@@ -832,28 +832,28 @@ function getStatusBadge(status: string): string {
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Tempat Lahir
 									<input type="text" bind:value={form.place_of_birth}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Contoh: Jakarta" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Tanggal Lahir
 									<input type="date" bind:value={form.date_of_birth}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
 								</label>
 							</div>
 						</div>
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Agama
 									<select bind:value={form.religion}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="islam">Islam</option>
 										<option value="kristen">Kristen</option>
 										<option value="katolik">Katolik</option>
@@ -865,10 +865,10 @@ function getStatusBadge(status: string): string {
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Status Pernikahan
 									<select bind:value={form.marital_status}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="lajang">Lajang</option>
 										<option value="menikah">Menikah</option>
 										<option value="cerai_hidup">Cerai Hidup</option>
@@ -882,21 +882,21 @@ function getStatusBadge(status: string): string {
 
 				<!-- Seksi 2: Data Pekerjaan -->
 				<section>
-					<h3 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Data Pekerjaan</h3>
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 pb-2 border-b border-gray-100">Data Pekerjaan</h3>
 					<div class="space-y-4">
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Tanggal Bergabung <span class="text-red-500">*</span>
 									<input type="date" bind:value={form.join_date}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Status Karyawan <span class="text-red-500">*</span>
 									<select bind:value={form.employment_status}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="percobaan">Percobaan</option>
 										<option value="kontrak">Kontrak</option>
 										<option value="tetap">Tetap</option>
@@ -909,11 +909,11 @@ function getStatusBadge(status: string): string {
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Departemen
 									<select bind:value={form.department_id}
 										onchange={() => { form.position_id = ''; }}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="">Pilih departemen (opsional)</option>
 										{#each departments as d}
 											<option value={d.id}>{d.name} ({d.code})</option>
@@ -922,10 +922,10 @@ function getStatusBadge(status: string): string {
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Posisi
 									<select bind:value={form.position_id}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="">Pilih posisi (opsional)</option>
 										{#each positions.filter(p => !form.department_id || p.department_id === form.department_id) as p}
 											<option value={p.id}>{p.name}</option>
@@ -955,10 +955,10 @@ function getStatusBadge(status: string): string {
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Role Sistem
 									<select bind:value={form.role_id}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="">Pilih role (opsional)</option>
 										{#each roles as r}
 											<option value={r.id}>{r.name}</option>
@@ -973,22 +973,22 @@ function getStatusBadge(status: string): string {
 
 				<!-- Seksi 3: Administratif & Keuangan -->
 				<section>
-					<h3 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Administratif & Keuangan</h3>
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 pb-2 border-b border-gray-100">Administratif & Keuangan</h3>
 					<div class="space-y-4">
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									NIK KTP
 									<input type="text" bind:value={form.nik}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Nomor Induk Kependudukan" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									NPWP
 									<input type="text" bind:value={form.npwp}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Nomor Pokok Wajib Pajak" />
 								</label>
 							</div>
@@ -996,18 +996,18 @@ function getStatusBadge(status: string): string {
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Nama Bank
 									<input type="text" bind:value={form.bank_name}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Contoh: BCA" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									No. Rekening
 									<input type="text" bind:value={form.bank_account}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Nomor rekening bank" />
 								</label>
 							</div>
@@ -1015,18 +1015,18 @@ function getStatusBadge(status: string): string {
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Alamat KTP
 									<input type="text" bind:value={form.address_ktp}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Alamat sesuai KTP" />
 								</label>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1.5">
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Alamat Domisili
 									<input type="text" bind:value={form.address}
-										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-400"
 										placeholder="Alamat saat ini" />
 								</label>
 							</div>
@@ -1036,9 +1036,9 @@ function getStatusBadge(status: string): string {
 			</div>
 
 			<!-- Form Footer -->
-			<div class="sticky bottom-0 z-10 flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/95 backdrop-blur-sm">
+			<div class="sticky bottom-0 z-10 flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-b-xl">
 				<button onclick={cancelForm}
-					class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">
+					class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition cursor-pointer">
 					Batal
 				</button>
 				<button onclick={handleSave} disabled={isSaving}
@@ -1054,20 +1054,20 @@ function getStatusBadge(status: string): string {
 			</div>
 		</div>
 	<!-- Table Card -->
-	<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm" class:hidden={showForm}>
+	<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm" class:hidden={showForm}>
 			{#if isLoading}
 				<div class="p-6 animate-pulse">
 					<div class="space-y-3">
 						{#each [1,2,3,4,5] as _}
 							<div class="flex items-center gap-4 py-2">
-								<div class="w-9 h-9 bg-gray-100 rounded-full shrink-0"></div>
+								<div class="w-9 h-9 bg-gray-100 dark:bg-gray-800 rounded-full shrink-0"></div>
 								<div class="flex-1 space-y-1.5">
-									<div class="h-4 bg-gray-100 rounded w-44"></div>
-									<div class="h-3 bg-gray-50 rounded w-28"></div>
+									<div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div>
+									<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div>
 								</div>
-								<div class="h-3 bg-gray-50 rounded w-24 hidden md:block"></div>
-								<div class="h-3 bg-gray-50 rounded w-20 hidden md:block"></div>
-								<div class="h-6 bg-gray-100 rounded-full w-16"></div>
+								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-24 hidden md:block"></div>
+								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-20 hidden md:block"></div>
+								<div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-16"></div>
 							</div>
 						{/each}
 					</div>
@@ -1079,19 +1079,19 @@ function getStatusBadge(status: string): string {
 							<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
 						</svg>
 					</div>
-					<p class="text-sm font-medium text-gray-900 mb-1">Gagal memuat data</p>
-					<p class="text-sm text-gray-500 mb-4">{errorMessage}</p>
+					<p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Gagal memuat data</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{errorMessage}</p>
 					<button onclick={loadEmployees} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if employees.length === 0}
 				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center">
+					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
 						<svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
 						</svg>
 					</div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada data karyawan</h3>
-					<p class="text-sm text-gray-500 max-w-xs mx-auto">
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada data karyawan</h3>
+					<p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
 						{searchQuery
 							? `Tidak ditemukan karyawan dengan kata kunci "${searchQuery}"`
 							: 'Data karyawan akan muncul di sini setelah ditambahkan.'}
@@ -1108,11 +1108,11 @@ function getStatusBadge(status: string): string {
 					{#each employees as emp}
 						<div class="p-4 hover:bg-blue-50/40 transition-colors">
 							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0 ring-1 ring-gray-200">
+								<div class="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-400 shrink-0 ring-1 ring-gray-200">
 									{getInitials(emp.full_name)}
 								</div>
 								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{emp.full_name}</div>
+									<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{emp.full_name}</div>
 									<div class="text-xs text-gray-400 truncate">{emp.position_name || '-'}</div>
 								</div>
 								{@html getStatusBadge(emp.employment_status)}
@@ -1142,22 +1142,22 @@ function getStatusBadge(status: string): string {
 				</div>
 
 				<!-- Pagination -->
-				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
-					<div class="text-xs text-gray-500">
-						Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span>
+				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50 dark:bg-gray-800/30">
+					<div class="text-xs text-gray-500 dark:text-gray-400">
+						Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span>
 					</div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1}
-							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
+							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 hover:text-gray-900 dark:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
 						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)}
-									class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
+									class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800'}">{pageNum}</button>
 							{/if}
 						{/each}
 						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages}
-							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
+							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 hover:text-gray-900 dark:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
 					</div>
 				</div>
 			{/if}
@@ -1167,19 +1167,19 @@ function getStatusBadge(status: string): string {
 <!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
 	<div onclick={cancelDelete} onkeydown={(e) => e.key === 'Enter' && cancelDelete()} role="button" tabindex="0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="dialog" tabindex="-1" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+		<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="dialog" tabindex="-1" class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
 			<div class="px-6 py-6 text-center">
 				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
 					<svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
 					</svg>
 				</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Nonaktifkan Karyawan</h3>
-				<p class="text-sm text-gray-500 mb-1">Apakah Anda yakin ingin menonaktifkan karyawan</p>
-				<p class="text-sm font-medium text-gray-900 mb-4">"{deletingName}"?</p>
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Nonaktifkan Karyawan</h3>
+				<p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Apakah Anda yakin ingin menonaktifkan karyawan</p>
+				<p class="text-sm font-medium text-gray-900 dark:text-white mb-4">"{deletingName}"?</p>
 				<p class="text-xs text-gray-400 mb-6">Karyawan yang dinonaktifkan tidak akan muncul di daftar aktif.</p>
 				<div class="flex items-center justify-center gap-3">
-					<button onclick={cancelDelete} class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">Batal</button>
+					<button onclick={cancelDelete} class="px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 transition cursor-pointer">Batal</button>
 					<button onclick={handleDelete} disabled={isSaving}
 						class="px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
 						{#if isSaving}
