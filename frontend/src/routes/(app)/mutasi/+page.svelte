@@ -63,6 +63,7 @@
 	let showDetail = $state(false);
 	let detailData = $state<MutationItem | null>(null);
 
+	let processingId = $state<string | null>(null);
 	let showRejectModal = $state(false);
 	let rejectId = $state<string | null>(null);
 	let rejectReason = $state('');
@@ -182,8 +183,10 @@
 	function closeDetail() { showDetail = false; detailData = null; }
 
 	async function handleApprove(id: string) {
+		processingId = id;
 		try { await mutations.approve(id); load(); if (detailData) closeDetail(); }
 		catch (e: unknown) { errorMessage = (e as { message?: string }).message || 'Gagal menyetujui'; }
+		finally { processingId = null; }
 	}
 
 	function openReject(id: string) { rejectId = id; rejectReason = ''; showRejectModal = true; }
@@ -191,8 +194,10 @@
 
 	async function handleReject() {
 		if (!rejectId) return;
+		processingId = rejectId;
 		try { await mutations.reject(rejectId, { rejection_reason: rejectReason }); showRejectModal = false; load(); if (detailData) closeDetail(); }
 		catch (e: unknown) { errorMessage = (e as { message?: string }).message || 'Gagal menolak'; showRejectModal = false; }
+		finally { processingId = null; }
 	}
 
 	async function handleCancel(id: string) {
@@ -417,12 +422,12 @@
 				{#if detailData.status === 'pending' && hasPermission('employee', 'update')}
 					<div class="border-t border-gray-100 dark:border-gray-700 pt-4">
 						<div class="flex items-center gap-3">
-							<button onclick={() => handleApprove(detailData!.id)} class="px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition inline-flex items-center gap-2 cursor-pointer">
-								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+							<button onclick={() => handleApprove(detailData!.id)} disabled={processingId !== null} class="px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer">
+								{#if processingId === detailData!.id}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{:else}<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>{/if}
 								Setujui & Terapkan
 							</button>
-							<button onclick={() => openReject(detailData!.id)} class="px-5 py-2.5 border border-red-200 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-50 transition cursor-pointer">Tolak</button>
-							<button onclick={() => handleCancel(detailData!.id)} class="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-50 transition cursor-pointer dark:border-gray-600 dark:text-gray-400">Batalkan</button>
+							<button onclick={() => openReject(detailData!.id)} disabled={processingId !== null} class="px-5 py-2.5 border border-red-200 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-50 transition disabled:opacity-50 cursor-pointer">Tolak</button>
+							<button onclick={() => handleCancel(detailData!.id)} disabled={processingId !== null} class="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-50 cursor-pointer dark:border-gray-600 dark:text-gray-400">Batalkan</button>
 						</div>
 					</div>
 				{/if}
@@ -472,8 +477,10 @@
 								<div class="flex items-center gap-2">
 									{@html getStatusBadge(item.status)}
 									{#if item.status === 'pending' && hasPermission('employee', 'update')}
-										<button onclick={() => handleApprove(item.id)} class="px-2.5 py-1 bg-green-600 text-white rounded-md text-xs font-semibold hover:bg-green-700 transition cursor-pointer">Setujui</button>
-										<button onclick={() => openReject(item.id)} class="px-2.5 py-1 border border-red-200 text-red-600 rounded-md text-xs font-semibold hover:bg-red-50 transition cursor-pointer dark:border-red-800">Tolak</button>
+										<button onclick={() => handleApprove(item.id)} disabled={processingId !== null} class="px-2.5 py-1 bg-green-600 text-white rounded-md text-xs font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+											{#if processingId === item.id}<svg class="w-3 h-3 animate-spin inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{:else}Setujui{/if}
+										</button>
+										<button onclick={() => openReject(item.id)} disabled={processingId !== null} class="px-2.5 py-1 border border-red-200 text-red-600 rounded-md text-xs font-semibold hover:bg-red-50 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer dark:border-red-800">Tolak</button>
 									{/if}
 								</div>
 							{/snippet}

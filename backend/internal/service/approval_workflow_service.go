@@ -469,6 +469,8 @@ func (s *ApprovalWorkflowService) getEntityConditionValue(ctx context.Context, e
 			return 0, errors.New("data pinjaman tidak ditemukan")
 		}
 		return amount, nil
+	case "mutation":
+		return 0, nil
 	default:
 		return 0, nil
 	}
@@ -509,6 +511,8 @@ func (s *ApprovalWorkflowService) CancelWorkflowTracking(ctx context.Context, en
 		_ = database.Pool.QueryRow(ctx, `SELECT COALESCE(approval_trail, '[]') FROM manual_attendance_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
 	case "resign":
 		_ = database.Pool.QueryRow(ctx, `SELECT COALESCE(approval_trail, '[]') FROM resign_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+	case "mutation":
+		_ = database.Pool.QueryRow(ctx, `SELECT COALESCE(approval_trail, '[]') FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&currentTrail)
 	default:
 		return fmt.Errorf("unknown entity type: %s", entityType)
 	}
@@ -584,6 +588,8 @@ func (s *ApprovalWorkflowService) getEntityLabel(entityType string) string {
 		return "Absensi Manual"
 	case "resign":
 		return "Resign"
+	case "mutation":
+		return "Mutasi"
 	default:
 		return entityType
 	}
@@ -612,6 +618,9 @@ func (s *ApprovalWorkflowService) appendToApprovalTrail(ctx context.Context, ent
 	case "resign":
 		err = database.Pool.QueryRow(ctx,
 			`SELECT COALESCE(approval_trail, '[]') FROM resign_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+	case "mutation":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT COALESCE(approval_trail, '[]') FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&currentTrail)
 	default:
 		return
 	}
@@ -743,6 +752,20 @@ func (s *ApprovalWorkflowService) getEntityInfo(ctx context.Context, entityType,
 		}
 		title = "Resign - " + empName
 		description = resignReason
+
+	case "mutation":
+		var mReason, mType, mEmpName string
+		err := database.Pool.QueryRow(ctx, `
+			SELECT COALESCE(em.reason, ''), COALESCE(em.mutation_type, ''), COALESCE(e.full_name, '')
+			FROM employee_mutations em
+			LEFT JOIN employees e ON e.id = em.employee_id
+			WHERE em.id::text = $1
+		`, entityID).Scan(&mReason, &mType, &mEmpName)
+		if err != nil {
+			return "Pengajuan Mutasi", "", 0
+		}
+		title = "Mutasi - " + mEmpName
+		description = mReason
 	}
 	return
 }

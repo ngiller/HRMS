@@ -174,6 +174,9 @@ func (h *ApprovalWorkflowHandler) InitializeTracking(c *fiber.Ctx) error {
 	case "shift_change":
 		database.Pool.QueryRow(c.Context(),
 			`SELECT employee_id::text FROM shift_change_requests WHERE id::text = $1`, entityID).Scan(&employeeID)
+	case "mutation":
+		database.Pool.QueryRow(c.Context(),
+			`SELECT employee_id::text FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&employeeID)
 	}
 
 	if employeeID == "" {

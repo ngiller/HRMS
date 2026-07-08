@@ -628,6 +628,9 @@ func UpdateApprovalTrail(ctx context.Context, entityType, entityID, trailJSON st
 	case "resign":
 		tableName = "resign_requests"
 		idColumn = "id"
+	case "mutation":
+		tableName = "employee_mutations"
+		idColumn = "id"
 	default:
 		return fmt.Errorf("unknown entity type: %s", entityType)
 	}
@@ -664,6 +667,9 @@ func UpdateEntityStatus(ctx context.Context, entityType, entityID, status string
 		idColumn = "id"
 	case "resign":
 		tableName = "resign_requests"
+		idColumn = "id"
+	case "mutation":
+		tableName = "employee_mutations"
 		idColumn = "id"
 	default:
 		return fmt.Errorf("unknown entity type: %s", entityType)

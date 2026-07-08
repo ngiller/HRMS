@@ -905,6 +905,7 @@ func main() {
 	}{
 		{"manual_attendance", "Workflow Absensi Manual", "Approval untuk pengajuan absensi manual", "hr_manager"},
 		{"resign", "Workflow Resign", "Approval untuk pengajuan resign karyawan", "hr_manager"},
+		{"mutation", "Workflow Mutasi", "Approval untuk pengajuan mutasi dan promosi karyawan", "hr_manager"},
 	}
 	for _, wf := range workflowSeeds {
 		var count int
