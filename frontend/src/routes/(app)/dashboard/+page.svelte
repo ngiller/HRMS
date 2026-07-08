@@ -73,7 +73,8 @@
 		if (!user) return true;
 		const slug = (user.role_slug || '').toLowerCase();
 		const name = (user.role_name || '').toLowerCase();
-		return !['admin', 'hr', 'owner', 'superadmin'].includes(slug) && !['admin', 'hr', 'owner'].includes(name);
+		const adminRoles = ['admin', 'hr', 'owner', 'superadmin', 'super_admin', 'super admin', 'hr_manager', 'hr_staff', 'hr manager', 'hr staff'];
+		return !adminRoles.includes(slug) && !adminRoles.includes(name);
 	});
 	let employeeAnnouncements = $state<any[]>([]);
 	let todayStatus = $state<any>(null);
@@ -490,24 +491,21 @@
 						
 						<div class="p-6">
 							{#if todayStatus}
-								<div class="flex flex-col sm:flex-row items-center justify-between gap-6 mb-6">
-									<div class="flex-1 w-full text-center sm:text-left">
+								<div class="grid grid-cols-2 divide-x divide-gray-200 gap-4 mb-6">
+									<div class="text-center sm:text-left px-2 sm:px-4">
 										<p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Check In</p>
-										<div class="text-3xl font-bold text-gray-900 tabular-nums">
+										<div class="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums">
 											{todayStatus.has_checked_in && todayStatus.record?.check_in_time ? new Date(todayStatus.record.check_in_time).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '--:--'}
 										</div>
-										<p class="text-xs text-gray-400 mt-1">Jadwal: {todayStatus.schedule_start || '--:--'}</p>
+										<p class="text-[10px] sm:text-xs text-gray-400 mt-1">Jadwal: {todayStatus.schedule_start || '--:--'}</p>
 									</div>
 									
-									<div class="hidden sm:block w-px h-16 bg-gray-200"></div>
-									<div class="sm:hidden w-full h-px bg-gray-200"></div>
-									
-									<div class="flex-1 w-full text-center sm:text-left">
+									<div class="text-center sm:text-left px-2 sm:px-4">
 										<p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Check Out</p>
-										<div class="text-3xl font-bold text-gray-900 tabular-nums">
+										<div class="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums">
 											{todayStatus.has_checked_out && todayStatus.record?.check_out_time ? new Date(todayStatus.record.check_out_time).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '--:--'}
 										</div>
-										<p class="text-xs text-gray-400 mt-1">Jadwal: {todayStatus.schedule_end || '--:--'}</p>
+										<p class="text-[10px] sm:text-xs text-gray-400 mt-1">Jadwal: {todayStatus.schedule_end || '--:--'}</p>
 									</div>
 								</div>
 								

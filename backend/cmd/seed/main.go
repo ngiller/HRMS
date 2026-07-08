@@ -1312,7 +1312,6 @@ func main() {
 			approvalTrail := "[]"
 			approvedBy := "NULL::uuid"
 			approvedAt := "NULL::timestamptz"
-			rejectedAt := "NULL::timestamptz"
 			rejectionReason := "NULL::text"
 
 			if ms.Status == "approved" {
@@ -1321,7 +1320,6 @@ func main() {
 				approvedAt = fmt.Sprintf("'%s'", now)
 			} else if ms.Status == "rejected" {
 				approvalTrail = fmt.Sprintf(`[{"status":"rejected","approver_id":"%s","date":"%s","reason":"%s"}]`, adminUUID, now, ms.Reason)
-				rejectedAt = fmt.Sprintf("'%s'", now)
 				rejectionReason = fmt.Sprintf("'%s'", ms.Reason)
 			}
 
@@ -1376,7 +1374,7 @@ func main() {
 					reason, effective_date, status,
 					approval_trail,
 					approved_by, approved_at,
-					rejected_at, rejection_reason,
+					rejection_reason,
 					created_by, notes
 				) VALUES (
 					'%s'::uuid, '%s',
@@ -1388,7 +1386,7 @@ func main() {
 					'%s', '%s'::date, '%s',
 					'%s'::jsonb,
 					%s, %s,
-					%s, %s,
+					%s,
 					'%s'::uuid, 'Data seed otomatis'
 				)
 			`, empUUID, ms.MutationType,
@@ -1400,7 +1398,7 @@ func main() {
 				ms.Reason, effectiveDate, ms.Status,
 				approvalTrail,
 				approvedBy, approvedAt,
-				rejectedAt, rejectionReason,
+				rejectionReason,
 				adminUUID)
 
 			_, err := database.Pool.Exec(ctx, query)

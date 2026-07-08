@@ -190,18 +190,18 @@ func (r *MutationRepo) Create(ctx context.Context, req *models.CreateMutationReq
 			$8, NULLIF($9, ''), $10::date, NULLIF($11, ''),
 			$12::uuid)
 		RETURNING id::text, employee_id::text, mutation_type,
-			NULL::text, NULL::text, NULL::text, NULL::text,
-			NULL::text, NULL::text,
+			NULL::text, ''::text, NULL::text, ''::text,
+			NULL::text, ''::text, NULL::text,
 			NULL::numeric,
-			new_department_id::text, NULL::text,
-			new_position_id::text, NULL::text,
-			new_position_grade_id::text, NULL::text,
+			new_department_id::text, ''::text,
+			new_position_id::text, ''::text,
+			new_position_grade_id::text, ''::text,
 			new_employment_status, new_base_salary,
 			reason, COALESCE(document_url, ''),
 			effective_date::text, COALESCE(notes, ''),
 			status::text,
-			NULL::text, NULL::text, NULL::timestamptz, '',
-			created_by::text, NULL::text,
+			NULL::text, ''::text, NULL::timestamptz, '',
+			created_by::text, ''::text,
 			created_at, updated_at
 	`
 	row := database.Pool.QueryRow(ctx, query,
@@ -240,7 +240,7 @@ func (r *MutationRepo) Create(ctx context.Context, req *models.CreateMutationReq
 func (r *MutationRepo) UpdateStatus(ctx context.Context, id, status, approvedBy, rejectionReason string) error {
 	query := `
 		UPDATE employee_mutations
-		SET status = $2,
+		SET status = $2::text,
 			approved_by = CASE WHEN $2 IN ('approved', 'rejected') THEN $3::uuid ELSE NULL END,
 			approved_at = CASE WHEN $2 IN ('approved', 'rejected') THEN NOW() ELSE NULL END,
 			rejection_reason = NULLIF($4, ''),
@@ -290,7 +290,7 @@ func (r *MutationRepo) ApplyMutation(ctx context.Context, id string) error {
 			department_id = COALESCE(em.new_department_id, e.department_id),
 			position_id = COALESCE(em.new_position_id, e.position_id),
 			position_grade_id = COALESCE(em.new_position_grade_id, e.position_grade_id),
-			employment_status = COALESCE(em.new_employment_status, e.employment_status),
+			employment_status = COALESCE(em.new_employment_status::employment_status, e.employment_status),
 			base_salary = COALESCE(em.new_base_salary, e.base_salary)
 		FROM employee_mutations em
 		WHERE em.id::text = $1 AND e.id = em.employee_id AND em.deleted_at IS NULL
@@ -305,7 +305,7 @@ func (r *MutationRepo) ApplyMutation(ctx context.Context, id string) error {
 // GetEmployeeData returns the current employee data needed for mutation
 func (r *MutationRepo) GetEmployeeData(ctx context.Context, employeeID string) (deptID, posID, gradeID, empStatus string, baseSalary *float64, err error) {
 	query := `
-		SELECT e.department_id::text, e.position_id::text, e.position_grade_id::text,
+		SELECT e.department_id::text, e.position_id::text, COALESCE(e.position_grade_id::text, ''),
 			e.employment_status, e.base_salary
 		FROM employees e
 		WHERE e.id::text = $1 AND e.deleted_at IS NULL

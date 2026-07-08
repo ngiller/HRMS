@@ -469,7 +469,13 @@
 								<p class="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">{item.reason}</p>
 							{/snippet}
 							{#snippet footer()}
-								{@html getStatusBadge(item.status)}
+								<div class="flex items-center gap-2">
+									{@html getStatusBadge(item.status)}
+									{#if item.status === 'pending' && hasPermission('employee', 'update')}
+										<button onclick={() => handleApprove(item.id)} class="px-2.5 py-1 bg-green-600 text-white rounded-md text-xs font-semibold hover:bg-green-700 transition cursor-pointer">Setujui</button>
+										<button onclick={() => openReject(item.id)} class="px-2.5 py-1 border border-red-200 text-red-600 rounded-md text-xs font-semibold hover:bg-red-50 transition cursor-pointer dark:border-red-800">Tolak</button>
+									{/if}
+								</div>
 							{/snippet}
 						</MobileCard>
 					{/each}
