@@ -643,8 +643,6 @@ func UpdateApprovalTrail(ctx context.Context, entityType, entityID, trailJSON st
 // UpdateEntityStatus updates the status field on an entity
 func UpdateEntityStatus(ctx context.Context, entityType, entityID, status string) error {
 	var tableName, idColumn string
-	possibleColumns := []string{"status", "leave_status", "overtime_status", "reimbursement_status", "shift_change_status", "loan_status"}
-	_ = possibleColumns // we'll use just "status" for now since that's what most tables use
 
 	switch entityType {
 	case "leave":
@@ -688,6 +686,14 @@ func UpdateEntityStatus(ctx context.Context, entityType, entityID, status string
 	if tag.RowsAffected() == 0 {
 		return errors.New("entity tidak ditemukan")
 	}
+
+	// For mutation approved via workflow, also apply changes to the employee record
+	if entityType == "mutation" && status == "approved" {
+		if applyErr := NewMutationRepo().ApplyMutation(ctx, entityID); applyErr != nil {
+			return fmt.Errorf("apply mutation changes: %w", applyErr)
+		}
+	}
+
 	return nil
 }
 
