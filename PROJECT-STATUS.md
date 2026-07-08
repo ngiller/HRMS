@@ -4,7 +4,7 @@
 > Dibaca oleh AI agent untuk melanjutkan pekerjaan dari sesi sebelumnya.  
 > Update file ini setiap kali ada progress signifikan.
 
-**Last Updated:** 8 Juli 2026 (PWA Mobile ✅, Security Hardening ✅, Manual Attendance ✅, Resign ✅)
+**Last Updated:** 8 Juli 2026 (Mutasi & Promosi ✅, Approval Workflow Mutation ✅, E2E Tests ✅)
 **Updated By:** AI Agent (Buffy)  
 **Project:** HRMS (Human Resource Management System)  
 **Stack:** Go (Fiber) + PostgreSQL 16 + SvelteKit (SPA)
@@ -63,7 +63,7 @@
 | **Migration 00037 — Salary Range (position_grades)** | ✅ **min_salary/max_salary columns + seed data by level** | **100%** |
 | **Salary Range Display di Frontend** | ✅ **Info card saat pilih posisi + column di golongan-jabatan** | **100%** |
 | **Attendance Export Excel** | ✅ **API endpoint + Tombol Export di halaman absensi** | **100%** |
-| **Playwright E2E Tests** | ✅ **6 tests (login + navigation + console error check)** | **100%** |
+| **Playwright E2E Tests** | ✅ **8 tests (login + navigation + console error check + mutation + approval)** | **100%** |
 | **ConfirmModal a11y Fix** | ✅ **Escape key handler + svelte-ignore (0 warnings)** | **100%** |
 | **Seed Data Enhancement** | ✅ **Shift change FK fix + position grades fix** | **100%** |
 | **Frontend UI/UX Polish** | ✅ **Form pengumuman full-width, detail view redesign, no-modal policy** | **100%** |
@@ -81,7 +81,7 @@
 | **Database Backup Script** | ✅ **Dump custom + SQL + S3 upload + retention policy** | **100%** |
 | **SMTP Email Config** | ✅ **SMTP_HOST/PORT/USER/PASSWORD/FROM/FROM_NAME di .env & config.go** | **100%** |
 | **JWT Secret Hardening** | ✅ **Random fallback secret + warning log jika tidak di-set** | **100%** |
-| **Approval Workflow Integration** | ✅ **Leave, Loan, Overtime, Reimbursement, Shift Change via ApprovalWorkflowService** | **100%** |
+| **Approval Workflow Integration** | ✅ **Leave, Loan, Overtime, Reimbursement, Shift Change, Manual Attendance, Resign, Mutation via ApprovalWorkflowService** | **100%** |
 | **THR Calculation Endpoint** | ✅ **GET /api/payroll/periods/:id/calculate-thr** | **100%** |
 | **Loan Cancel Endpoint** | ✅ **PUT /api/loans/:id/cancel** | **100%** |
 | **Manual Attendance Request** | ✅ **Backend CRUD + approval workflow + Frontend + API Client** | **100%** |
@@ -94,7 +94,7 @@
 | **File Upload Validation** | ✅ **MIME type + extension + size validation** | **100%** |
 | **Company Settings UI** | ✅ **Form BPJS + Profil Perusahaan + Workflow Persetujuan** | **100%** |
 | **Push Notification (Web Push)** | ✅ **Backend VAPID + subscription CRUD + Frontend service worker + notif page** | **100%** |
-| **Mutasi & Promosi** | ✅ **Backend CRUD + approval workflow + Frontend halaman + seed data** | **100%** |
+| **Mutasi & Promosi** | ✅ **Backend CRUD + approval workflow + Frontend halaman + seed data + integration test + PDF SK + export Excel + E2E** | **100%** |
 
 ---
 
@@ -842,4 +842,50 @@ Plus `UpdateOvertimeStatus` di overtime_repo.go: tambah `rejected_at`/`rejected_
 | Departemen | ✅ |
 
 ---
+
+## ✅ Sesi Ini — 8 Juli 2026 (Mutasi & Promosi — Full Feature Complete ✅)
+
+### 🔄 Mutasi & Promosi — Complete Feature
+
+**Backend:**
+- `mutation_repo.go` — Full CRUD: List (paginated + filter), GetByID, Create, UpdateStatus, UpdateOldValues, ApplyMutation, GetEmployeeData, ListAll (export)
+- `mutation_service.go` — Business logic: validate, create, approve, reject, cancel, ExportExcel
+- `mutation_handler.go` — 6 HTTP endpoints: list, get, create, approve, reject, cancel, export
+- `mutation_service_test.go` — Unit tests (validation: employee_id, type, reason, date, effective)
+- `mutation_integration_test.go` — Integration tests (CRUD flow, approve/reject/cancel, ListAll, error handling) — ALL 10/10 PASS
+
+**Frontend:**
+- `/mutasi` — Full page: list, filter by status, inline approve/reject buttons with loading state, form create, detail view
+- `/mutasi/[id]/sk` — SK Mutasi PDF generation (html-to-image + jsPDF) with formal letter layout
+- `/persetujuan` — Mutation entity_type added to centralized approval display
+
+**Approval Workflow Integration:**
+- Added `mutation` entity support to `approval_workflow_service.go` (getEntityLabel, getEntityInfo, appendToApprovalTrail, CancelWorkflowTracking)
+- Added `mutation` entity support to `approval_workflow_repo.go` (UpdateApprovalTrail, UpdateEntityStatus + ApplyMutation)
+- Added `mutation` to `approval_workflow_handler.go` (InitializeTracking)
+- Workflow seed: "Workflow Mutasi" — 1 step (hr_manager)
+- Fixed: `UpdateEntityStatus` now calls `ApplyMutation()` when mutation is approved via workflow
+
+**Bug Fixes in mutation_repo.go:**
+- RETURNING clause: Added NULL::text for old_employment_status (31→32 columns)
+- Changed NULL::text → ''::text for non-pointer string fields (pgx can't scan NULL into string)
+- Added COALESCE for position_grade_id in GetEmployeeData (nullable column)
+- UpdateStatus: $2::text cast to resolve pgx type inference
+- ApplyMutation: ::employment_status cast for COALESCE type mismatch (VARCHAR vs enum)
+
+**Infrastructure:**
+- Migration 00046 applied to both Docker (port 5435) and local dev (port 5432) databases
+- Frontend config.js updated to API port 8590 (Docker API)
+
+### Build Status
+
+| Check | Result |
+|-------|--------|
+| `go build ./...` | ✅ 0 errors |
+| `go vet ./...` | ✅ 0 issues |
+| `go test -tags=integration -run TestMutation ./internal/repository/` | ✅ **10/10 PASS** |
+| `svelte-check` | ✅ 2 pre-existing errors (push notification) |
+
+---
 *Update file ini saat ada progress baru dengan menambahkan entry di atas.*
+
