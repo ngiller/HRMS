@@ -318,6 +318,96 @@ func (r *MutationRepo) GetEmployeeData(ctx context.Context, employeeID string) (
 	return
 }
 
+// ListAll returns all mutations without pagination (for export)
+func (r *MutationRepo) ListAll(ctx context.Context, status, employeeID string) ([]models.EmployeeMutation, error) {
+	where := []string{"em.deleted_at IS NULL"}
+	args := []interface{}{}
+	idx := 0
+
+	if status != "" {
+		idx++
+		where = append(where, fmt.Sprintf("em.status::text = $%d", idx))
+		args = append(args, status)
+	}
+	if employeeID != "" {
+		idx++
+		where = append(where, fmt.Sprintf("em.employee_id::text = $%d", idx))
+		args = append(args, employeeID)
+	}
+
+	whereClause := strings.Join(where, " AND ")
+
+	query := fmt.Sprintf(`
+		SELECT em.id::text, em.employee_id::text, COALESCE(e.full_name, ''),
+			em.mutation_type,
+			em.old_department_id::text, COALESCE(od.name, ''),
+			em.old_position_id::text, COALESCE(op.name, ''),
+			em.old_position_grade_id::text, COALESCE(opg.name, ''),
+			em.old_employment_status, em.old_base_salary,
+			em.new_department_id::text, COALESCE(nd.name, ''),
+			em.new_position_id::text, COALESCE(np.name, ''),
+			em.new_position_grade_id::text, COALESCE(npg.name, ''),
+			em.new_employment_status, em.new_base_salary,
+			COALESCE(em.reason, ''), COALESCE(em.document_url, ''),
+			em.effective_date::text, COALESCE(em.notes, ''),
+			em.status::text,
+			em.approved_by::text, COALESCE(ab.full_name, ''),
+			em.approved_at, COALESCE(em.rejection_reason, ''),
+			em.created_by::text, COALESCE(cb.full_name, ''),
+			em.created_at, em.updated_at
+		FROM employee_mutations em
+		LEFT JOIN employees e ON e.id = em.employee_id
+		LEFT JOIN departments od ON od.id = em.old_department_id
+		LEFT JOIN departments nd ON nd.id = em.new_department_id
+		LEFT JOIN positions op ON op.id = em.old_position_id
+		LEFT JOIN positions np ON np.id = em.new_position_id
+		LEFT JOIN position_grades opg ON opg.id = em.old_position_grade_id
+		LEFT JOIN position_grades npg ON npg.id = em.new_position_grade_id
+		LEFT JOIN employees ab ON ab.id = em.approved_by
+		LEFT JOIN employees cb ON cb.id = em.created_by
+		WHERE %s
+		ORDER BY em.created_at DESC
+	`, whereClause)
+
+	rows, err := database.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list all mutations: %w", err)
+	}
+	defer rows.Close()
+
+	var mutations []models.EmployeeMutation
+	for rows.Next() {
+		var m models.EmployeeMutation
+		if err := rows.Scan(
+			&m.ID, &m.EmployeeID, &m.EmployeeName,
+			&m.MutationType,
+			&m.OldDepartmentID, &m.OldDepartmentName,
+			&m.OldPositionID, &m.OldPositionName,
+			&m.OldPositionGradeID, &m.OldPositionGradeName,
+			&m.OldEmploymentStatus, &m.OldBaseSalary,
+			&m.NewDepartmentID, &m.NewDepartmentName,
+			&m.NewPositionID, &m.NewPositionName,
+			&m.NewPositionGradeID, &m.NewPositionGradeName,
+			&m.NewEmploymentStatus, &m.NewBaseSalary,
+			&m.Reason, &m.DocumentURL,
+			&m.EffectiveDate, &m.Notes,
+			&m.Status,
+			&m.ApprovedBy, &m.ApprovedByName,
+			&m.ApprovedAt, &m.RejectionReason,
+			&m.CreatedBy, &m.CreatedByName,
+			&m.CreatedAt, &m.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan mutation for export: %w", err)
+		}
+		mutations = append(mutations, m)
+	}
+
+	if mutations == nil {
+		mutations = []models.EmployeeMutation{}
+	}
+	return mutations, nil
+}
+
 // UpdateApprovalTrail updates the approval trail JSON
 func (r *MutationRepo) UpdateApprovalTrail(ctx context.Context, id, trail string) error {
 	_, err := database.Pool.Exec(ctx,

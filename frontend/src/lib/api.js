@@ -1880,9 +1880,7 @@ function arrayBufferToBase64(buffer) {
 		binary += String.fromCharCode(bytes[i]);
 	}
 	return btoa(binary);
-}
-
-export const mutations = {
+}	export const mutations = {
 	/** @param {number} [page] @param {number} [perPage] @param {string} [status] @param {string} [employeeId] */
 	list(page = 1, perPage = 25, status = '', employeeId = '') {
 		const params = new URLSearchParams();
@@ -1907,6 +1905,29 @@ export const mutations = {
 
 	/** @param {string} id */
 	cancel(id) { return request(`/api/mutations/${id}/cancel`, { method: 'PUT' }); },
+
+	/**
+	 * Export mutations as Excel file
+	 * @param {string} [status]
+	 * @param {string} [employeeId]
+	 * @returns {Promise<Blob>}
+	 */
+	async exportExcel(status = '', employeeId = '') {
+		const token = typeof localStorage !== 'undefined' ? localStorage.getItem(config.ACCESS_TOKEN_KEY) : null;
+		const params = new URLSearchParams();
+		if (status) params.set('status', status);
+		if (employeeId) params.set('employee_id', employeeId);
+		const qs = params.toString();
+		const url = `${config.API_BASE_URL}/api/mutations/export${qs ? '?' + qs : ''}`;
+		const response = await fetch(url, {
+			headers: token ? { Authorization: `Bearer ${token}` } : {},
+		});
+		if (!response.ok) {
+			const data = await response.json().catch(() => ({}));
+			throw new ApiError(data.message || 'Gagal export data mutasi', response.status);
+		}
+		return response.blob();
+	},
 };
 
 export { ApiError };

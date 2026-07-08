@@ -393,6 +393,7 @@ func Setup(
 
 	// ==================== Employee Mutation Routes ====================
 	mutations := protected.Group("/mutations")
+	mutations.Get("/export", middleware.RBAC("employee", "read"), mutationHandler.ExportMutations)
 	mutations.Get("/", middleware.RBAC("employee", "read"), mutationHandler.ListMutations)
 	mutations.Get("/:id", middleware.RBAC("employee", "read"), mutationHandler.GetMutation)
 	mutations.Post("/", middleware.RBAC("employee", "create"), mutationHandler.CreateMutation)

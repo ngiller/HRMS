@@ -204,6 +204,22 @@
 		if (!dateStr) return '-';
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
+
+	async function exportExcel() {
+		try {
+			const blob = await mutations.exportExcel(statusFilter);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'riwayat-mutasi.xlsx';
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		} catch (e: unknown) {
+			errorMessage = (e as { message?: string }).message || 'Gagal export Excel';
+		}
+	}
 </script>
 
 <div class="w-full">
@@ -213,6 +229,12 @@
 			<p class="text-sm text-gray-500 mt-0.5">Kelola promosi, demosi, mutasi departemen, dan perubahan jabatan</p>
 		</div>
 		<div class="flex items-center gap-2">
+			{#if !showForm && !showDetail && hasPermission('employee', 'read')}
+				<button onclick={exportExcel} class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all cursor-pointer dark:border-gray-600 dark:text-gray-300">
+					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+					Export Excel
+				</button>
+			{/if}
 			{#if !showForm && !showDetail && hasPermission('employee', 'create')}
 				<button onclick={openForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>

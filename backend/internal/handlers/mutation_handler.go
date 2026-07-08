@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strings"
 
 	"hrms-backend/internal/database"
@@ -160,6 +161,22 @@ func (h *MutationHandler) RejectMutation(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(SuccessResponse(m, "Mutasi berhasil ditolak"))
+}
+
+// ExportMutations exports mutation data as Excel
+// GET /api/mutations/export
+func (h *MutationHandler) ExportMutations(c *fiber.Ctx) error {
+	status := c.Query("status", "")
+	employeeID := c.Query("employee_id", "")
+
+	fileBytes, filename, err := h.svc.ExportExcel(c.Context(), status, employeeID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse(err.Error()))
+	}
+
+	c.Response().Header.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Response().Header.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	return c.Send(fileBytes)
 }
 
 // CancelMutation cancels a pending mutation

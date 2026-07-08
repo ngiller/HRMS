@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"hrms-backend/internal/models"
 	"hrms-backend/internal/repository"
+
+	"github.com/xuri/excelize/v2"
 )
 
 // MutationService handles business logic for employee mutations & promotions
@@ -171,6 +174,82 @@ func (s *MutationService) Reject(ctx context.Context, id, approverID, reason str
 	}
 
 	return s.repo.GetByID(ctx, id)
+}
+
+// ExportExcel exports mutations as Excel file
+func (s *MutationService) ExportExcel(ctx context.Context, status, employeeID string) ([]byte, string, error) {
+	mutations, err := s.repo.ListAll(ctx, status, employeeID)
+	if err != nil {
+		return nil, "", fmt.Errorf("gagal mengambil data mutasi: %w", err)
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	sheet := "Riwayat Mutasi"
+	f.SetSheetName("Sheet1", sheet)
+
+	typeLabels := map[string]string{
+		"promotion": "Promosi", "demotion": "Demosi", "transfer": "Mutasi Departemen",
+		"position_change": "Perubahan Jabatan", "status_change": "Perubahan Status", "salary_change": "Perubahan Gaji",
+	}
+	statusLabels := map[string]string{
+		"pending": "Menunggu", "approved": "Disetujui", "rejected": "Ditolak", "cancelled": "Dibatalkan",
+	}
+
+	headers := []string{"No", "Nama Karyawan", "Jenis Mutasi", "Departemen Lama", "Departemen Baru",
+		"Jabatan Lama", "Jabatan Baru", "Gaji Lama", "Gaji Baru", "Status Lama", "Status Baru",
+		"Tanggal Berlaku", "Status", "Alasan", "Tanggal Pengajuan"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, h)
+	}
+
+	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	f.SetRowStyle(sheet, 1, 1, style)
+
+	for i, m := range mutations {
+		row := i + 2
+		oldSalary := ""
+		if m.OldBaseSalary != nil {
+			oldSalary = fmt.Sprintf("Rp %.0f", *m.OldBaseSalary)
+		}
+		newSalary := ""
+		if m.NewBaseSalary != nil {
+			newSalary = fmt.Sprintf("Rp %.0f", *m.NewBaseSalary)
+		}
+
+		vals := []interface{}{
+			i + 1,
+			m.EmployeeName,
+			typeLabels[m.MutationType],
+			m.OldDepartmentName, m.NewDepartmentName,
+			m.OldPositionName, m.NewPositionName,
+			oldSalary, newSalary,
+			m.OldEmploymentStatus, m.NewEmploymentStatus,
+			m.EffectiveDate,
+			statusLabels[m.Status],
+			m.Reason,
+			m.CreatedAt.Format("2006-01-02"),
+		}
+		for j, v := range vals {
+			cell, _ := excelize.CoordinatesToCellName(j+1, row)
+			f.SetCellValue(sheet, cell, v)
+		}
+	}
+
+	for i := range headers {
+		col, _ := excelize.ColumnNumberToName(i + 1)
+		f.SetColWidth(sheet, col, col, 22)
+	}
+
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, "", fmt.Errorf("gagal menulis file Excel: %w", err)
+	}
+
+	filename := fmt.Sprintf("riwayat-mutasi-%s.xlsx", time.Now().Format("2006-01-02"))
+	return buf.Bytes(), filename, nil
 }
 
 // Cancel cancels a pending mutation
