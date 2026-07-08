@@ -10,10 +10,11 @@ import (
 
 type PayrollHandler struct {
 	payrollService *service.PayrollService
+	companyService *service.CompanyService
 }
 
-func NewPayrollHandler(payrollService *service.PayrollService) *PayrollHandler {
-	return &PayrollHandler{payrollService: payrollService}
+func NewPayrollHandler(payrollService *service.PayrollService, companyService *service.CompanyService) *PayrollHandler {
+	return &PayrollHandler{payrollService: payrollService, companyService: companyService}
 }
 
 // ListPeriods returns paginated payroll periods
@@ -207,6 +208,23 @@ func (h *PayrollHandler) ListMyPayslips(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(SuccessResponse(payslips, "Berhasil memuat daftar slip gaji"))
+}
+
+// CalculateTHR calculates THR for all employees in a period
+// GET /api/payroll/periods/:id/calculate-thr
+func (h *PayrollHandler) CalculateTHR(c *fiber.Ctx) error {
+	periodID := c.Params("id")
+
+	result, err := h.companyService.CalculateTHRForPeriod(c.Context(), periodID)
+	if err != nil {
+		code := fiber.StatusInternalServerError
+		if contains(err.Error(), "tidak ditemukan") {
+			code = fiber.StatusNotFound
+		}
+		return c.Status(code).JSON(ErrorResponse(err.Error()))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Perhitungan THR berhasil"))
 }
 
 // GetMyPayslip returns the detail of a single payslip for the logged-in employee

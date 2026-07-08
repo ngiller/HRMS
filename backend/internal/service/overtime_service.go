@@ -33,9 +33,9 @@ func (s *OvertimeService) List(ctx context.Context, page, perPage int, status, e
 
 	return &models.OvertimeRequestListResponse{
 		OvertimeRequests: requests,
-		Total:           total,
-		Page:            page,
-		PerPage:         perPage,
+		Total:            total,
+		Page:             page,
+		PerPage:          perPage,
 	}, nil
 }
 
@@ -85,7 +85,20 @@ func (s *OvertimeService) Create(ctx context.Context, employeeID string, req *mo
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat pengajuan lembur: %w", err)
 	}
+
+	// Initialize workflow tracking (non-blocking, ignore errors)
+	err = s.initWorkflowTracking(ctx, "overtime", r.ID.String(), employeeID, r.TotalHours)
+	if err != nil {
+		fmt.Printf("[WARN] Overtime workflow init: %v\n", err)
+	}
+
 	return r, nil
+}
+
+func (s *OvertimeService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+	wfSvc := NewApprovalWorkflowService()
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	return err
 }
 
 func (s *OvertimeService) Approve(ctx context.Context, id, approverID string) (*models.OvertimeRequest, error) {
@@ -142,6 +155,11 @@ func (s *OvertimeService) Cancel(ctx context.Context, id, employeeID string) err
 	if err != nil {
 		return fmt.Errorf("gagal membatalkan pengajuan lembur: %w", err)
 	}
+
+	// Cancel workflow tracking (non-blocking, ignore errors)
+	wfSvc := NewApprovalWorkflowService()
+	_ = wfSvc.CancelWorkflowTracking(ctx, "overtime", id)
+
 	return nil
 }
 

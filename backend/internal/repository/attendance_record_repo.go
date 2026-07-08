@@ -37,7 +37,7 @@ func GetTodayAttendanceByEmployee(ctx context.Context, employeeID string) (*mode
 	return record, nil
 }
 
-func CreateCheckIn(ctx context.Context, employeeID string, scheduleID string, lat, lng *float64, locationID, locationName *string, isLate bool, lateMinutes int) (*models.AttendanceRecord, error) {
+func CreateCheckIn(ctx context.Context, employeeID string, scheduleID string, lat, lng *float64, locationID, locationName *string, isLate bool, lateMinutes int, photoURL *string) (*models.AttendanceRecord, error) {
 	var locID *uuid.UUID
 	if locationID != nil && *locationID != "" {
 		uid, err := uuid.Parse(*locationID)
@@ -54,10 +54,10 @@ func CreateCheckIn(ctx context.Context, employeeID string, scheduleID string, la
 	query := `
 		INSERT INTO attendance_records (employee_id, date, check_in_time,
 			check_in_lat, check_in_lng, check_in_location_id, check_in_location_name,
-			status, is_late, late_minutes)
+			status, is_late, late_minutes, check_in_photo_url)
 		VALUES ($1::uuid, CURRENT_DATE, NOW(),
 			$2, $3, $4, $5,
-			$6, $7, $8)
+			$6, $7, $8, $9)
 		RETURNING id, employee_id, date, check_in_time, check_out_time,
 			check_in_photo_url, check_in_lat, check_in_lng,
 			check_in_location_id, COALESCE(check_in_location_name, ''),
@@ -68,11 +68,11 @@ func CreateCheckIn(ctx context.Context, employeeID string, scheduleID string, la
 			created_at, updated_at
 	`
 	row := database.Pool.QueryRow(ctx, query, employeeID, lat, lng, locID, locationName,
-		status, isLate, lateMinutes)
+		status, isLate, lateMinutes, photoURL)
 	return scanAttendanceRecord(row)
 }
 
-func UpdateCheckOut(ctx context.Context, recordID string, lat, lng *float64, locationID, locationName *string, totalWorkHours *float64) (*models.AttendanceRecord, error) {
+func UpdateCheckOut(ctx context.Context, recordID string, lat, lng *float64, locationID, locationName *string, totalWorkHours *float64, photoURL *string) (*models.AttendanceRecord, error) {
 	var locID *uuid.UUID
 	if locationID != nil && *locationID != "" {
 		uid, err := uuid.Parse(*locationID)
@@ -88,7 +88,8 @@ func UpdateCheckOut(ctx context.Context, recordID string, lat, lng *float64, loc
 			check_out_lng = $3,
 			check_out_location_id = $4,
 			check_out_location_name = $5,
-			total_work_hours = $6
+			total_work_hours = $6,
+			check_out_photo_url = COALESCE($7, check_out_photo_url)
 		WHERE id::text = $1
 		RETURNING id, employee_id, date, check_in_time, check_out_time,
 			check_in_photo_url, check_in_lat, check_in_lng,
@@ -99,7 +100,7 @@ func UpdateCheckOut(ctx context.Context, recordID string, lat, lng *float64, loc
 			total_work_hours, is_manual_entry, manual_entry_reason,
 			created_at, updated_at
 	`
-	row := database.Pool.QueryRow(ctx, query, recordID, lat, lng, locID, locationName, totalWorkHours)
+	row := database.Pool.QueryRow(ctx, query, recordID, lat, lng, locID, locationName, totalWorkHours, photoURL)
 	return scanAttendanceRecord(row)
 }
 
@@ -345,7 +346,9 @@ func GetEmployeeScheduleInfo(ctx context.Context, employeeID string) (scheduleID
 	return &sid, sname, stime, etime, nil
 }
 
-func scanAttendanceRecord(row interface{ Scan(dest ...interface{}) error }) (*models.AttendanceRecord, error) {
+func scanAttendanceRecord(row interface {
+	Scan(dest ...interface{}) error
+}) (*models.AttendanceRecord, error) {
 	var r models.AttendanceRecord
 	err := row.Scan(
 		&r.ID, &r.EmployeeID, &r.Date, &r.CheckInTime, &r.CheckOutTime,

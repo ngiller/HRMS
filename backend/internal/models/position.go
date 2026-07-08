@@ -19,15 +19,15 @@ type Position struct {
 }
 
 type PositionSummary struct {
-	ID               uuid.UUID `json:"id"`
-	Name             string    `json:"name"`
-	DepartmentName   string    `json:"department_name"`
-	DepartmentID     string    `json:"department_id"`
-	GradeName        string    `json:"grade_name"`
-	GradeID          string    `json:"grade_id"`
-	Description      string    `json:"description"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	DepartmentName string    `json:"department_name"`
+	DepartmentID   string    `json:"department_id"`
+	GradeName      string    `json:"grade_name"`
+	GradeID        string    `json:"grade_id"`
+	Description    string    `json:"description"`
+	IsActive       bool      `json:"is_active"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type CreatePositionRequest struct {

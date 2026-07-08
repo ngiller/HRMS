@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { notifications, ApiError } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
 
 	let loading = $state(true);
 	let items = $state<any[]>([]);
@@ -87,7 +88,6 @@
 		};
 	}
 
-	const skeletonItems = [1, 2, 3, 4, 5];
 	const totalPages = $derived(Math.max(1, Math.ceil(total / perPage)));
 
 	onMount(() => { load(); });
@@ -130,17 +130,7 @@
 	<!-- List -->
 	<div class="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
 		{#if loading}
-			<div class="divide-y divide-gray-100 dark:divide-gray-800">
-				{#each skeletonItems as _}
-					<div class="p-4 md:p-6 flex items-start gap-4">
-						<div class="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse shrink-0"></div>
-						<div class="flex-1 space-y-3 py-1">
-							<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 animate-pulse"></div>
-							<div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse"></div>
-						</div>
-					</div>
-				{/each}
-			</div>
+			<PulseLoader variant="card" count={5} />
 		{:else if items.length === 0}
 			<div class="text-center py-20 px-4">
 				<div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 text-gray-400">
@@ -162,7 +152,7 @@
 							if (!item.is_read) markAsRead(item.id); 
 							expandedId = expandedId === item.id ? null : item.id;
 						}}
-						class="group flex items-start gap-4 p-4 md:p-6 transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer relative {item.is_read ? 'opacity-70' : 'bg-blue-50/30 dark:bg-blue-900/10'}"
+						class="group flex items-start gap-4 p-4 md:p-6 transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer relative {item.is_read ? 'opacity-70' : 'bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-blue-100/50 dark:border-blue-900/20 shadow-sm'}"
 					>
 						{#if !item.is_read}
 							<div class="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-r-full shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>

@@ -148,19 +148,21 @@ func (h *LeaveHandler) ApproveLeaveRequest(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.leaveService.Approve(c.Context(), id, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "leave", id, userID, "approve", "")
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "pengajuan cuti tidak ditemukan":
+		case "pengajuan cuti tidak ditemukan", "data cuti tidak ditemukan",
+			"tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "pengajuan cuti sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Pengajuan cuti berhasil disetujui"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Pengajuan cuti berhasil disetujui"))
 }
 
 // RejectLeaveRequest rejects a leave request
@@ -178,19 +180,21 @@ func (h *LeaveHandler) RejectLeaveRequest(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.leaveService.Reject(c.Context(), id, req.RejectionReason, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "leave", id, userID, "reject", req.RejectionReason)
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "pengajuan cuti tidak ditemukan":
+		case "pengajuan cuti tidak ditemukan", "data cuti tidak ditemukan",
+			"tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "pengajuan cuti sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Pengajuan cuti berhasil ditolak"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Pengajuan cuti berhasil ditolak"))
 }
 
 // CancelLeaveRequest cancels a leave request

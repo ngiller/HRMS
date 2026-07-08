@@ -7,20 +7,20 @@ import (
 )
 
 type KPITemplate struct {
-	ID           uuid.UUID  `json:"id"`
-	Title        string     `json:"title"`
-	PositionID   *uuid.UUID `json:"position_id"`
-	PositionName string     `json:"position_name"`
-	DepartmentID *uuid.UUID `json:"department_id"`
-	DeptName     string     `json:"dept_name"`
-	PeriodType   string     `json:"period_type"`
-	Year         int        `json:"year"`
-	Description  string     `json:"description"`
-	IsActive     bool       `json:"is_active"`
-	CreatedBy    *uuid.UUID `json:"created_by"`
-	CreatedByName string    `json:"created_by_name"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	Title         string     `json:"title"`
+	PositionID    *uuid.UUID `json:"position_id"`
+	PositionName  string     `json:"position_name"`
+	DepartmentID  *uuid.UUID `json:"department_id"`
+	DeptName      string     `json:"dept_name"`
+	PeriodType    string     `json:"period_type"`
+	Year          int        `json:"year"`
+	Description   string     `json:"description"`
+	IsActive      bool       `json:"is_active"`
+	CreatedBy     *uuid.UUID `json:"created_by"`
+	CreatedByName string     `json:"created_by_name"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 type KPIIndicator struct {
@@ -106,24 +106,24 @@ type KPITemplateListResponse struct {
 }
 
 type CreateKPITemplateRequest struct {
-	Title        string                `json:"title"`
-	PositionID   *string               `json:"position_id"`
-	DepartmentID *string               `json:"department_id"`
-	PeriodType   string                `json:"period_type"`
-	Year         int                   `json:"year"`
-	Description  string                `json:"description"`
-	Indicators   []CreateKPIIndicator  `json:"indicators"`
+	Title        string               `json:"title"`
+	PositionID   *string              `json:"position_id"`
+	DepartmentID *string              `json:"department_id"`
+	PeriodType   string               `json:"period_type"`
+	Year         int                  `json:"year"`
+	Description  string               `json:"description"`
+	Indicators   []CreateKPIIndicator `json:"indicators"`
 }
 
 type UpdateKPITemplateRequest struct {
-	Title        string                `json:"title"`
-	PositionID   *string               `json:"position_id"`
-	DepartmentID *string               `json:"department_id"`
-	PeriodType   string                `json:"period_type"`
-	Year         int                   `json:"year"`
-	Description  string                `json:"description"`
-	IsActive     *bool                 `json:"is_active"`
-	Indicators   []CreateKPIIndicator  `json:"indicators"`
+	Title        string               `json:"title"`
+	PositionID   *string              `json:"position_id"`
+	DepartmentID *string              `json:"department_id"`
+	PeriodType   string               `json:"period_type"`
+	Year         int                  `json:"year"`
+	Description  string               `json:"description"`
+	IsActive     *bool                `json:"is_active"`
+	Indicators   []CreateKPIIndicator `json:"indicators"`
 }
 
 type CreateKPIIndicator struct {

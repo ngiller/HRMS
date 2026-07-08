@@ -34,23 +34,34 @@ type Config struct {
 	EncryptionKey string
 
 	UploadDir string
+
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPFromName string
 }
 
 func Load() *Config {
 	// Try to load .env from current directory and parent directory
 	// (backend can be run from project root or backend/ folder)
-	_ = godotenv.Load()
-	_ = godotenv.Load("../.env")
+	if err := godotenv.Load(); err != nil {
+		log.Printf("INFO: No .env in current directory: %v", err)
+	}
+	if err := godotenv.Load("../.env"); err != nil {
+		log.Printf("INFO: No .env in parent directory: %v", err)
+	}
 
 	cfg := &Config{
 		DBHost:     getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "magnum"),
-		DBPassword: getEnv("DB_PASSWORD", "Pass@w0rd"),
+		DBUser:     getEnv("DB_USER", "postgres"),
+		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "hrms"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
 
-		JWTSecret:        getEnv("JWT_SECRET", "hrms-super-secret-key"),
+		JWTSecret:        getEnv("JWT_SECRET", ""),
 		JWTAccessExpiry:  getDuration("JWT_ACCESS_EXPIRY", 15*time.Minute),
 		JWTRefreshExpiry: getDuration("JWT_REFRESH_EXPIRY", 7*24*time.Hour),
 
@@ -63,6 +74,23 @@ func Load() *Config {
 
 		EncryptionKey: getEncryptionKey(),
 		UploadDir:     getEnv("UPLOAD_DIR", "./uploads"),
+
+		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPPort:     getEnv("SMTP_PORT", "587"),
+		SMTPUser:     getEnv("SMTP_USER", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM", "noreply@hrms.com"),
+		SMTPFromName: getEnv("SMTP_FROM_NAME", "HRMS System"),
+	}
+
+	// Warn if sensitive defaults are used (development only)
+	if cfg.DBPassword == "" {
+		log.Println("⚠️  WARNING: DB_PASSWORD tidak di-set. Gunakan .env untuk production.")
+	}
+	if cfg.JWTSecret == "" {
+		log.Println("⚠️  WARNING: JWT_SECRET tidak di-set. Menggunakan secret random.")
+		log.Println("⚠️  Set JWT_SECRET di .env untuk persistensi token setelah restart.")
+		cfg.JWTSecret = generateRandomSecret()
 	}
 
 	// Ensure upload directory exists
@@ -102,6 +130,14 @@ func getInt(key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}
+
+func generateRandomSecret() string {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		log.Fatalf("FATAL: Failed to generate random JWT secret: %v", err)
+	}
+	return hex.EncodeToString(key)
 }
 
 func getEncryptionKey() string {

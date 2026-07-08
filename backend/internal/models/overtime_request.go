@@ -7,24 +7,24 @@ import (
 )
 
 type OvertimeRequest struct {
-	ID            uuid.UUID  `json:"id"`
-	EmployeeID    uuid.UUID  `json:"employee_id"`
-	EmployeeName  string     `json:"employee_name"`
-	Date          string     `json:"date"`
-	StartTime     time.Time  `json:"start_time"`
-	EndTime       time.Time  `json:"end_time"`
-	TotalHours    float64    `json:"total_hours"`
-	OvertimeType  string     `json:"overtime_type"`
-	Reason        string     `json:"reason"`
-	IsMandatory   bool       `json:"is_mandatory"`
-	ApprovalTrail string     `json:"approval_trail"`
-	Status        string     `json:"status"`
-	RejectionReason string   `json:"rejection_reason"`
-	CancelledBy   *uuid.UUID `json:"cancelled_by"`
-	CancelledAt   *time.Time `json:"cancelled_at"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
+	ID              uuid.UUID  `json:"id"`
+	EmployeeID      uuid.UUID  `json:"employee_id"`
+	EmployeeName    string     `json:"employee_name"`
+	Date            string     `json:"date"`
+	StartTime       time.Time  `json:"start_time"`
+	EndTime         time.Time  `json:"end_time"`
+	TotalHours      float64    `json:"total_hours"`
+	OvertimeType    string     `json:"overtime_type"`
+	Reason          string     `json:"reason"`
+	IsMandatory     bool       `json:"is_mandatory"`
+	ApprovalTrail   string     `json:"approval_trail"`
+	Status          string     `json:"status"`
+	RejectionReason string     `json:"rejection_reason"`
+	CancelledBy     *uuid.UUID `json:"cancelled_by"`
+	CancelledAt     *time.Time `json:"cancelled_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
 
 	// Calculation result (from overtime_calculation view)
 	HourlyRate  float64 `json:"hourly_rate,omitempty"`
@@ -44,13 +44,13 @@ type OvertimeRequestSummary struct {
 }
 
 type CreateOvertimeRequestReq struct {
-	Date         string `json:"date"`
-	StartTime    string `json:"start_time"`
-	EndTime      string `json:"end_time"`
+	Date         string  `json:"date"`
+	StartTime    string  `json:"start_time"`
+	EndTime      string  `json:"end_time"`
 	TotalHours   float64 `json:"total_hours"`
-	OvertimeType string `json:"overtime_type"`
-	Reason       string `json:"reason"`
-	IsMandatory  bool   `json:"is_mandatory"`
+	OvertimeType string  `json:"overtime_type"`
+	Reason       string  `json:"reason"`
+	IsMandatory  bool    `json:"is_mandatory"`
 }
 
 type UpdateOvertimeStatusReq struct {
@@ -65,13 +65,13 @@ type OvertimeRequestListResponse struct {
 }
 
 type OvertimeCalculationResponse struct {
-	ID            uuid.UUID `json:"id"`
-	EmployeeID    uuid.UUID `json:"employee_id"`
-	Date          string    `json:"date"`
-	TotalHours    float64   `json:"total_hours"`
-	OvertimeType  string    `json:"overtime_type"`
-	BaseSalary    float64   `json:"base_salary"`
-	HourlyRate    float64   `json:"hourly_rate"`
-	RateSegments  string    `json:"rate_segments"`
-	OvertimePay   float64   `json:"overtime_pay"`
+	ID           uuid.UUID `json:"id"`
+	EmployeeID   uuid.UUID `json:"employee_id"`
+	Date         string    `json:"date"`
+	TotalHours   float64   `json:"total_hours"`
+	OvertimeType string    `json:"overtime_type"`
+	BaseSalary   float64   `json:"base_salary"`
+	HourlyRate   float64   `json:"hourly_rate"`
+	RateSegments string    `json:"rate_segments"`
+	OvertimePay  float64   `json:"overtime_pay"`
 }

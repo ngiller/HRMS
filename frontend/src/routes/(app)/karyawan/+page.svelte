@@ -2,9 +2,15 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { employees as employeesApi, departments as deptApi, roles as rolesApi, positions as positionsApi, positionGrades as gradesApi, ApiError } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
 	import { hasPermission } from '$lib/permissions.js';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams, Position, PositionGrade } from '$lib/types.js';
 	type Employee = {
 		id: string;
 		employee_id: string;
@@ -20,6 +26,19 @@
 		base_salary: number;
 		join_date: string;
 		phone: string;
+		place_of_birth: string;
+		date_of_birth: string;
+		religion: string;
+		marital_status: string;
+		address: string;
+		nik: string;
+		npwp: string;
+		role_id: string;
+		position_id: string;
+		department_id: string;
+		bank_name: string;
+		bank_account: string;
+		address_ktp: string;
 	};
 
 	type EmployeeForm = {
@@ -81,8 +100,7 @@
 	let editingId = $state<string | null>(null);
 	let form = $state<EmployeeForm>({
 		employee_id: '', full_name: '', email: '', password: '',
-		gender: 'laki_laki', place_of_birth: '', date_of_birth: '',
-		religion: 'islam', marital_status: 'lajang',
+		gender: 'laki_laki', place_of_birth: '', date_of_birth: '', religion: 'islam', marital_status: 'belum_menikah',
 		join_date: '', employment_status: 'percobaan',
 		phone: '', address: '',
 		nik: '', npwp: '', bank_name: '', bank_account: '', address_ktp: '',
@@ -99,14 +117,14 @@
 	// Dropdown data
 	let departments = $state<Department[]>([]);
 	let roles = $state<Role[]>([]);
-	let positions = $state<any[]>([]);
-	let positionGrades = $state<any[]>([]);
+	let positions = $state<Position[]>([]);
+	let positionGrades = $state<PositionGrade[]>([]);
 
 	let selectedPositionGradeInfo = $derived.by(() => {
 		if (!form.position_id || positionGrades.length === 0) return null;
 		const pos = positions.find(p => p.id === form.position_id);
-		if (!pos || !pos.grade_id) return null;
-		return positionGrades.find((g: any) => g.id === pos.grade_id) || null;
+		if (!pos || !(pos as any).grade_id) return null;
+		return positionGrades.find((g: any) => g.id === (pos as any).grade_id) || null;
 	});
 
 	onMount(async () => { const m = await getAgGrid(); agGridModule = m;
@@ -137,7 +155,7 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await employeesApi.list(page, perPage, searchQuery, filterDepartment, filterStatus, showDeleted);
+			const response: ApiResponse<Employee[]> = await employeesApi.list(page, perPage, searchQuery, filterDepartment, filterStatus, showDeleted) as ApiResponse<Employee[]>;
 			const data = response.data || [];
 			employees = data;
 			total = response.meta?.total || 0;
@@ -148,8 +166,8 @@
 			totalActive = data.filter((e: Employee) => e.is_active && !e.deleted_at).length;
 			totalKontrak = data.filter((e: Employee) => e.employment_status?.toLowerCase() === 'kontrak').length;
 			totalPercobaan = data.filter((e: Employee) => e.employment_status?.toLowerCase() === 'percobaan').length;
-		} catch (error: any) {
-			errorMessage = error.message || 'Gagal memuat data karyawan';
+		} catch (error: unknown) {
+			errorMessage = (error as { message?: string }).message || 'Gagal memuat data karyawan';
 			console.error('Employee list error:', error);
 		} finally {
 			isLoading = false;
@@ -188,7 +206,7 @@
 		form = {
 			employee_id: emp.employee_id, full_name: emp.full_name, email: emp.email,
 			password: '', gender: emp.gender, place_of_birth: '', date_of_birth: '',
-			religion: 'islam', marital_status: 'lajang',
+			religion: 'islam', marital_status: 'belum_menikah',
 			join_date: typeof emp.join_date === 'string' ? emp.join_date.split('T')[0] : '',
 			employment_status: emp.employment_status, phone: emp.phone,
 			address: '', nik: '', npwp: '', bank_name: '', bank_account: '', address_ktp: '',
@@ -206,7 +224,7 @@
 				form.place_of_birth = d.place_of_birth || '';
 				form.date_of_birth = d.date_of_birth ? d.date_of_birth.split('T')[0] : '';
 				form.religion = d.religion || 'islam';
-				form.marital_status = d.marital_status || 'lajang';
+				form.marital_status = d.marital_status || 'belum_menikah';
 				form.join_date = d.join_date ? d.join_date.split('T')[0] : '';
 				form.phone = d.phone || '';
 				form.address = d.address || '';
@@ -219,7 +237,9 @@
 				form.position_id = d.position_id || '';
 				form.department_id = d.department_id || '';
 			}
-		}).catch(() => {});
+		}).catch((err: unknown) => {
+			console.error('Gagal memuat detail karyawan:', err);
+		});
 	}
 
 	function cancelForm() {
@@ -236,7 +256,7 @@
 		formError = '';
 		try {
 			if (editingId) {
-				const payload: any = {
+				const payload: Record<string, unknown> = {
 					full_name: form.full_name.trim(),
 					email: form.email.trim(),
 					gender: form.gender,
@@ -286,8 +306,8 @@
 			}
 			cancelForm();
 			loadEmployees();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menyimpan karyawan';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menyimpan karyawan';
 		} finally {
 			isSaving = false;
 		}
@@ -314,8 +334,8 @@
 			deletingId = null;
 			deletingName = '';
 			loadEmployees();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menghapus karyawan';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menghapus karyawan';
 			showDeleteConfirm = false;
 		} finally {
 			isSaving = false;
@@ -349,8 +369,8 @@ function getStatusBadge(status: string): string {
 		try {
 			await employeesApi.restore(id);
 			loadEmployees();
-		} catch (err: any) {
-			alert(err.message || 'Gagal mengaktifkan kembali karyawan');
+		} catch (err: unknown) {
+			errorMessage = (err as { message?: string }).message || 'Gagal mengaktifkan kembali karyawan';
 		} finally {
 			restoringId = null;
 		}
@@ -359,12 +379,6 @@ function getStatusBadge(status: string): string {
 	function formatDate(dateStr: string): string {
 		if (!dateStr) return '-';
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-	}
-
-	function getInitials(name: string): string {
-		const parts = name.split(' ');
-		if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-		return name.substring(0, 2).toUpperCase();
 	}
 
 	// Export/Import
@@ -384,8 +398,8 @@ function getStatusBadge(status: string): string {
 			a.click();
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
-		} catch (err: any) {
-			alert(err.message || 'Gagal export data');
+		} catch (err: unknown) {
+			errorMessage = (err as { message?: string }).message || 'Gagal export data';
 		} finally {
 			isExporting = false;
 		}
@@ -402,8 +416,8 @@ function getStatusBadge(status: string): string {
 			const res: any = await employeesApi.importExcel(file);
 			importResult = res.data || { success: 0, message: 'Selesai' };
 			loadEmployees();
-		} catch (err: any) {
-			importResult = { success: 0, errors: [err.message], message: 'Gagal import' };
+		} catch (err: unknown) {
+			importResult = { success: 0, errors: [(err as { message?: string }).message || 'Terjadi kesalahan'], message: 'Gagal import' };
 		} finally {
 			isImporting = false;
 			target.value = '';
@@ -413,7 +427,7 @@ function getStatusBadge(status: string): string {
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true,
@@ -453,9 +467,9 @@ function getStatusBadge(status: string): string {
 		{
 			field: 'full_name', headerName: 'Karyawan', minWidth: 220, flex: 1,
 			valueGetter: (params) => params.data?.full_name || '',
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Employee>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				const email = params.data?.email || '';
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-400 shrink-0 ring-1 ring-gray-200">${initials}</div>
@@ -469,19 +483,19 @@ function getStatusBadge(status: string): string {
 		{ field: 'department_name', headerName: 'Departemen', minWidth: 150, headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider', cellClass: 'text-sm text-gray-600 dark:text-gray-400' },		{
 			field: 'base_salary', headerName: 'Gaji Pokok', minWidth: 140,
 			hide: !hasPermission('payroll', 'read'),
-			valueFormatter: (params: any) => params.value > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(params.value) : '-',
+			valueFormatter: (params: AgGridValueParams) => (params.value as number) > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(params.value as number) : '-',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-700 dark:text-gray-300 tabular-nums text-right',
 			type: 'rightAligned',
 		},
 		{ field: 'join_date', headerName: 'Bergabung', minWidth: 130,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'employment_status', headerName: 'Status', minWidth: 120,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Employee>) => {
 				const emp = params.data;
 				if (!emp) return '';
 				if (emp.deleted_at) {
@@ -493,7 +507,7 @@ function getStatusBadge(status: string): string {
 		},
 		{
 			field: 'id', headerName: '', minWidth: 140, maxWidth: 140,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Employee>) => {
 				const emp = params.data;
 				if (!emp) return '';
 
@@ -569,10 +583,10 @@ function getStatusBadge(status: string): string {
 
 	$effect(() => {
 		if (employees.length > 0 && gridContainer && !showForm) {
-			if (!gridApi) {
+			if (!gridApi && agGridModule) {
 				gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi;
 			}
-			gridApi.updateGridOptions({ rowData: employees as any[] });
+			gridApi?.updateGridOptions({ rowData: employees });
 		}
 	});
 
@@ -869,7 +883,7 @@ function getStatusBadge(status: string): string {
 									Status Pernikahan
 									<select bind:value={form.marital_status}
 										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
-										<option value="lajang">Lajang</option>
+										<option value="belum_menikah">Belum Menikah</option>
 										<option value="menikah">Menikah</option>
 										<option value="cerai_hidup">Cerai Hidup</option>
 										<option value="cerai_mati">Cerai Mati</option>
@@ -1056,22 +1070,7 @@ function getStatusBadge(status: string): string {
 	<!-- Table Card -->
 	<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm" class:hidden={showForm}>
 			{#if isLoading}
-				<div class="p-6 animate-pulse">
-					<div class="space-y-3">
-						{#each [1,2,3,4,5] as _}
-							<div class="flex items-center gap-4 py-2">
-								<div class="w-9 h-9 bg-gray-100 dark:bg-gray-800 rounded-full shrink-0"></div>
-								<div class="flex-1 space-y-1.5">
-									<div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div>
-									<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div>
-								</div>
-								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-24 hidden md:block"></div>
-								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-20 hidden md:block"></div>
-								<div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-16"></div>
-							</div>
-						{/each}
-					</div>
-				</div>
+				<PulseLoader variant="table-row" count={5} />
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
@@ -1104,42 +1103,43 @@ function getStatusBadge(status: string): string {
 				</div>
 
 				<!-- Mobile Cards -->
-				<div class="md:hidden divide-y divide-gray-100">
-					{#each employees as emp}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-400 shrink-0 ring-1 ring-gray-200">
-									{getInitials(emp.full_name)}
-								</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{emp.full_name}</div>
-									<div class="text-xs text-gray-400 truncate">{emp.position_name || '-'}</div>
-								</div>
-								{@html getStatusBadge(emp.employment_status)}
-							</div>
-							<div class="flex items-center gap-3 text-xs text-gray-400 ml-13">
-								<span class="truncate">{emp.department_name || '-'}</span>
-								<span class="w-1 h-1 bg-gray-300 rounded-full shrink-0"></span>
-								<span class="truncate">{emp.email}</span>
-							</div>
-							<div class="flex items-center gap-2 mt-2 ml-13">
-								{#if isDeleted(emp)}
-									{#if hasPermission('employee', 'update')}
-										<button onclick={() => handleRestore(emp.id)} disabled={restoringId === emp.id} class="text-xs text-emerald-600 hover:underline cursor-pointer disabled:opacity-50">
-											{restoringId === emp.id ? 'Memulihkan...' : 'Aktifkan Kembali'}
-										</button>
-									{/if}
-								{:else}
-									<button onclick={() => openEditForm(emp)} class="text-xs text-[#1A56DB] hover:underline cursor-pointer">Edit</button>
-									<span class="text-gray-300">|</span>
-									{#if hasPermission('employee', 'delete')}
-										<button onclick={() => confirmDelete(emp.id, emp.full_name)} class="text-xs text-red-500 hover:underline cursor-pointer">Nonaktifkan</button>
-									{/if}
-								{/if}
-							</div>
-						</div>
-					{/each}
-				</div>
+				<PullToRefresh onRefresh={loadEmployees}>
+					<div class="md:hidden space-y-3">
+						{#each employees as emp}
+							<MobileCard
+								title={emp.full_name}
+								subtitle={emp.position_name || emp.email || '-'}
+								avatar={getInitials(emp.full_name)}
+								avatarColor={getAvatarTheme('employee').gradientClasses}
+								badges={[{ label: emp.employment_status ? emp.employment_status.charAt(0).toUpperCase() + emp.employment_status.slice(1) : '-', color: employmentStatusColors[emp.employment_status?.toLowerCase()] || 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400' }]}
+							>
+								{#snippet children()}
+									<div class="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg>
+										<span>{emp.department_name || 'Tanpa departemen'}</span>
+									</div>
+								{/snippet}
+								{#snippet footer()}
+									<div class="flex items-center gap-2">
+										<button onclick={() => viewDetail(emp.employee_id)} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Detail</button>
+										{#if isDeleted(emp)}
+											{#if hasPermission('employee', 'update')}
+												<button onclick={() => handleRestore(emp.id)} disabled={restoringId === emp.id} class="flex-1 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition cursor-pointer active:scale-95 disabled:opacity-50">{restoringId === emp.id ? '...' : 'Aktifkan'}</button>
+											{/if}
+										{:else}
+											{#if hasPermission('employee', 'update')}
+												<button onclick={() => openEditForm(emp)} class="flex-1 py-2 text-xs font-medium text-[#1A56DB] dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer active:scale-95">Edit</button>
+											{/if}
+											{#if hasPermission('employee', 'delete')}
+												<button onclick={() => confirmDelete(emp.id, emp.full_name)} class="flex-1 py-2 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">Nonaktifkan</button>
+											{/if}
+										{/if}
+									</div>
+								{/snippet}
+							</MobileCard>
+						{/each}
+					</div>
+				</PullToRefresh>
 
 				<!-- Pagination -->
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50 dark:bg-gray-800/30">
@@ -1165,7 +1165,7 @@ function getStatusBadge(status: string): string {
 </div>
 
 <!-- Delete Confirmation Modal -->
-{#if showDeleteConfirm}
+<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
 	<div onclick={cancelDelete} onkeydown={(e) => e.key === 'Enter' && cancelDelete()} role="button" tabindex="0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="dialog" tabindex="-1" class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
 			<div class="px-6 py-6 text-center">
@@ -1194,4 +1194,4 @@ function getStatusBadge(status: string): string {
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

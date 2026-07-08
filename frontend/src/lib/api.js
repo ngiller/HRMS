@@ -1175,6 +1175,39 @@ export const payroll = {
 	getMyPayslip(periodId) {
 		return request(`/api/payroll/my-payslips/${periodId}`);
 	},
+
+	/** @param {string} periodId */
+	calculateTHR(periodId) {
+		return request(`/api/payroll/periods/${periodId}/calculate-thr`);
+	},
+};
+
+export const company = {
+	/** @returns {Promise<ApiResponse>} */
+	getSettings() {
+		return request('/api/company/settings');
+	},
+
+	/** @param {Object} data */
+	updateSettings(data) {
+		return request('/api/company/settings', {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} employeeId */
+	getEmployeeBPJSConfig(employeeId) {
+		return request(`/api/employees/${employeeId}/bpjs-config`);
+	},
+
+	/** @param {string} employeeId @param {Object} bpjsConfig */
+	updateEmployeeBPJSConfig(employeeId, bpjsConfig) {
+		return request(`/api/employees/${employeeId}/bpjs-config`, {
+			method: 'PUT',
+			body: { bpjs_config: bpjsConfig },
+		});
+	},
 };
 
 export const dashboard = {
@@ -1617,5 +1650,179 @@ export const reports = {
 	},
 };
 
+export const approvalWorkflows = {
+	/** @param {string} [entityType] */
+	list(entityType = '') {
+		const params = new URLSearchParams();
+		if (entityType) params.set('entity_type', entityType);
+		return request(`/api/approval-workflows?${params}`);
+	},
+
+	/** @param {string} id */
+	get(id) {
+		return request(`/api/approval-workflows/${id}`);
+	},
+
+	/** @param {Object} data */
+	create(data) {
+		return request('/api/approval-workflows', {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	remove(id) {
+		return request(`/api/approval-workflows/${id}`, {
+			method: 'DELETE',
+		});
+	},
+
+	/** @param {string} workflowId @param {Object} data */
+	addStep(workflowId, data) {
+		return request(`/api/approval-workflows/${workflowId}/steps`, {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} stepId @param {Object} data */
+	updateStep(stepId, data) {
+		return request(`/api/approval-workflow-steps/${stepId}`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} stepId */
+	removeStep(stepId) {
+		return request(`/api/approval-workflow-steps/${stepId}`, {
+			method: 'DELETE',
+		});
+	},
+};
+
+export const approvals = {
+	/** @returns {Promise<ApiResponse>} */
+	getPending() {
+		return request('/api/approvals/pending');
+	},
+
+	/** @param {string} entityType @param {string} entityId @param {Object} data */
+	process(entityType, entityId, data) {
+		return request(`/api/approvals/${entityType}/${entityId}/process`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} entityType @param {string} entityId */
+	initTracking(entityType, entityId) {
+		return request(`/api/approvals/${entityType}/${entityId}/init`, {
+			method: 'POST',
+		});
+	},
+};
+
+export const manualAttendance = {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [status] @param {string} [employeeId] */
+	list(page = 1, perPage = 25, status = '', employeeId = '') {
+		const params = new URLSearchParams();
+		params.set('page', String(page));
+		params.set('per_page', String(perPage));
+		if (status) params.set('status', status);
+		if (employeeId) params.set('employee_id', employeeId);
+		return request(`/api/manual-attendance?${params}`);
+	},
+
+	/** @param {string} id */
+	get(id) {
+		return request(`/api/manual-attendance/${id}`);
+	},
+
+	/** @param {Object} data */
+	create(data) {
+		return request('/api/manual-attendance', {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	approve(id) {
+		return request(`/api/manual-attendance/${id}/approve`, {
+			method: 'PUT',
+		});
+	},
+
+	/** @param {string} id @param {Object} [data] */
+	reject(id, data = {}) {
+		return request(`/api/manual-attendance/${id}/reject`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	cancel(id) {
+		return request(`/api/manual-attendance/${id}/cancel`, {
+			method: 'PUT',
+		});
+	},
+};
+
+export const resign = {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [status] @param {string} [employeeId] */
+	list(page = 1, perPage = 25, status = '', employeeId = '') {
+		const params = new URLSearchParams();
+		params.set('page', String(page));
+		params.set('per_page', String(perPage));
+		if (status) params.set('status', status);
+		if (employeeId) params.set('employee_id', employeeId);
+		return request(`/api/resign?${params}`);
+	},
+
+	/** @param {string} id */
+	get(id) {
+		return request(`/api/resign/${id}`);
+	},
+
+	/** @param {Object} data */
+	create(data) {
+		return request('/api/resign', {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	approve(id) {
+		return request(`/api/resign/${id}/approve`, {
+			method: 'PUT',
+		});
+	},
+
+	/** @param {string} id @param {Object} [data] */
+	reject(id, data = {}) {
+		return request(`/api/resign/${id}/reject`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	listClearance(id) {
+		return request(`/api/resign/${id}/clearance`);
+	},
+
+	/** @param {string} itemId @param {Object} data */
+	updateClearance(itemId, data) {
+		return request(`/api/resign/clearance/${itemId}`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+};
+
 export { ApiError };
-export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, ApiError };
+export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, ApiError };

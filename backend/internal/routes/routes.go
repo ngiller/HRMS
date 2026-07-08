@@ -41,6 +41,10 @@ func Setup(
 	reportHandler *handlers.ReportHandler,
 	notificationHandler *handlers.NotificationHandler,
 	activityLogHandler *handlers.ActivityLogHandler,
+	companyHandler *handlers.CompanyHandler,
+	manualAttendanceHandler *handlers.ManualAttendanceHandler,
+	resignHandler *handlers.ResignHandler,
+	approvalWorkflowHandler *handlers.ApprovalWorkflowHandler,
 	authService *service.AuthService,
 ) {
 	// Health check
@@ -195,6 +199,25 @@ func Setup(
 	attendance.Get("/report", middleware.RBAC("attendance", "read"), attendanceRecordHandler.ListAttendanceReport)
 	attendance.Get("/report/export", middleware.RBAC("attendance", "read"), attendanceRecordHandler.ExportAttendanceReport)
 
+	// ==================== Manual Attendance Routes ====================
+	manualAttendance := protected.Group("/manual-attendance")
+	manualAttendance.Get("/", middleware.RBAC("attendance", "read"), manualAttendanceHandler.ListManualAttendance)
+	manualAttendance.Get("/:id", middleware.RBAC("attendance", "read"), manualAttendanceHandler.GetManualAttendance)
+	manualAttendance.Post("/", middleware.RBAC("attendance", "create"), manualAttendanceHandler.CreateManualAttendance)
+	manualAttendance.Put("/:id/approve", middleware.RBAC("attendance", "approve"), manualAttendanceHandler.ApproveManualAttendance)
+	manualAttendance.Put("/:id/reject", middleware.RBAC("attendance", "update"), manualAttendanceHandler.RejectManualAttendance)
+	manualAttendance.Put("/:id/cancel", middleware.RBAC("attendance", "create"), manualAttendanceHandler.CancelManualAttendance)
+
+	// ==================== Resign & Exit Management Routes ====================
+	resign := protected.Group("/resign")
+	resign.Get("/", middleware.RBAC("employee", "read"), resignHandler.ListResigns)
+	resign.Get("/:id", middleware.RBAC("employee", "read"), resignHandler.GetResign)
+	resign.Post("/", middleware.RBAC("employee", "create"), resignHandler.CreateResign)
+	resign.Put("/:id/approve", middleware.RBAC("employee", "update"), resignHandler.ApproveResign)
+	resign.Put("/:id/reject", middleware.RBAC("employee", "update"), resignHandler.RejectResign)
+	resign.Get("/:id/clearance", middleware.RBAC("employee", "read"), resignHandler.ListClearanceItems)
+	resign.Put("/clearance/:itemId", middleware.RBAC("employee", "update"), resignHandler.UpdateClearanceItem)
+
 	// ==================== Organization Tree Routes ====================
 	protected.Get("/organization/tree", organizationHandler.GetTree)
 
@@ -268,6 +291,18 @@ func Setup(
 	holidays.Put("/:id", middleware.RBAC("announcement", "update"), holidayHandler.UpdateHoliday)
 	holidays.Delete("/:id", middleware.RBAC("announcement", "delete"), holidayHandler.DeleteHoliday)
 
+	// ==================== Company Settings Routes ====================
+	company := protected.Group("/company")
+	company.Get("/settings", middleware.RBAC("company_settings", "read"), companyHandler.GetSettings)
+	company.Put("/settings", middleware.RBAC("company_settings", "update"), companyHandler.UpdateSettings)
+
+	// ==================== Per-Employee BPJS Config ====================
+	protected.Get("/employees/:id/bpjs-config", middleware.RBAC("employee", "read"), companyHandler.GetEmployeeBPJSConfig)
+	protected.Put("/employees/:id/bpjs-config", middleware.RBAC("employee", "update"), companyHandler.UpdateEmployeeBPJSConfig)
+
+	// ==================== Payroll THR Calculation ====================
+	payroll.Get("/periods/:id/calculate-thr", middleware.RBAC("payroll", "read"), payrollHandler.CalculateTHR)
+
 	// ==================== Loan Routes (Pinjaman) ====================
 	loans := protected.Group("/loans")
 	loans.Get("/stats", middleware.RBAC("loan", "read"), loanHandler.GetLoanStats)
@@ -276,6 +311,7 @@ func Setup(
 	loans.Post("/", middleware.RBAC("loan", "create"), loanHandler.CreateLoan)
 	loans.Put("/:id/approve", middleware.RBAC("loan", "approve"), loanHandler.ApproveLoan)
 	loans.Put("/:id/reject", middleware.RBAC("loan", "update"), loanHandler.RejectLoan)
+	loans.Put("/:id/cancel", middleware.RBAC("loan", "create"), loanHandler.CancelLoan)
 	loans.Put("/:id/disburse", middleware.RBAC("loan", "update"), loanHandler.DisburseLoan)
 
 	// ==================== KPI Routes ====================
@@ -325,4 +361,24 @@ func Setup(
 	activityLogs.Get("/entity-types", middleware.RBAC("employee", "read"), activityLogHandler.GetEntityTypes)
 	activityLogs.Get("/actions", middleware.RBAC("employee", "read"), activityLogHandler.GetActions)
 	activityLogs.Get("/:id", middleware.RBAC("employee", "read"), activityLogHandler.GetActivityLog)
+
+	// ==================== Approval Workflow Routes ====================
+	// Workflow Configuration (Admin)
+	approvalWorkflows := protected.Group("/approval-workflows")
+	approvalWorkflows.Get("/", middleware.RBAC("company_settings", "read"), approvalWorkflowHandler.ListWorkflows)
+	approvalWorkflows.Get("/:id", middleware.RBAC("company_settings", "read"), approvalWorkflowHandler.GetWorkflowDetail)
+	approvalWorkflows.Post("/", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.CreateWorkflow)
+	approvalWorkflows.Delete("/:id", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.DeleteWorkflow)
+
+	// Workflow Steps (Admin)
+	approvalWorkflows.Post("/:id/steps", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.AddWorkflowStep)
+	approvalWorkflowSteps := protected.Group("/approval-workflow-steps")
+	approvalWorkflowSteps.Put("/:id", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.UpdateWorkflowStep)
+	approvalWorkflowSteps.Delete("/:id", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.DeleteWorkflowStep)
+
+	// Pending Approvals (all authenticated users)
+	approvals := protected.Group("/approvals")
+	approvals.Get("/pending", approvalWorkflowHandler.GetPendingApprovals)
+	approvals.Post("/:entityType/:entityId/init", approvalWorkflowHandler.InitializeTracking)
+	approvals.Put("/:entityType/:entityId/process", approvalWorkflowHandler.ProcessApproval)
 }

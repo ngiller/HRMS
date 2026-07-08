@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { holidays as api } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type Holiday = {
 		id: string;
 		date: string;
@@ -55,7 +61,7 @@
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -80,14 +86,14 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'date', headerName: 'Tanggal', minWidth: 130,
-			valueFormatter: (params: any) => params.value ? formatDate(params.value) : '',
+			valueFormatter: (params: AgGridValueParams) => params.value ? formatDate(params.value as string) : '',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm font-medium text-gray-900 dark:text-white tabular-nums',
 		},
 		{
 			field: 'name', headerName: 'Nama Hari Libur', minWidth: 250, flex: 1,
-			cellRenderer: (params: any) => {
-				const name = params.value || '';
+			cellRenderer: (params: AgGridCellParams<Holiday>) => {
+				const name = params.value as string || '';
 				const desc = params.data?.description || '';
 				return `<div class="text-sm font-medium text-gray-900 dark:text-white">${name}${desc ? `<span class="text-xs text-gray-400 dark:text-gray-500 ml-2">${desc}</span>` : ''}</div>`;
 			},
@@ -95,8 +101,8 @@
 		},
 		{
 			field: 'holiday_type', headerName: 'Tipe', minWidth: 140,
-			cellRenderer: (params: any) => {
-				const t = params.value || '';
+			cellRenderer: (params: AgGridCellParams<Holiday>) => {
+				const t = params.value as string || '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${typeColors[t] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${holidayTypes[t] || t}</span>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
@@ -111,7 +117,7 @@
 		},
 		{
 			field: 'id', headerName: '', minWidth: 100, maxWidth: 100,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Holiday>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -152,10 +158,11 @@
 		}
 	});
 
+
 	$effect(() => {
 		if (items.length > 0 && gridContainer && !showForm) {
-			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
+			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}
 	});
 
@@ -171,13 +178,13 @@
 		gridApi = null;
 		isLoading = true; errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, yearFilter, typeFilter);
+			const response = await api.list(page, perPage, yearFilter, typeFilter) as ApiResponse<Holiday[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -194,8 +201,8 @@
 		isEditing = true; editId = id; formTitle = 'Edit Hari Libur';
 		formError = ''; showForm = true;
 		try {
-			const response: any = await api.get(id);
-			const d = response.data;
+			const response = await api.get(id) as ApiResponse<Holiday>;
+			const d = response.data || {} as Holiday;
 			form = {
 				date: d.date || '',
 				name: d.name || '',
@@ -214,7 +221,7 @@
 
 		isSaving = true; formError = '';
 		try {
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				date: form.date,
 				name: form.name.trim(),
 				holiday_type: form.holiday_type,
@@ -234,7 +241,7 @@
 	async function handleDelete(id: string) {
 		if (!confirm('Hapus hari libur ini?')) return; isSaving = true;
 		try { await api.remove(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menghapus'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menghapus'; }
 		finally { isSaving = false; }
 	}
 
@@ -338,7 +345,7 @@
 	{:else}
 		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-20"></div><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div><div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div></div><div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-20"></div></div>{/each}</div></div>
+				<div class="p-6"><PulseLoader variant="table-row" count={5} /></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
@@ -347,11 +354,11 @@
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada hari libur</h3>
-					<p class="text-sm text-gray-500 dark:text-gray-400">Belum ada hari libur yang ditambahkan.</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada hari libur"
+					description="Belum ada hari libur yang ditambahkan."
+				/>
 			{:else}
 				<!-- Calendar-like header -->
 				<div class="hidden md:grid grid-cols-12 gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
@@ -367,30 +374,40 @@
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
 				<!-- Mobile: grouped by month -->
-				<div class="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
-					{#each [...new Set(items.map(i => getMonth(i.date)))] as month}
-						<div class="px-4 py-3 bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
-							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{month}</h3>
-						</div>
-						{#each items.filter(i => getMonth(i.date) === month) as item}
-							<div class="px-4 py-3 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
-								<div class="flex items-center justify-between mb-1">
-									<div class="text-sm font-medium text-gray-900 dark:text-white">{item.name}</div>
-									<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {typeColors[item.holiday_type] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{holidayTypes[item.holiday_type] || item.holiday_type}</span>
-								</div>
-								<div class="text-xs text-gray-400 dark:text-gray-500">{formatShortDate(item.date)}{item.is_recurring_yearly ? ' · Tahunan' : ''}</div>
-								<div class="flex items-center gap-1 mt-2">
-									{#if hasPermission('announcement', 'update')}
-										<button onclick={() => openEdit(item.id)} class="px-2 py-1 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Edit</button>
-									{/if}
-									{#if hasPermission('announcement', 'delete')}
-										<button onclick={() => handleDelete(item.id)} class="px-2 py-1 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer">Hapus</button>
-									{/if}
-								</div>
+				<PullToRefresh onRefresh={load}>
+					<div class="md:hidden space-y-3">
+						{#each [...new Set(items.map(i => getMonth(i.date)))] as month}
+							<div class="px-4 py-2">
+								<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{month}</h3>
 							</div>
+							{#each items.filter(i => getMonth(i.date) === month) as item}
+								<MobileCard
+									title={item.name}
+									subtitle={`${formatShortDate(item.date)}${item.is_recurring_yearly ? ' · Tahunan' : ''}`}
+									avatar={getInitials(item.name)}
+									avatarColor={getAvatarTheme('holiday').gradientClasses}
+									badges={[{ label: holidayTypes[item.holiday_type] || item.holiday_type, color: typeColors[item.holiday_type] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }]}
+								>
+									{#snippet children()}
+										{#if item.description}
+											<div class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{item.description}</div>
+										{/if}
+									{/snippet}
+									{#snippet footer()}
+										<div class="flex items-center gap-2">
+											{#if hasPermission('announcement', 'update')}
+												<button onclick={() => openEdit(item.id)} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Edit</button>
+											{/if}
+											{#if hasPermission('announcement', 'delete')}
+												<button onclick={() => handleDelete(item.id)} class="flex-1 py-2 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">Hapus</button>
+											{/if}
+										</div>
+									{/snippet}
+								</MobileCard>
+							{/each}
 						{/each}
-					{/each}
-				</div>
+					</div>
+				</PullToRefresh>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">
 					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">

@@ -1,6 +1,43 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { reports, departments, ApiError } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+
+	type HeadcountReport = {
+		total_employees: number;
+		active_employees: number;
+		new_hires_this_year: number;
+		resigned_this_year: number;
+		by_department: { department_name: string; count: number }[];
+	};
+
+	type PayrollReport = {
+		total_periods: number;
+		total_gross: number;
+		total_net_salary: number;
+		average_net_salary: number;
+	};
+
+	type AttendanceReport = {
+		total_records: number;
+		on_time: number;
+		late: number;
+		late_percentage: number;
+	};
+
+	type LeaveReport = {
+		total_requests: number;
+		approved: number;
+		pending: number;
+		total_days_approved: number;
+	};
+
+	type OvertimeReport = {
+		total_requests: number;
+		approved: number;
+		total_hours: number;
+		total_cost: number;
+	};
 
 	let activeTab = $state<'headcount' | 'payroll' | 'attendance' | 'leave' | 'overtime'>('headcount');
 
@@ -8,14 +45,14 @@
 	let selectedYear = $state(2026);
 	let selectedMonth = $state(0);
 	let selectedDept = $state('');
-	let deptOptions = $state<any[]>([]);
+	let deptOptions = $state<{ id: string; name: string }[]>([]);
 
 	// Data
-	let headcount = $state<any>(null);
-	let payroll = $state<any>(null);
-	let attendance = $state<any>(null);
-	let leave = $state<any>(null);
-	let overtime = $state<any>(null);
+	let headcount = $state<HeadcountReport | null>(null);
+	let payroll = $state<PayrollReport | null>(null);
+	let attendance = $state<AttendanceReport | null>(null);
+	let leave = $state<LeaveReport | null>(null);
+	let overtime = $state<OvertimeReport | null>(null);
 
 	let loading = $state(false);
 	let error = $state('');
@@ -77,8 +114,7 @@
 
 	<!-- Tabs -->
 	<div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
-		{#each ['headcount', 'payroll', 'attendance', 'leave', 'overtime'] as tab}
-			<button onclick={() => { activeTab = tab as any; loadCurrentTab(); }}
+		{#each ['headcount', 'payroll', 'attendance', 'leave', 'overtime'] as tab}				<button onclick={() => { activeTab = tab as typeof activeTab; loadCurrentTab(); }}
 				class="px-5 py-3 text-sm font-medium whitespace-nowrap transition border-b-2 -mb-px cursor-pointer
 					{activeTab === tab ? 'border-[#1A56DB] text-[#1A56DB]' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}">
 				{tab === 'headcount' ? 'Headcount' : tab === 'payroll' ? 'Penggajian' : tab === 'attendance' ? 'Absensi' : tab === 'leave' ? 'Cuti' : 'Lembur'}
@@ -117,32 +153,32 @@
 
 	{#if loading}
 		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-8">
-			<div class="animate-pulse space-y-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="grid grid-cols-3 gap-4"><div class="h-24 bg-gray-100 dark:bg-gray-800 rounded"></div><div class="h-24 bg-gray-100 dark:bg-gray-800 rounded"></div><div class="h-24 bg-gray-100 dark:bg-gray-800 rounded"></div></div></div>
+			<PulseLoader variant="card" count={2} />
 		</div>
 	{:else}
 		<!-- ═══ HEADCOUNT ═══ -->
 		{#if activeTab === 'headcount' && headcount}
 			<div class="space-y-6">
 				<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Total Karyawan</p>
 						<p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{headcount.total_employees}</p>
 					</div>
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Aktif</p>
 						<p class="text-2xl font-bold text-green-600 mt-1">{headcount.active_employees}</p>
 					</div>
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Bergabung Tahun Ini</p>
 						<p class="text-2xl font-bold text-blue-600 mt-1">{headcount.new_hires_this_year}</p>
 					</div>
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Resign Tahun Ini</p>
 						<p class="text-2xl font-bold text-red-600 mt-1">{headcount.resigned_this_year}</p>
 					</div>
 				</div>
 				<!-- By Department -->
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
 					<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Berdasarkan Departemen</h3>
 					<div class="space-y-2">
 						{#each headcount.by_department || [] as dept}
@@ -164,19 +200,19 @@
 		{:else if activeTab === 'payroll' && payroll}
 			<div class="space-y-6">
 				<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Total Periode</p>
 						<p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{payroll.total_periods}</p>
 					</div>
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Total Gross</p>
 						<p class="text-lg font-bold text-[#1A56DB] mt-1">{formatCurrency(payroll.total_gross)}</p>
 					</div>
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Total Net</p>
 						<p class="text-lg font-bold text-green-600 mt-1">{formatCurrency(payroll.total_net_salary)}</p>
 					</div>
-					<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 						<p class="text-xs text-gray-400 uppercase tracking-wide">Rata-rata Net</p>
 						<p class="text-lg font-bold text-gray-900 dark:text-gray-100 mt-1">{formatCurrency(payroll.average_net_salary)}</p>
 					</div>
@@ -186,19 +222,19 @@
 		<!-- ═══ ATTENDANCE ═══ -->
 		{:else if activeTab === 'attendance' && attendance}
 			<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Total Record</p>
 					<p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{attendance.total_records}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Tepat Waktu</p>
 					<p class="text-2xl font-bold text-green-600 mt-1">{attendance.on_time}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Terlambat</p>
 					<p class="text-2xl font-bold text-red-600 mt-1">{attendance.late}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">% Terlambat</p>
 					<p class="text-2xl font-bold text-amber-600 mt-1">{formatPercent(attendance.late_percentage)}</p>
 				</div>
@@ -207,19 +243,19 @@
 		<!-- ═══ LEAVE ═══ -->
 		{:else if activeTab === 'leave' && leave}
 			<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Total Pengajuan</p>
 					<p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{leave.total_requests}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Disetujui</p>
 					<p class="text-2xl font-bold text-green-600 mt-1">{leave.approved}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Pending</p>
 					<p class="text-2xl font-bold text-yellow-600 mt-1">{leave.pending}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Hari Cuti (Approved)</p>
 					<p class="text-2xl font-bold text-[#1A56DB] mt-1">{leave.total_days_approved}</p>
 				</div>
@@ -228,19 +264,19 @@
 		<!-- ═══ OVERTIME ═══ -->
 		{:else if activeTab === 'overtime' && overtime}
 			<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Total Lembur</p>
 					<p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{overtime.total_requests}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Disetujui</p>
 					<p class="text-2xl font-bold text-green-600 mt-1">{overtime.approved}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Total Jam</p>
 					<p class="text-2xl font-bold text-[#1A56DB] mt-1">{overtime.total_hours?.toFixed(1) || '0'}</p>
 				</div>
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm hover:shadow-md transition-all duration-200">
 					<p class="text-xs text-gray-400 uppercase tracking-wide">Biaya Lembur</p>
 					<p class="text-lg font-bold text-amber-600 mt-1">{formatCurrency(overtime.total_cost)}</p>
 				</div>

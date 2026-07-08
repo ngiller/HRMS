@@ -161,8 +161,6 @@ func CreateLoan(ctx context.Context, employeeID string, req *models.CreateLoanRe
 	return &l, nil
 }
 
-
-
 func UpdateLoanStatus(ctx context.Context, id, status, rejectionReason, approverID string) (*models.Loan, error) {
 	query := `
 		UPDATE loans
@@ -245,6 +243,21 @@ func DisburseLoan(ctx context.Context, id, approverID, date string) (*models.Loa
 		return nil, err
 	}
 	return &l, nil
+}
+
+func CancelLoan(ctx context.Context, id, employeeID string) error {
+	query := `
+		UPDATE loans
+		SET status = 'cancelled'::loan_status,
+			deleted_at = NOW()
+		WHERE id::text = $1 AND employee_id::text = $2
+		AND deleted_at IS NULL AND status = 'pending'::loan_status
+	`
+	_, err := database.Pool.Exec(ctx, query, id, employeeID)
+	if err != nil {
+		return fmt.Errorf("gagal membatalkan pinjaman: %w", err)
+	}
+	return nil
 }
 
 func GetLoanStats(ctx context.Context) (*models.LoanStatsResponse, error) {

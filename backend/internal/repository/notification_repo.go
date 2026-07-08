@@ -149,6 +149,21 @@ func (r *NotificationRepo) CreateNotificationBatch(ctx context.Context, requests
 	return tx.Commit(ctx)
 }
 
+// GetEmployeeEmailByUserID retrieves an employee's email by their user ID
+func GetEmployeeEmailByUserID(ctx context.Context, userID string, email *string) error {
+	return database.Pool.QueryRow(ctx, `SELECT email FROM employees WHERE id::text = $1 AND deleted_at IS NULL`, userID).Scan(email)
+}
+
+// UpdateNotificationEmailSent marks a notification's is_email_sent flag as true
+func UpdateNotificationEmailSent(ctx context.Context, notificationID string) error {
+	_, err := database.Pool.Exec(ctx,
+		`UPDATE notifications SET is_email_sent = true WHERE id::text = $1`, notificationID)
+	if err != nil {
+		return fmt.Errorf("update email sent: %w", err)
+	}
+	return nil
+}
+
 // toJSONB converts a map to a JSON string for PostgreSQL jsonb
 func toJSONB(data map[string]any) *string {
 	if data == nil {

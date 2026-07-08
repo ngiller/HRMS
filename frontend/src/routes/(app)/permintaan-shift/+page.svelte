@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { shiftChangeRequests as api, workSchedules, employees } from '$lib/api.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import SwipeActions from '$lib/components/SwipeActions.svelte';
+import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
 	import { hasPermission } from '$lib/permissions.js';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type ShiftChangeRequest = {
 		id: string;
 		request_type: string;
@@ -16,6 +23,7 @@
 		reason: string;
 		status: string;
 		created_at: string;
+		swap_partner_confirmed: boolean;
 	};
 
 	type FormData = {
@@ -52,12 +60,12 @@
 
 	let showDetail = $state(false);
 	let detailId = $state<string | null>(null);
-	let detailData = $state<any>(null);
+	let detailData = $state<ShiftChangeRequest | null>(null);
 	let isDetailLoading = $state(false);
 
 	let scheduleOptions = $state<WorkScheduleOption[]>([]);
 	let scheduleSwapOptions = $state<WorkScheduleOption[]>([]);
-	let employeeOptions = $state<any[]>([]);
+	let employeeOptions = $state<{ id: string; full_name: string; employee_id: string }[]>([]);
 
 	let showRejectModal = $state(false);
 	let rejectId = $state<string | null>(null);
@@ -82,7 +90,7 @@
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -116,9 +124,9 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'employee_name', headerName: 'Karyawan', minWidth: 240, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<ShiftChangeRequest>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				const swapName = params.data?.swap_partner_name || '';
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center text-xs font-semibold text-purple-600 shrink-0 ring-1 ring-purple-200">${initials}</div>
@@ -130,19 +138,19 @@
 		},
 		{
 			field: 'request_type', headerName: 'Tipe', minWidth: 100, maxWidth: 120,
-			valueFormatter: (params: any) => params.value === 'individual' ? 'Individual' : params.value === 'swap' ? 'Swap' : params.value || '',
+			valueFormatter: (params: AgGridValueParams) => params.value === 'individual' ? 'Individual' : params.value === 'swap' ? 'Swap' : String(params.value || ''),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600',
 		},
 		{
 			field: 'target_date', headerName: 'Tanggal', minWidth: 120,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600',
 		},
 		{
 			field: 'requested_schedule_name', headerName: 'Jadwal Diminta', minWidth: 160,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<ShiftChangeRequest>) => {
 				const requested = params.value || '';
 				const current = params.data?.current_schedule_name || '';
 				return `<div class="text-sm text-gray-700">${requested}</div>${current ? `<div class="text-xs text-gray-400">Dari: ${current}</div>` : ''}`;
@@ -152,21 +160,21 @@
 		},
 		{
 			field: 'status', headerName: 'Status', minWidth: 130, maxWidth: 150,
-			cellRenderer: (params: any) => {
-				const status = params.value || '';
+			cellRenderer: (params: AgGridCellParams<ShiftChangeRequest>) => {
+				const status = (params.value as string) || '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${statusLabels[status] || status}</span>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 120,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 150, maxWidth: 150,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<ShiftChangeRequest>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -225,16 +233,16 @@
 	};
 
 	$effect(() => {
-		if ((showForm || showDetail) && gridApi) {
-			gridApi.destroy();
+		if (showForm || showDetail) {
+			gridApi?.destroy();
 			gridApi = null;
 		}
 	});
 
 	$effect(() => {
 		if (items.length > 0 && gridContainer && !showForm && !showDetail) {
-			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
+			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}
 	});
 
@@ -251,7 +259,7 @@
 	});
 	async function loadOptions() {
 		try {
-			const [schedRes, empRes]: any[] = await Promise.all([
+			const [schedRes, empRes] = await Promise.all([
 				workSchedules.getAll(),
 				employees.list(1, 9999),
 			]);
@@ -266,13 +274,13 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, statusFilter);
+			const response = await api.list(page, perPage, statusFilter) as ApiResponse<ShiftChangeRequest[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -300,7 +308,7 @@
 		isSaving = true;
 		formError = '';
 		try {
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				request_type: form.request_type,
 				target_date: form.target_date,
 				current_schedule_id: form.current_schedule_id || '',
@@ -313,7 +321,7 @@
 			await api.create(payload);
 			cancelForm();
 			load();
-		} catch (error: any) { formError = error.message || 'Gagal menyimpan data'; }
+		} catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menyimpan data'; }
 		finally { isSaving = false; }
 	}
 
@@ -323,8 +331,8 @@
 		isDetailLoading = true;
 		detailData = null;
 		try {
-			const response: any = await api.get(id);
-			detailData = response.data;
+			const response = await api.get(id) as ApiResponse<ShiftChangeRequest>;
+			detailData = response.data ?? null;
 		} catch (_) { detailData = null; }
 		finally { isDetailLoading = false; }
 	}
@@ -334,7 +342,7 @@
 	async function handleApprove(id: string) {
 		isSaving = true;
 		try { await api.approve(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menyetujui'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menyetujui'; }
 		finally { isSaving = false; }
 	}
 
@@ -345,21 +353,21 @@
 		if (!rejectId) return;
 		isSaving = true;
 		try { await api.reject(rejectId, { rejection_reason: rejectReason }); showRejectModal = false; rejectId = null; rejectReason = ''; load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menolak'; showRejectModal = false; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menolak'; showRejectModal = false; }
 		finally { isSaving = false; }
 	}
 
 	async function handleConfirmSwap(id: string) {
 		isSaving = true;
 		try { await api.confirmSwap(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal konfirmasi swap'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal konfirmasi swap'; }
 		finally { isSaving = false; }
 	}
 
 	async function handleCancel(id: string) {
 		isSaving = true;
 		try { await api.cancel(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal membatalkan'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal membatalkan'; }
 		finally { isSaving = false; }
 	}
 
@@ -368,11 +376,6 @@
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
-	function getInitials(name: string): string {
-		const parts = name.split(' ');
-		if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-		return name.substring(0, 2).toUpperCase();
-	}
 </script>
 
 <div class="w-full">
@@ -531,43 +534,63 @@
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada permintaan shift</h3>
-					<p class="text-sm text-gray-500">Belum ada permintaan perubahan shift yang diajukan.</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada permintaan shift"
+					description="Belum ada permintaan perubahan shift yang diajukan."
+				/>
 			{:else}
 				<!-- Desktop Table — AG Grid -->
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<PullToRefresh onRefresh={load}>
+				<div class="md:hidden space-y-3">
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center text-xs font-semibold text-purple-600 ring-1 ring-purple-200">{getInitials(item.employee_name)}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{item.employee_name}</div>
-									<div class="text-xs text-gray-400">{item.request_type === 'individual' ? 'Individual' : 'Swap'} &middot; {formatDate(item.target_date)}</div>
-								</div>
-								<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[item.status] || item.status}</span>
-							</div>
-							<div class="flex items-center justify-end gap-1 mt-2">
-								<button onclick={() => openDetail(item.id)} class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition cursor-pointer">Detail</button>
-								{#if item.status === 'pending' && hasPermission('shift_change', 'update')}
-									<button onclick={() => handleApprove(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition cursor-pointer">Setujui</button>
-									<button onclick={() => openReject(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition cursor-pointer">Tolak</button>
-								{/if}
-								{#if item.status === 'partner_pending' && hasPermission('shift_change', 'update')}
-									<button onclick={() => handleConfirmSwap(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition cursor-pointer">Konfirmasi</button>
-								{/if}
-								{#if (item.status === 'pending' || item.status === 'partner_pending') && hasPermission('shift_change', 'create')}
-									<button onclick={() => handleCancel(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 transition cursor-pointer">Batalkan</button>
-								{/if}
-							</div>
-						</div>
+						<SwipeActions
+							onApprove={item.status === 'pending' && hasPermission('shift_change', 'update') ? () => handleApprove(item.id) : undefined}
+							onReject={item.status === 'pending' && hasPermission('shift_change', 'update') ? () => openReject(item.id) : undefined}
+						>
+							<MobileCard
+								title={item.employee_name}
+								subtitle={item.request_type === 'individual' ? 'Individual' : 'Swap'}
+								avatar={getInitials(item.employee_name)}
+								avatarColor={getAvatarTheme('shift').gradientClasses}
+								badges={[{ label: statusLabels[item.status] || item.status, color: statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }]}
+								onclick={() => openDetail(item.id)}
+							>
+								{#snippet children()}
+									<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+										<div class="flex items-center gap-1.5">
+											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+											</svg>
+											<span>{formatDate(item.target_date)}</span>
+										</div>
+										{#if item.swap_partner_name}
+											<span>Swap: {item.swap_partner_name}</span>
+										{/if}
+									</div>
+								{/snippet}
+								{#snippet footer()}
+									{#if item.status === 'pending'}
+										<div class="flex items-center gap-2">
+											<button onclick={(e) => { e.stopPropagation(); openDetail(item.id); }} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Detail</button>
+											{#if hasPermission('shift_change', 'update')}
+												<button onclick={(e) => { e.stopPropagation(); handleApprove(item.id); }} class="flex-1 py-2 text-xs font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>Setujui</button>
+												<button onclick={(e) => { e.stopPropagation(); openReject(item.id); }} class="flex-1 py-2 text-xs font-semibold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>Tolak</button>
+											{/if}
+											{#if hasPermission('shift_change', 'create')}
+												<button onclick={(e) => { e.stopPropagation(); handleCancel(item.id); }} class="flex-1 py-2 text-xs font-medium text-orange-600 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/30 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>Batalkan</button>
+											{/if}
+										</div>
+									{/if}
+								{/snippet}
+							</MobileCard>
+						</SwipeActions>
 					{/each}
 				</div>
+				</PullToRefresh>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
 					<div class="flex items-center gap-1.5">
@@ -586,7 +609,7 @@
 	{/if}
 </div>
 
-{#if showRejectModal}
+<AnimatedPresence show={showRejectModal} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
@@ -609,4 +632,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

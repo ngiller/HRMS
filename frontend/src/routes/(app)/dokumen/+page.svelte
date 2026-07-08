@@ -1,32 +1,17 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { documents as api, employees } from '$lib/api.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import SwipeActions from '$lib/components/SwipeActions.svelte';
+import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
-import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	type Document = {
-		id: string;
-		employee_id: string;
-		employee_name: string;
-		doc_type: string;
-		file_name: string;
-		title: string;
-		status: string;
-		expiry_date: string;
-		created_at: string;
-	};
-
-	type FormData = {
-		employee_id: string;
-		doc_type: string;
-		title: string;
-		description: string;
-		expiry_date: string;
-		file: File | null;
-		file_name: string;
-		file_url: string;
-	};
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import type { Document as DocType, DocumentForm, Employee, ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 
 	const docTypes: Record<string, string> = {
 		ktp: 'KTP', kk: 'Kartu Keluarga', ijazah: 'Ijazah',
@@ -34,7 +19,7 @@ import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 		npwp: 'NPWP', bpjs: 'BPJS', photo: 'Foto', other: 'Lainnya',
 	};
 
-	let items = $state<Document[]>([]);
+	let items = $state<DocType[]>([]);
 	let total = $state(0);
 	let page = $state(1);
 	let perPage = $state(25);
@@ -47,13 +32,13 @@ import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let showForm = $state(false);
 	let formTitle = $state('');
-	let form = $state<FormData>({ employee_id: '', doc_type: 'ktp', title: '', description: '', expiry_date: '', file: null, file_name: '', file_url: '' });
+	let form = $state<DocumentForm>({ employee_id: '', doc_type: 'ktp', title: '', description: '', expiry_date: '', file: null, file_name: '', file_url: '' });
 	let formError = $state('');
 	let isSaving = $state(false);
 
 	let showDetail = $state(false);
 	let detailId = $state<string | null>(null);
-	let detailData = $state<any>(null);
+	let detailData = $state<DocType | null>(null);
 let showDeleteConfirm = $state(false);
 let deleteId: string | null = null;
 	let isDetailLoading = $state(false);
@@ -62,7 +47,7 @@ let deleteId: string | null = null;
 	let rejectId = $state<string | null>(null);
 	let rejectReason = $state('');
 
-	let allEmployees = $state<any[]>([]);
+	let allEmployees = $state<Employee[]>([]);
 
 	const statusLabels: Record<string, string> = {
 		pending: 'Menunggu', verified: 'Terverifikasi',
@@ -77,7 +62,7 @@ let deleteId: string | null = null;
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -108,9 +93,9 @@ let deleteId: string | null = null;
 	const columnDefs: ColDef[] = [
 		{
 			field: 'employee_name', headerName: 'Karyawan', minWidth: 220, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<DocType>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600 shrink-0 ring-1 ring-indigo-200">${initials}</div>
 					<div class="text-sm font-medium text-gray-900 dark:text-white">${params.value}</div>
@@ -126,33 +111,33 @@ let deleteId: string | null = null;
 		},
 		{
 			field: 'doc_type', headerName: 'Tipe', minWidth: 120,
-			valueFormatter: (params: any) => docTypes[params.value] || params.value || '',
+			valueFormatter: (params: AgGridValueParams) => docTypes[params.value as string] || (params.value as string) || '',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600 dark:text-gray-400',
 		},
 		{
 			field: 'status', headerName: 'Status', minWidth: 120, maxWidth: 140,
-			cellRenderer: (params: any) => {
-				const status = params.value || '';
+			cellRenderer: (params: AgGridCellParams<DocType>) => {
+				const status = (params.value as string) || '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${statusLabels[status] || status}</span>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 		},
 		{
 			field: 'expiry_date', headerName: 'Berakhir', minWidth: 120,
-			valueFormatter: (params: any) => params.value ? formatDate(params.value) : '-',
+			valueFormatter: (params: AgGridValueParams) => params.value ? formatDate(params.value as string) : '-',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 120,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 150, maxWidth: 150,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<DocType>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -205,8 +190,8 @@ let deleteId: string | null = null;
 
 	$effect(() => {
 		if (items.length > 0 && gridContainer && !showForm) {
-			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
+			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}
 	});
 
@@ -216,7 +201,7 @@ let deleteId: string | null = null;
 		const m = await getAgGrid();
 		agGridModule = m;
 		try {
-			const empResp: any = await employees.list(1, 200);
+			const empResp = await employees.list(1, 200) as ApiResponse<Employee[]>;
 			allEmployees = empResp.data || [];
 		} catch (_) {}
 		load();
@@ -227,13 +212,13 @@ let deleteId: string | null = null;
 		gridApi = null;
 		isLoading = true; errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, statusFilter, employeeFilter, typeFilter);
+			const response = await api.list(page, perPage, statusFilter, employeeFilter, typeFilter) as ApiResponse<DocType[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -265,13 +250,13 @@ let deleteId: string | null = null;
 				expiry_date: form.expiry_date || '',
 			});
 			cancelForm(); load();
-		} catch (error: any) { formError = error.message || 'Gagal menyimpan data'; }
+		} catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menyimpan data'; }
 		finally { isSaving = false; }
 	}
 
 	async function openDetail(id: string) {
 		showDetail = true; detailId = id; isDetailLoading = true; detailData = null;
-		try { const response: any = await api.get(id); detailData = response.data; }
+		try { const response = await api.get(id) as ApiResponse<DocType>; detailData = response.data ?? null; }
 		catch (_) { detailData = null; }
 		finally { isDetailLoading = false; }
 	}
@@ -281,7 +266,7 @@ let deleteId: string | null = null;
 	async function handleVerify(id: string) {
 		isSaving = true;
 		try { await api.verify(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal memverifikasi'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memverifikasi'; }
 		finally { isSaving = false; }
 	}
 
@@ -291,7 +276,7 @@ let deleteId: string | null = null;
 	async function handleReject() {
 		if (!rejectId) return; isSaving = true;
 		try { await api.reject(rejectId, { rejection_reason: rejectReason }); showRejectModal = false; rejectId = null; rejectReason = ''; load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menolak'; showRejectModal = false; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menolak'; showRejectModal = false; }
 		finally { isSaving = false; }
 	}
 
@@ -305,8 +290,8 @@ async function confirmDelete() {
   try {
     await api.remove(deleteId);
     load();
-  } catch (error: any) {
-    errorMessage = error.message || 'Gagal menghapus';
+  } catch (error: unknown) {
+    errorMessage = (error as { message?: string }).message || 'Gagal menghapus';
   } finally {
     isSaving = false;
     showDeleteConfirm = false;
@@ -323,11 +308,6 @@ function cancelDelete() {
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
-	function getInitials(name: string): string {
-		const parts = name.split(' ');
-		if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-		return name.substring(0, 2).toUpperCase();
-	}
 </script>
 
 <div class="w-full">
@@ -428,36 +408,37 @@ function cancelDelete() {
 				{#if isDetailLoading}
 					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-64"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-40"></div></div>
 				{:else if detailData}
+					{@const dd = detailData}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Informasi Dokumen</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Status</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[detailData.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[detailData.status] || detailData.status}</span></p></div>
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Tipe</span><p class="text-sm font-medium text-gray-900 dark:text-white">{docTypes[detailData.doc_type] || detailData.doc_type}</p></div>
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.title || '-'}</p></div>
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.description || '-'}</p></div>
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Nama File</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.file_name || '-'}</p></div>
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Masa Berakhir</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.expiry_date ? formatDate(detailData.expiry_date) : '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Status</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[dd.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[dd.status] || dd.status}</span></p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Tipe</span><p class="text-sm font-medium text-gray-900 dark:text-white">{docTypes[dd.doc_type] || dd.doc_type}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-white">{dd.title || '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{dd.description || '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Nama File</span><p class="text-sm text-gray-700 dark:text-gray-300">{dd.file_name || '-'}</p></div>
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Masa Berakhir</span><p class="text-sm text-gray-700 dark:text-gray-300">{dd.expiry_date ? formatDate(dd.expiry_date) : '-'}</p></div>
 							</div>
 						</div>
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Karyawan & Verifikasi</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400 dark:text-gray-500">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.employee_name || '-'}</p></div>
-								{#if detailData.verified_by_name}<div><span class="text-xs text-gray-400 dark:text-gray-500">Diverifikasi Oleh</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailData.verified_by_name}</p></div>{/if}
-								{#if detailData.verified_at}<div><span class="text-xs text-gray-400 dark:text-gray-500">Diverifikasi Pada</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(detailData.verified_at)}</p></div>{/if}
-								{#if detailData.rejection_reason}<div><span class="text-xs text-gray-400 dark:text-gray-500">Alasan Ditolak</span><p class="text-sm text-red-600 dark:text-red-400">{detailData.rejection_reason}</p></div>{/if}
+								<div><span class="text-xs text-gray-400 dark:text-gray-500">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-white">{dd.employee_name || '-'}</p></div>
+								{#if dd.verified_by_name}<div><span class="text-xs text-gray-400 dark:text-gray-500">Diverifikasi Oleh</span><p class="text-sm text-gray-700 dark:text-gray-300">{dd.verified_by_name}</p></div>{/if}
+								{#if dd.verified_at}<div><span class="text-xs text-gray-400 dark:text-gray-500">Diverifikasi Pada</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(dd.verified_at)}</p></div>{/if}
+								{#if dd.rejection_reason}<div><span class="text-xs text-gray-400 dark:text-gray-500">Alasan Ditolak</span><p class="text-sm text-red-600 dark:text-red-400">{dd.rejection_reason}</p></div>{/if}
 							</div>
 							<div class="mt-4 flex gap-2">
-								{#if detailData.file_url}
-									<a href={detailData.file_url} target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+								{#if dd.file_url}
+									<a href={dd.file_url} target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition">
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
 										Download
 									</a>
 								{/if}
-								{#if detailData.status === 'pending' && hasPermission('document', 'update')}
-									<button onclick={() => handleVerify(detailData.id)} disabled={isSaving} class="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50 cursor-pointer">Verifikasi</button>
-									<button onclick={() => openReject(detailData.id)} disabled={isSaving} class="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-50 cursor-pointer">Tolak</button>
+								{#if dd.status === 'pending' && hasPermission('document', 'update')}
+									<button onclick={() => handleVerify(dd.id)} disabled={isSaving} class="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50 cursor-pointer">Verifikasi</button>
+									<button onclick={() => openReject(dd.id)} disabled={isSaving} class="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-50 cursor-pointer">Tolak</button>
 								{/if}
 							</div>
 						</div>
@@ -479,36 +460,47 @@ function cancelDelete() {
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada dokumen</h3>
-					<p class="text-sm text-gray-500 dark:text-gray-400">Belum ada dokumen yang diupload.</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada dokumen"
+					description="Belum ada dokumen yang diupload."
+				/>
 			{:else}
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
+				<PullToRefresh onRefresh={load}>
+				<div class="md:hidden space-y-3">
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/50 dark:to-indigo-800/50 flex items-center justify-center text-xs font-semibold text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-800">{getInitials(item.employee_name)}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</div>
-									<div class="text-xs text-gray-400 dark:text-gray-500">{docTypes[item.doc_type] || item.doc_type}</div>
-								</div>
-								<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">{statusLabels[item.status] || item.status}</span>
-							</div>
-							<div class="flex items-center gap-1 mt-2">
-								<button onclick={() => openDetail(item.id)} class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Detail</button>
-								{#if item.status === 'pending' && hasPermission('document', 'update')}
-									<button onclick={() => handleVerify(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 transition cursor-pointer">Verifikasi</button>
-									<button onclick={() => openReject(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer">Tolak</button>
-								{/if}
-							</div>
-						</div>
+						<SwipeActions
+							onApprove={item.status === 'pending' && hasPermission('document', 'update') ? () => handleVerify(item.id) : undefined}
+							onReject={item.status === 'pending' && hasPermission('document', 'update') ? () => openReject(item.id) : undefined}
+							approveLabel="Verifikasi"
+						>
+							<MobileCard
+								title={item.title}
+								subtitle={`${docTypes[item.doc_type] || item.doc_type} · ${item.employee_name}`}
+								avatar={getInitials(item.employee_name)}
+								avatarColor={getAvatarTheme('document').gradientClasses}
+								badges={[{ label: statusLabels[item.status] || item.status, color: statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }]}
+								onclick={() => openDetail(item.id)}
+							>
+								{#snippet footer()}
+									{#if item.status === 'pending'}
+										<div class="flex items-center gap-2">
+											<button onclick={(e) => { e.stopPropagation(); openDetail(item.id); }} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Detail</button>
+											{#if hasPermission('document', 'update')}
+												<button onclick={(e) => { e.stopPropagation(); handleVerify(item.id); }} class="flex-1 py-2 text-xs font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>Verifikasi</button>
+												<button onclick={(e) => { e.stopPropagation(); openReject(item.id); }} class="flex-1 py-2 text-xs font-semibold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>Tolak</button>
+											{/if}
+										</div>
+									{/if}
+								{/snippet}
+							</MobileCard>
+						</SwipeActions>
 					{/each}
 				</div>
+				</PullToRefresh>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">
 					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
@@ -527,7 +519,7 @@ function cancelDelete() {
 	{/if}
 </div>
 
-{#if showRejectModal}
+<AnimatedPresence show={showRejectModal} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
@@ -550,16 +542,15 @@ function cancelDelete() {
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>
 
-{#if showDeleteConfirm}
-	<ConfirmModal
-		title="Hapus Dokumen"
-		message="Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan."
-		confirmText="Hapus"
-		confirmColor="red"
-		onConfirm={confirmDelete}
-		onCancel={cancelDelete}
-		{isSaving}
-	/>
-{/if}
+<ConfirmModal
+	show={showDeleteConfirm}
+	title="Hapus Dokumen"
+	message="Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan."
+	confirmText="Hapus"
+	confirmColor="red"
+	onConfirm={confirmDelete}
+	onCancel={cancelDelete}
+	{isSaving}
+/>

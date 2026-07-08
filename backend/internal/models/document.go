@@ -68,13 +68,13 @@ type DocumentListResponse struct {
 
 // DocType labels for frontend
 var DocTypeLabels = map[string]string{
-	"ktp":           "KTP",
-	"kk":            "Kartu Keluarga",
-	"ijazah":        "Ijazah",
-	"sertifikat":    "Sertifikat",
-	"kontrak":       "Kontrak Kerja",
-	"npwp":          "NPWP",
-	"bpjs":          "BPJS",
-	"photo":         "Foto",
-	"other":         "Lainnya",
+	"ktp":        "KTP",
+	"kk":         "Kartu Keluarga",
+	"ijazah":     "Ijazah",
+	"sertifikat": "Sertifikat",
+	"kontrak":    "Kontrak Kerja",
+	"npwp":       "NPWP",
+	"bpjs":       "BPJS",
+	"photo":      "Foto",
+	"other":      "Lainnya",
 }

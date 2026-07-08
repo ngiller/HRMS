@@ -92,5 +92,3 @@ func (h *ActivityLogHandler) GetActions(c *fiber.Ctx) error {
 
 	return c.JSON(SuccessResponse(fiber.Map{"actions": actions}, "Daftar tipe aksi"))
 }
-
-

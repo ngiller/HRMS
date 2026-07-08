@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { roles as rolesApi } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 	import { hasPermission } from '$lib/permissions.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type RoleSummary = {
 		id: string;
 		name: string;
@@ -69,7 +72,7 @@
 	// AG Grid
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -94,9 +97,9 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'name', headerName: 'Role', minWidth: 240, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<RoleSummary>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				const desc = params.data?.description || '';
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center text-xs font-semibold text-purple-600 shrink-0 ring-1 ring-purple-200">${initials}</div>
@@ -108,7 +111,7 @@
 		},
 		{
 			field: 'slug', headerName: 'Slug', minWidth: 140,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<RoleSummary>) => {
 				if (!params.value) return '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-gray-100 text-gray-600">${params.value}</span>`;
 			},
@@ -117,7 +120,7 @@
 		},
 		{
 			field: 'employee_count', headerName: 'Karyawan', minWidth: 100, maxWidth: 120,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<RoleSummary>) => {
 				if (params.value == null) return '';
 				return `<span class="text-sm font-medium text-gray-700 tabular-nums">${params.value}</span>`;
 			},
@@ -126,7 +129,7 @@
 		},
 		{
 			field: 'is_system_role', headerName: 'Tipe', minWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<RoleSummary>) => {
 				if (params.value) {
 					return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 ring-1 ring-purple-600/20">Sistem</span>';
 				}
@@ -136,7 +139,7 @@
 		},
 		{
 			field: 'is_active', headerName: 'Status', minWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<RoleSummary>) => {
 				if (params.value == null) return '';
 				if (params.value) {
 					return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20">Aktif</span>';
@@ -147,13 +150,13 @@
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 130,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 110, maxWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<RoleSummary>) => {
 				const role = params.data;
 				if (!role) return '';
 				const container = document.createElement('div');
@@ -205,9 +208,9 @@
 	$effect(() => {
 		if (roles.length > 0 && gridContainer && !showForm) {
 			if (!gridApi) {
-				gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi;
+				gridApi = agGridModule!.createGrid(gridContainer, gridOptions) as GridApi;
 			}
-			gridApi.updateGridOptions({ rowData: roles as any[] });
+			gridApi.updateGridOptions({ rowData: roles });
 		}
 	});
 
@@ -232,7 +235,7 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await rolesApi.list(page, perPage, searchQuery);
+			const response: ApiResponse<RoleSummary[]> = await rolesApi.list(page, perPage, searchQuery) as ApiResponse<RoleSummary[]>;
 			const data = response.data || [];
 			roles = data;
 			total = response.meta?.total || 0;
@@ -243,8 +246,8 @@
 			totalSystem = data.filter((r: RoleSummary) => r.is_system_role).length;
 			totalCustom = data.filter((r: RoleSummary) => !r.is_system_role).length;
 			totalEmployeesInRoles = data.reduce((sum: number, r: RoleSummary) => sum + (r.employee_count || 0), 0);
-		} catch (error: any) {
-			errorMessage = error.message || 'Gagal memuat data role';
+		} catch (error: unknown) {
+			errorMessage = (error as { message?: string }).message || 'Gagal memuat data role';
 			console.error('Role list error:', error);
 		} finally {
 			isLoading = false;
@@ -253,7 +256,7 @@
 
 	async function loadPermissionTemplate() {
 		try {
-			const response: any = await rolesApi.getPermissionTemplate();
+			const response: ApiResponse<PermissionModule[]> = await rolesApi.getPermissionTemplate() as ApiResponse<PermissionModule[]>;
 			permissionModules = response.data || [];
 		} catch {
 			permissionModules = [];
@@ -290,7 +293,9 @@
 				form.is_active = resp.data.is_active ?? true;
 				form.permissions = resp.data.permissions || {};
 			}
-		}).catch(() => {});
+		}).catch((err: unknown) => {
+			console.error('Gagal memuat detail role:', err);
+		});
 	}
 
 	function cancelForm() {
@@ -336,7 +341,7 @@
 		isSaving = true;
 		formError = '';
 		try {
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				name: form.name.trim(),
 				slug: form.slug.trim().toLowerCase().replace(/\s+/g, '_'),
 				description: form.description.trim(),
@@ -351,8 +356,8 @@
 			}
 			cancelForm();
 			loadRoles();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menyimpan role';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menyimpan role';
 		} finally {
 			isSaving = false;
 		}
@@ -379,8 +384,8 @@
 			deletingId = null;
 			deletingName = '';
 			loadRoles();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menghapus role';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menghapus role';
 			showDeleteConfirm = false;
 		} finally {
 			isSaving = false;
@@ -614,19 +619,7 @@
 		<!-- Table Card -->
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse space-y-3">
-					{#each [1,2,3,4] as _}
-						<div class="flex items-center gap-4 py-2">
-							<div class="flex-1 space-y-1.5">
-								<div class="h-4 bg-gray-100 rounded w-44"></div>
-								<div class="h-3 bg-gray-50 rounded w-28"></div>
-							</div>
-							<div class="h-3 bg-gray-50 rounded w-20"></div>
-							<div class="h-6 bg-gray-100 rounded-full w-20"></div>
-							<div class="h-8 bg-gray-100 rounded w-20"></div>
-						</div>
-					{/each}
-				</div>
+				<PulseLoader variant="table-row" count={4} />
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
@@ -723,7 +716,7 @@
 </div>
 
 <!-- Delete Confirmation Modal (tetap modal, cuma buat konfirmasi) -->
-{#if showDeleteConfirm}
+<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
@@ -755,4 +748,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

@@ -11,7 +11,6 @@ import (
 	"hrms-backend/internal/models"
 )
 
-
 // ─── Leave Types ──────────────────────────────────────────────
 
 func GetAllLeaveTypes(ctx context.Context) ([]models.LeaveTypeSummary, error) {

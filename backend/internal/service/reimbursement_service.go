@@ -40,9 +40,9 @@ func (s *ReimbursementService) List(ctx context.Context, page, perPage int, stat
 
 	return &models.ReimbursementListResponse{
 		Reimbursements: reimbursements,
-		Total:         total,
-		Page:          page,
-		PerPage:       perPage,
+		Total:          total,
+		Page:           page,
+		PerPage:        perPage,
 	}, nil
 }
 
@@ -72,7 +72,20 @@ func (s *ReimbursementService) Create(ctx context.Context, employeeID string, re
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat pengajuan reimbursement: %w", err)
 	}
+
+	// Initialize workflow tracking (non-blocking, ignore errors)
+	err = s.initWorkflowTracking(ctx, "reimbursement", r.ID.String(), employeeID, r.Amount)
+	if err != nil {
+		fmt.Printf("[WARN] Reimbursement workflow init: %v\n", err)
+	}
+
 	return r, nil
+}
+
+func (s *ReimbursementService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+	wfSvc := NewApprovalWorkflowService()
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	return err
 }
 
 func (s *ReimbursementService) Approve(ctx context.Context, id, approverID string) (*models.Reimbursement, error) {
@@ -187,5 +200,10 @@ func (s *ReimbursementService) Cancel(ctx context.Context, id, employeeID string
 	if err != nil {
 		return fmt.Errorf("gagal membatalkan reimbursement: %w", err)
 	}
+
+	// Cancel workflow tracking (non-blocking, ignore errors)
+	wfSvc := NewApprovalWorkflowService()
+	_ = wfSvc.CancelWorkflowTracking(ctx, "reimbursement", id)
+
 	return nil
 }

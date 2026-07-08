@@ -402,7 +402,7 @@ func main() {
 	// 📊 SEED KPI TEMPLATES & INDICATORS
 	// ─────────────────────────────────────────────────────────
 	fmt.Println("\n📊 Seeding KPI templates...")
-	
+
 	// KPI Template 1: Staff IT (yearly 2026)
 	var kpiTemplateCount int
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM kpi_templates WHERE title = 'KPI Staff IT - 2026'`).Scan(&kpiTemplateCount)
@@ -411,7 +411,7 @@ func main() {
 		var itPosID string
 		database.Pool.QueryRow(ctx, `SELECT id::text FROM departments WHERE code = 'IT' LIMIT 1`).Scan(&itDeptID)
 		database.Pool.QueryRow(ctx, `SELECT id::text FROM positions WHERE name = 'Staff IT' LIMIT 1`).Scan(&itPosID)
-		
+
 		if itDeptID != "" && itPosID != "" {
 			var templateID string
 			err := database.Pool.QueryRow(ctx, `
@@ -419,12 +419,12 @@ func main() {
 				VALUES ('KPI Staff IT - 2026', $1::uuid, $2::uuid, 'yearly', 2026, 'Template KPI untuk Staff IT tahun 2026', TRUE)
 				RETURNING id::text
 			`, itPosID, itDeptID).Scan(&templateID)
-			
+
 			if err != nil {
 				log.Printf("⚠️ Failed to create KPI template: %v", err)
 			} else {
 				fmt.Println("✅ Seeded KPI template: KPI Staff IT - 2026")
-				
+
 				// Seed indicators
 				indicators := []struct {
 					Name   string
@@ -436,7 +436,7 @@ func main() {
 					{"Server & System Uptime", 99.9, 30, "%"},
 					{"Waktu Respon Penyelesaian Tiket", 15, 30, "menit"},
 				}
-				
+
 				for i, ind := range indicators {
 					_, err = database.Pool.Exec(ctx, `
 						INSERT INTO kpi_indicators (kpi_template_id, name, target, weight, measurement_unit, sort_order)
@@ -459,7 +459,7 @@ func main() {
 		var finPosID string
 		database.Pool.QueryRow(ctx, `SELECT id::text FROM departments WHERE code = 'FIN' LIMIT 1`).Scan(&finDeptID)
 		database.Pool.QueryRow(ctx, `SELECT id::text FROM positions WHERE name = 'Finance Staff' LIMIT 1`).Scan(&finPosID)
-		
+
 		if finDeptID != "" && finPosID != "" {
 			var templateID string
 			err := database.Pool.QueryRow(ctx, `
@@ -467,12 +467,12 @@ func main() {
 				VALUES ('KPI Finance Staff - 2026', $1::uuid, $2::uuid, 'yearly', 2026, 'Template KPI untuk Staff Finance tahun 2026', TRUE)
 				RETURNING id::text
 			`, finPosID, finDeptID).Scan(&templateID)
-			
+
 			if err != nil {
 				log.Printf("⚠️ Failed to create KPI template 2: %v", err)
 			} else {
 				fmt.Println("✅ Seeded KPI template: KPI Finance Staff - 2026")
-				
+
 				// Seed indicators
 				indicators := []struct {
 					Name   string
@@ -484,7 +484,7 @@ func main() {
 					{"Kepatuhan Audit Pajak", 100, 30, "%"},
 					{"Waktu Pemrosesan Reimbursement", 2, 20, "hari"},
 				}
-				
+
 				for i, ind := range indicators {
 					_, err = database.Pool.Exec(ctx, `
 						INSERT INTO kpi_indicators (kpi_template_id, name, target, weight, measurement_unit, sort_order)
@@ -721,13 +721,13 @@ func main() {
 	// ──────────────────────────────────────────────────────────────
 	fmt.Println("\n📅 Seeding leave request data...")
 	type leaveSeed struct {
-		EmployeeID  string
-		LeaveType   string // slug: annual, sick, etc.
-		StartDate   string
-		EndDate     string
-		Days        int
-		Reason      string
-		Status      string // pending | approved | rejected | cancelled
+		EmployeeID string
+		LeaveType  string // slug: annual, sick, etc.
+		StartDate  string
+		EndDate    string
+		Days       int
+		Reason     string
+		Status     string // pending | approved | rejected | cancelled
 	}
 	leaveSeeds := []leaveSeed{
 		{"EMP-001", "tahunan", "2026-07-07", "2026-07-09", 3, "Liburan keluarga", "approved"},
@@ -794,13 +794,13 @@ func main() {
 		JOIN employees e ON e.id = kr.employee_id
 		WHERE e.employee_id = 'EMP-001'
 	`).Scan(&kpiReviewCount)
-	
+
 	if kpiReviewCount == 0 {
 		var budiUUID string
 		var templateID string
 		database.Pool.QueryRow(ctx, `SELECT id::text FROM employees WHERE employee_id = 'EMP-001' LIMIT 1`).Scan(&budiUUID)
 		database.Pool.QueryRow(ctx, `SELECT id::text FROM kpi_templates WHERE title = 'KPI Staff IT - 2026' LIMIT 1`).Scan(&templateID)
-		
+
 		if budiUUID != "" && templateID != "" {
 			_, err := database.Pool.Exec(ctx, `
 				INSERT INTO kpi_reviews (employee_id, kpi_template_id, period, year, status, self_score, manager_score, final_score, final_category)
@@ -890,6 +890,48 @@ func main() {
 			} else {
 				fmt.Printf("📄 Document created: %s\n", d.Title)
 			}
+		}
+	}
+
+	// ============================================================
+	// 📋 SEED APPROVAL WORKFLOWS (for new feature: manual_attendance & resign)
+	// ============================================================
+	fmt.Println("\n📋 Seeding approval workflows...")
+	workflowSeeds := []struct {
+		EntityType string
+		Name       string
+		Desc       string
+		StepType   string
+	}{
+		{"manual_attendance", "Workflow Absensi Manual", "Approval untuk pengajuan absensi manual", "hr_manager"},
+		{"resign", "Workflow Resign", "Approval untuk pengajuan resign karyawan", "hr_manager"},
+	}
+	for _, wf := range workflowSeeds {
+		var count int
+		database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM approval_workflows WHERE entity_type = $1 AND deleted_at IS NULL`, wf.EntityType).Scan(&count)
+		if count == 0 {
+			var wfID string
+			err := database.Pool.QueryRow(ctx, `
+				INSERT INTO approval_workflows (entity_type, name, description, is_active)
+				VALUES ($1, $2, $3, TRUE)
+				RETURNING id::text
+			`, wf.EntityType, wf.Name, wf.Desc).Scan(&wfID)
+			if err != nil {
+				log.Printf("⚠️ Failed to create workflow for %s: %v", wf.EntityType, err)
+				continue
+			}
+			// Add a single step: hr_manager approval
+			_, err = database.Pool.Exec(ctx, `
+				INSERT INTO approval_workflow_steps (workflow_id, step_order, approver_type)
+				VALUES ($1::uuid, 1, $2)
+			`, wfID, wf.StepType)
+			if err != nil {
+				log.Printf("⚠️ Failed to create step for %s workflow: %v", wf.EntityType, err)
+			} else {
+				fmt.Printf("📋 Workflow created: %s (1 step: %s)\n", wf.Name, wf.StepType)
+			}
+		} else {
+			fmt.Printf("📋 Workflow already exists for %s, skipping\n", wf.EntityType)
 		}
 	}
 
@@ -1157,12 +1199,12 @@ func main() {
 	// ============================================================
 	fmt.Println("\n🔄 Seeding shift change requests...")
 	type shiftSeed struct {
-		EmployeeID      string
-		RequestType     string
-		TargetDate      string
-		Reason          string
-		SwapPartnerID   string
-		Status          string
+		EmployeeID    string
+		RequestType   string
+		TargetDate    string
+		Reason        string
+		SwapPartnerID string
+		Status        string
 	}
 	// Get a work schedule ID for shift change requests (FK references work_schedules.id)
 	var shiftWorkScheduleID string

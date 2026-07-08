@@ -1,12 +1,58 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { kpi, employees, positions, departments, ApiError } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import StaggerList from '$lib/components/StaggerList.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
+
+	type KpiReview = {
+		id: string;
+		employee_name: string;
+		template_title: string;
+		period: string;
+		year: number;
+		final_score: number | null;
+		final_category: string;
+		status: string;
+		created_at: string;
+		salary_increase?: number;
+		bonus_amount?: number;
+	};
+	type KpiTemplate = {
+		id: string;
+		title: string;
+		period_type: string;
+		year: number;
+		position_name: string | null;
+		dept_name: string | null;
+		is_active: boolean;
+		created_at: string;
+		description?: string;
+		position_id?: string;
+		department_id?: string;
+		indicators?: KpiIndicator[];
+	};
+	type KpiIndicator = {
+		name: string;
+		description: string;
+		target: number;
+		weight: number;
+		measurement_unit: string;
+		sort_order: number;
+	};
+	type EmployeeOption = { id: string; full_name: string; };
+	type TemplateOption = { id: string; title: string; year: number; };
+	type PositionOption = { id: string; name: string; };
+	type DepartmentOption = { id: string; name: string; };
 
 	// ─── Tab State ───
 	let activeTab = $state<'reviews' | 'templates'>('reviews');
 
 	// ─── Reviews State ───
-	let reviewData = $state<any[]>([]);
+	let reviewData = $state<KpiReview[]>([]);
 	let reviewTotal = $state(0);
 	let reviewPage = $state(1);
 	let reviewPerPage = $state(25);
@@ -17,15 +63,15 @@
 	let showReviewForm = $state(false);
 	let reviewForm = $state({ employee_id: '', kpi_template_id: '', period: 'Q1', year: 2026 });
 	let reviewCreateLoading = $state(false);
-	let employeeOptions = $state<any[]>([]);
-	let templateOptions = $state<any[]>([]);
+	let employeeOptions = $state<EmployeeOption[]>([]);
+	let templateOptions = $state<TemplateOption[]>([]);
 
 	let showReviewDetail = $state(false);
-	let reviewDetail = $state<any>(null);
+	let reviewDetail = $state<KpiReview | null>(null);
 	let reviewDetailLoading = $state(false);
 
 	// ─── Templates State ───
-	let templateData = $state<any[]>([]);
+	let templateData = $state<KpiTemplate[]>([]);
 	let templateTotal = $state(0);
 	let templatePage = $state(1);
 	let templatePerPage = $state(25);
@@ -35,23 +81,23 @@
 
 	let showTemplateForm = $state(false);
 	let templateFormTitle = $state('');
-	let templateForm = $state<any>({
-		title: '', position_id: '', department_id: '', period_type: 'yearly', year: 2026, description: '', indicators: []
+	let templateForm = $state({
+		title: '', position_id: '', department_id: '', period_type: 'yearly', year: 2026, description: '', indicators: [] as KpiIndicator[], is_active: true
 	});
 	let templateFormError = $state('');
 	let templateSaving = $state(false);
 	let editingTemplateId = $state<string | null>(null);
 
 	let showTemplateDetail = $state(false);
-	let templateDetail = $state<any>(null);
+	let templateDetail = $state<KpiTemplate | null>(null);
 	let templateDetailLoading = $state(false);
 
 	let showDeleteModal = $state(false);
 	let deleteId = $state<string | null>(null);
 	let deleteLoading = $state(false);
 
-	let positionOptions = $state<any[]>([]);
-	let departmentAllOptions = $state<any[]>([]);
+	let positionOptions = $state<PositionOption[]>([]);
+	let departmentAllOptions = $state<DepartmentOption[]>([]);
 
 	// ─── Mount ───
 	onMount(() => {
@@ -97,12 +143,12 @@
 		reviewLoading = true;
 		reviewError = '';
 		try {
-			const res: any = await kpi.listReviews(reviewPage, reviewPerPage, reviewStatusFilter);
+			const res = await kpi.listReviews(reviewPage, reviewPerPage, reviewStatusFilter) as { success: boolean; data: KpiReview[]; meta?: { total: number; page?: number; per_page?: number } };
 			if (res?.success) {
 				reviewData = res.data || [];
 				reviewTotal = res.meta?.total || 0;
 			}
-		} catch (err) {
+		} catch (err: unknown) {
 			reviewError = err instanceof ApiError ? err.message : 'Gagal memuat data';
 		} finally {
 			reviewLoading = false;
@@ -117,7 +163,7 @@
 		reviewDetailLoading = true;
 		showReviewDetail = true;
 		try {
-			const res: any = await kpi.getReview(id);
+			const res = await kpi.getReview(id) as { success: boolean; data: KpiReview };
 			if (res?.success) reviewDetail = res.data;
 		} catch { reviewDetail = null; }
 		finally { reviewDetailLoading = false; }
@@ -138,13 +184,13 @@
 		reviewCreateLoading = true;
 		reviewError = '';
 		try {
-			const res: any = await kpi.createReview(reviewForm);
+			const res = await kpi.createReview(reviewForm) as { success: boolean };
 			if (res?.success) {
 				showReviewForm = false;
 				reviewForm = { employee_id: '', kpi_template_id: '', period: 'Q1', year: 2026 };
 				loadReviews();
 			}
-		} catch (err) {
+		} catch (err: unknown) {
 			reviewError = err instanceof ApiError ? err.message : 'Gagal membuat review KPI';
 		} finally {
 			reviewCreateLoading = false;
@@ -194,12 +240,12 @@
 		templateLoading = true;
 		templateError = '';
 		try {
-			const res: any = await kpi.listTemplates(templatePage, templatePerPage, templateYearFilter);
+			const res = await kpi.listTemplates(templatePage, templatePerPage, templateYearFilter) as { success: boolean; data: KpiTemplate[]; meta?: { total: number; page?: number; per_page?: number } };
 			if (res?.success) {
 				templateData = res.data || [];
 				templateTotal = res.meta?.total || 0;
 			}
-		} catch (err) {
+		} catch (err: unknown) {
 			templateError = err instanceof ApiError ? err.message : 'Gagal memuat data';
 		} finally {
 			templateLoading = false;
@@ -214,8 +260,8 @@
 		templateDetailLoading = true;
 		showTemplateDetail = true;
 		try {
-			const res: any = await kpi.getTemplate(id);
-			if (res?.success) templateDetail = res.data;
+			const res = await kpi.getTemplate(id) as { success: boolean; data?: KpiTemplate };
+			if (res?.success) templateDetail = res.data ?? null;
 		} catch { templateDetail = null; }
 		finally { templateDetailLoading = false; }
 	}
@@ -229,7 +275,7 @@
 			title: '', position_id: '', department_id: '', period_type: 'yearly',
 			year: 2026, description: '', indicators: [
 				{ name: '', description: '', target: 0, weight: 0, measurement_unit: '', sort_order: 0 }
-			]
+			], is_active: true
 		};
 		templateFormTitle = 'Buat Template KPI Baru';
 		templateFormError = '';
@@ -244,8 +290,8 @@
 		templateFormError = '';
 		templateSaving = true;
 
-		kpi.getTemplate(id).then((res: any) => {
-			if (res?.success) {
+		kpi.getTemplate(id).then((res: { success: boolean; data?: KpiTemplate }) => {
+			if (res?.success && res.data) {
 				const t = res.data;
 				templateForm = {
 					title: t.title || '',
@@ -255,7 +301,7 @@
 					year: t.year || 2026,
 					description: t.description || '',
 					is_active: t.is_active,
-					indicators: (t.indicators || []).map((ind: any, i: number) => ({
+					indicators: (t.indicators || []).map((ind: KpiIndicator, i: number) => ({
 						name: ind.name || '',
 						description: ind.description || '',
 						target: ind.target || 0,
@@ -289,12 +335,12 @@
 
 	function removeIndicator(index: number) {
 		if (templateForm.indicators.length <= 1) return;
-		templateForm.indicators = templateForm.indicators.filter((_: any, i: number) => i !== index)
-			.map((ind: any, i: number) => ({ ...ind, sort_order: i }));
+		templateForm.indicators = templateForm.indicators.filter((_: KpiIndicator, i: number) => i !== index)
+			.map((ind: KpiIndicator, i: number) => ({ ...ind, sort_order: i }));
 	}
 
 	function calcTotalWeight(): number {
-		return templateForm.indicators.reduce((sum: number, ind: any) => sum + (parseFloat(ind.weight) || 0), 0);
+		return templateForm.indicators.reduce((sum: number, ind: KpiIndicator) => sum + (parseFloat(String(ind.weight)) || 0), 0);
 	}
 
 	async function handleSaveTemplate() {
@@ -309,8 +355,8 @@
 		for (let i = 0; i < templateForm.indicators.length; i++) {
 			const ind = templateForm.indicators[i];
 			if (!ind.name.trim()) { templateFormError = `Nama indikator #${i + 1} harus diisi`; return; }
-			if (parseFloat(ind.target) <= 0) { templateFormError = `Target indikator #${i + 1} harus lebih dari 0`; return; }
-			if (parseFloat(ind.weight) <= 0) { templateFormError = `Bobot indikator #${i + 1} harus lebih dari 0`; return; }
+			if (parseFloat(String(ind.target)) <= 0) { templateFormError = `Target indikator #${i + 1} harus lebih dari 0`; return; }
+			if (parseFloat(String(ind.weight)) <= 0) { templateFormError = `Bobot indikator #${i + 1} harus lebih dari 0`; return; }
 		}
 
 		templateSaving = true;
@@ -324,11 +370,11 @@
 				year: templateForm.year,
 				description: templateForm.description.trim(),
 				is_active: templateForm.is_active,
-				indicators: templateForm.indicators.map((ind: any) => ({
+				indicators: templateForm.indicators.map((ind: KpiIndicator) => ({
 					name: ind.name.trim(),
 					description: ind.description.trim(),
-					target: parseFloat(ind.target),
-					weight: parseFloat(ind.weight),
+					target: parseFloat(String(ind.target)),
+					weight: parseFloat(String(ind.weight)),
 					measurement_unit: ind.measurement_unit,
 					sort_order: ind.sort_order,
 				})),
@@ -342,7 +388,7 @@
 			cancelTemplateForm();
 			loadTemplates();
 			loadReviewOptions();
-		} catch (err) {
+		} catch (err: unknown) {
 			templateFormError = err instanceof ApiError ? err.message : 'Gagal menyimpan template';
 		} finally {
 			templateSaving = false;
@@ -367,7 +413,7 @@
 			if (showTemplateDetail) { showTemplateDetail = false; templateDetail = null; }
 			loadTemplates();
 			loadReviewOptions();
-		} catch (err) {
+		} catch (err: unknown) {
 			templateError = err instanceof ApiError ? err.message : 'Gagal menghapus template';
 			showDeleteModal = false;
 		} finally {
@@ -476,7 +522,7 @@
 				</div>
 				<div class="px-6 py-5">
 					{#if reviewDetailLoading}
-						<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-64"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-40"></div></div>
+						<PulseLoader variant="text" count={3} />
 					{:else if reviewDetail}
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 							<div>
@@ -516,7 +562,7 @@
 			{#if reviewError}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg px-4 py-3 mb-4">{reviewError}</div>{/if}
 
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-				<div class="overflow-x-auto">
+				<div class="hidden md:block overflow-x-auto">
 					<table class="w-full text-sm">
 						<thead class="bg-gray-50 dark:bg-gray-800/50 text-left">
 							<tr>
@@ -532,18 +578,7 @@
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 							{#if reviewLoading}
-								{#each [1,2,3,4,5] as _}
-									<tr class="animate-pulse">
-										<td class="px-4 py-3"><div class="flex items-center gap-3"><div class="w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-full"></div><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-36"></div></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-28"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-20"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-12"></div></td>
-										<td class="px-4 py-3"><div class="h-5 bg-gray-100 dark:bg-gray-800 rounded-full w-20"></div></td>
-										<td class="px-4 py-3"><div class="h-5 bg-gray-100 dark:bg-gray-800 rounded-full w-24"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-16"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-12"></div></td>
-									</tr>
-								{/each}
+								<PulseLoader variant="table-row" count={5} />
 							{:else if reviewData.length === 0}
 								<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada review KPI</td></tr>
 							{:else}
@@ -562,6 +597,42 @@
 							{/if}
 						</tbody>
 					</table>
+				</div>
+				<!-- Mobile: Review cards -->
+				<div class="md:hidden space-y-3">
+					{#if reviewLoading}
+						<PulseLoader variant="card" count={3} />
+					{:else if reviewData.length === 0}
+						<EmptyState variant="empty" title="Belum ada review KPI" description="Belum ada review KPI untuk periode ini." />
+					{:else}
+						<StaggerList items={reviewData} stagger={60}>
+					{#snippet children(item)}
+						<MobileCard
+							title={item.employee_name}
+							subtitle={item.template_title}
+							avatar={getInitials(item.employee_name)}
+							avatarColor={getAvatarTheme('kpi').gradientClasses}
+							badges={[{ label: ({ draft: 'Draft', self_review: 'Self Review', manager_review: 'Manager Review', hr_review: 'HR Review', completed: 'Selesai' })[item.status as string] || item.status as string, color: reviewStatusColors[item.status as string] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' }]}
+							onclick={() => loadReviewDetail(item.id)}
+						>
+							{#snippet children()}
+								<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+									<span>{item.period} {item.year}</span>
+									{#if item.final_score != null}
+										<span class="font-semibold text-blue-600 dark:text-blue-400">Skor: {item.final_score}</span>
+									{/if}
+								</div>
+							{/snippet}
+							{#snippet footer()}
+								<div class="flex items-center justify-between">
+									{@html getReviewCategoryBadge(item.final_category)}
+									<span class="text-xs text-gray-400">{new Date(item.created_at).toLocaleDateString('id-ID')}</span>
+								</div>
+							{/snippet}
+						</MobileCard>
+					{/snippet}
+					</StaggerList>
+					{/if}
 				</div>
 				<div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
 					<span class="text-xs text-gray-400">Total {reviewTotal} data</span>
@@ -710,18 +781,19 @@
 				</div>
 				<div class="px-6 py-5">
 					{#if templateDetailLoading}
-						<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-64"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-40"></div></div>
+						<PulseLoader variant="text" count={3} />
 					{:else if templateDetail}
+					{@const td = templateDetail}
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 							<div>
 								<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Informasi Template</h3>
 								<div class="space-y-3">
-									<div><span class="text-xs text-gray-400">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{templateDetail.title}</p></div>
-									<div><span class="text-xs text-gray-400">Status</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {templateDetail.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}">{templateDetail.is_active ? 'Aktif' : 'Nonaktif'}</span></p></div>
-									<div><span class="text-xs text-gray-400">Periode</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{templatePeriodLabels[templateDetail.period_type] || templateDetail.period_type} - {templateDetail.year}</p></div>
-									<div><span class="text-xs text-gray-400">Posisi</span><p class="text-sm text-gray-700 dark:text-gray-300">{templateDetail.position_name || 'Semua Posisi'}</p></div>
-									<div><span class="text-xs text-gray-400">Departemen</span><p class="text-sm text-gray-700 dark:text-gray-300">{templateDetail.dept_name || 'Semua Departemen'}</p></div>
-									{#if templateDetail.description}<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{templateDetail.description}</p></div>{/if}
+									<div><span class="text-xs text-gray-400">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{td.title}</p></div>
+									<div><span class="text-xs text-gray-400">Status</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {templateDetail.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}">{td.is_active ? 'Aktif' : 'Nonaktif'}</span></p></div>
+									<div><span class="text-xs text-gray-400">Periode</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{templatePeriodLabels[td.period_type] || td.period_type} - {td.year}</p></div>
+									<div><span class="text-xs text-gray-400">Posisi</span><p class="text-sm text-gray-700 dark:text-gray-300">{td.position_name || 'Semua Posisi'}</p></div>
+									<div><span class="text-xs text-gray-400">Departemen</span><p class="text-sm text-gray-700 dark:text-gray-300">{td.dept_name || 'Semua Departemen'}</p></div>
+									{#if td.description}<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{td.description}</p></div>{/if}
 								</div>
 							</div>
 						</div>
@@ -741,7 +813,7 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-										{#each templateDetail.indicators || [] as ind, i}
+										{#each td.indicators || [] as ind, i}
 											<tr>
 												<td class="px-3 py-2 text-gray-500">{i + 1}</td>
 												<td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{ind.name}</td>
@@ -755,7 +827,7 @@
 										<tr>
 											<td colspan="4" class="px-3 py-2 text-xs font-semibold text-gray-500 text-right">Total Bobot</td>
 											<td class="px-3 py-2 font-bold text-[#1A56DB]">
-												{(templateDetail.indicators || []).reduce((s: number, ind: any) => s + (parseFloat(ind.weight) || 0), 0).toFixed(1)}%
+												{(td.indicators || []).reduce((s: number, ind: KpiIndicator) => s + (parseFloat(String(ind.weight)) || 0), 0).toFixed(1)}%
 											</td>
 										</tr>
 									</tfoot>
@@ -764,8 +836,8 @@
 						</div>
 
 						<div class="mt-6 flex gap-2">
-							<button onclick={() => openEditTemplate(templateDetail.id)} class="px-4 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition cursor-pointer">Edit Template</button>
-							<button onclick={() => { closeTemplateDetail(); openDeleteModal(templateDetail.id); }} class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition cursor-pointer">Hapus</button>
+							<button onclick={() => openEditTemplate(td.id)} class="px-4 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition cursor-pointer">Edit Template</button>
+							<button onclick={() => { closeTemplateDetail(); openDeleteModal(td.id); }} class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition cursor-pointer">Hapus</button>
 						</div>
 					{/if}
 				</div>
@@ -775,7 +847,7 @@
 			{#if templateError}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg px-4 py-3 mb-4">{templateError}</div>{/if}
 
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-				<div class="overflow-x-auto">
+				<div class="hidden md:block overflow-x-auto">
 					<table class="w-full text-sm">
 						<thead class="bg-gray-50 dark:bg-gray-800/50 text-left">
 							<tr>
@@ -790,17 +862,7 @@
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 							{#if templateLoading}
-								{#each [1,2,3] as _}
-									<tr class="animate-pulse">
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-40"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-24"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-28"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-28"></div></td>
-										<td class="px-4 py-3"><div class="h-5 bg-gray-100 dark:bg-gray-800 rounded-full w-16"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-20"></div></td>
-										<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-16"></div></td>
-									</tr>
-								{/each}
+								<PulseLoader variant="table-row" count={3} />
 							{:else if templateData.length === 0}
 								<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada template KPI. Klik "Buat Template" untuk membuat baru.</td></tr>
 							{:else}
@@ -822,6 +884,39 @@
 						</tbody>
 					</table>
 				</div>
+				<!-- Mobile: Template cards -->
+				<div class="md:hidden space-y-3">
+					{#if templateLoading}
+						<PulseLoader variant="card" count={3} />
+					{:else if templateData.length === 0}
+						<EmptyState variant="empty" title="Belum ada template KPI" description="Klik 'Buat Template' untuk membuat template baru." />
+					{:else}
+						<StaggerList items={templateData} stagger={60}>
+					{#snippet children(item)}
+						<MobileCard
+							title={item.title}
+							subtitle={`${templatePeriodLabels[item.period_type] || item.period_type} ${item.year}`}
+							avatar={getInitials(item.title)}
+							avatarColor={getAvatarTheme('kpi').gradientClasses}
+							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-green-50 text-green-700 ring-green-200 dark:bg-green-900 dark:text-green-200 dark:ring-green-800' : 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700' }]}
+						>
+							{#snippet children()}
+								<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+									<span>{item.position_name || 'Semua Posisi'}</span>
+									<span>· {item.dept_name || 'Semua Dept'}</span>
+								</div>
+							{/snippet}
+							{#snippet footer()}
+								<div class="flex items-center gap-2">
+									<button onclick={() => loadTemplateDetail(item.id)} class="flex-1 py-2 text-xs font-medium text-[#1A56DB] bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer active:scale-95">Detail</button>
+									<button onclick={() => { showTemplateDetail = false; openEditTemplate(item.id); }} class="flex-1 py-2 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer active:scale-95">Edit</button>
+								</div>
+							{/snippet}
+						</MobileCard>
+					{/snippet}
+					</StaggerList>
+					{/if}
+				</div>
 				<div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
 					<span class="text-xs text-gray-400">Total {templateTotal} data</span>
 					<div class="flex gap-1">
@@ -836,7 +931,7 @@
 </div>
 
 <!-- ─── Delete Confirm Modal ─── -->
-{#if showDeleteModal}
+<AnimatedPresence show={showDeleteModal} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
@@ -856,4 +951,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

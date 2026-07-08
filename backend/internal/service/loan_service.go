@@ -77,7 +77,20 @@ func (s *LoanService) Create(ctx context.Context, employeeID string, req *models
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat pinjaman: %w", err)
 	}
+
+	// Initialize workflow tracking (non-blocking, ignore errors)
+	err = s.initWorkflowTracking(ctx, "loan", l.ID.String(), employeeID, l.Amount)
+	if err != nil {
+		fmt.Printf("[WARN] Loan workflow init: %v\n", err)
+	}
+
 	return l, nil
+}
+
+func (s *LoanService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+	wfSvc := NewApprovalWorkflowService()
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	return err
 }
 
 func (s *LoanService) Approve(ctx context.Context, id, approverID string) (*models.Loan, error) {
@@ -135,6 +148,30 @@ func (s *LoanService) Disburse(ctx context.Context, id, approverID, date string)
 		return nil, fmt.Errorf("gagal mencairkan pinjaman: %w", err)
 	}
 	return l, nil
+}
+
+func (s *LoanService) Cancel(ctx context.Context, id, employeeID string) error {
+	existing, err := repository.GetLoanByID(ctx, id)
+	if err != nil {
+		return errors.New("gagal memuat data pinjaman")
+	}
+	if existing == nil {
+		return errors.New("pinjaman tidak ditemukan")
+	}
+	if existing.Status != "pending" {
+		return errors.New("pinjaman sudah diproses, tidak dapat dibatalkan")
+	}
+
+	err = repository.CancelLoan(ctx, id, employeeID)
+	if err != nil {
+		return fmt.Errorf("gagal membatalkan pinjaman: %w", err)
+	}
+
+	// Cancel workflow tracking (non-blocking, ignore errors)
+	wfSvc := NewApprovalWorkflowService()
+	_ = wfSvc.CancelWorkflowTracking(ctx, "loan", id)
+
+	return nil
 }
 
 func (s *LoanService) Stats(ctx context.Context) (*models.LoanStatsResponse, error) {

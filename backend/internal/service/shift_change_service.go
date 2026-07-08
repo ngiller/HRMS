@@ -33,9 +33,9 @@ func (s *ShiftChangeService) List(ctx context.Context, page, perPage int, status
 
 	return &models.ShiftChangeRequestListResponse{
 		ShiftChangeRequests: requests,
-		Total:              total,
-		Page:               page,
-		PerPage:            perPage,
+		Total:               total,
+		Page:                page,
+		PerPage:             perPage,
 	}, nil
 }
 
@@ -82,7 +82,21 @@ func (s *ShiftChangeService) Create(ctx context.Context, employeeID string, req 
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat permintaan shift: %w", err)
 	}
+
+	// Initialize workflow tracking (non-blocking, ignore errors)
+	// Shift changes are unconditional (single-step approval), so conditionValue = 0
+	err = s.initWorkflowTracking(ctx, "shift_change", r.ID.String(), employeeID, 0)
+	if err != nil {
+		fmt.Printf("[WARN] Shift change workflow init: %v\n", err)
+	}
+
 	return r, nil
+}
+
+func (s *ShiftChangeService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+	wfSvc := NewApprovalWorkflowService()
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	return err
 }
 
 func (s *ShiftChangeService) Approve(ctx context.Context, id, approverID string) (*models.ShiftChangeRequest, error) {
@@ -158,5 +172,10 @@ func (s *ShiftChangeService) Cancel(ctx context.Context, id, employeeID string) 
 	if err != nil {
 		return fmt.Errorf("gagal membatalkan permintaan shift: %w", err)
 	}
+
+	// Cancel workflow tracking (non-blocking, ignore errors)
+	wfSvc := NewApprovalWorkflowService()
+	_ = wfSvc.CancelWorkflowTracking(ctx, "shift_change", id)
+
 	return nil
 }

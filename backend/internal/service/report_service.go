@@ -30,70 +30,70 @@ type DeptCount struct {
 }
 
 type PayrollSummaryReport struct {
-	TotalPeriods      int     `json:"total_periods"`
-	TotalGross        float64 `json:"total_gross"`
-	TotalDeductions   float64 `json:"total_deductions"`
-	TotalNetSalary    float64 `json:"total_net_salary"`
-	TotalCompanyCost  float64 `json:"total_company_cost"`
-	AverageNetSalary  float64 `json:"average_net_salary"`
-	ByMonth           []MonthStat `json:"by_month"`
+	TotalPeriods     int         `json:"total_periods"`
+	TotalGross       float64     `json:"total_gross"`
+	TotalDeductions  float64     `json:"total_deductions"`
+	TotalNetSalary   float64     `json:"total_net_salary"`
+	TotalCompanyCost float64     `json:"total_company_cost"`
+	AverageNetSalary float64     `json:"average_net_salary"`
+	ByMonth          []MonthStat `json:"by_month"`
 }
 
 type MonthStat struct {
-	Month     int     `json:"month"`
-	Year      int     `json:"year"`
-	Count     int     `json:"count"`
+	Month      int     `json:"month"`
+	Year       int     `json:"year"`
+	Count      int     `json:"count"`
 	TotalGross float64 `json:"total_gross"`
-	TotalNet  float64 `json:"total_net"`
+	TotalNet   float64 `json:"total_net"`
 }
 
 type AttendanceSummaryReport struct {
-	TotalRecords    int            `json:"total_records"`
-	OnTime          int            `json:"on_time"`
-	Late            int            `json:"late"`
-	LatePercentage  float64        `json:"late_percentage"`
-	AverageWorkHours float64        `json:"average_work_hours"`
-	ByDepartment    []DeptAttStat  `json:"by_department"`
+	TotalRecords     int           `json:"total_records"`
+	OnTime           int           `json:"on_time"`
+	Late             int           `json:"late"`
+	LatePercentage   float64       `json:"late_percentage"`
+	AverageWorkHours float64       `json:"average_work_hours"`
+	ByDepartment     []DeptAttStat `json:"by_department"`
 }
 
 type DeptAttStat struct {
-	DepartmentID   string  `json:"department_id"`
-	DepartmentName string  `json:"department_name"`
-	Total          int     `json:"total"`
-	OnTime         int     `json:"on_time"`
-	Late           int     `json:"late"`
+	DepartmentID   string `json:"department_id"`
+	DepartmentName string `json:"department_name"`
+	Total          int    `json:"total"`
+	OnTime         int    `json:"on_time"`
+	Late           int    `json:"late"`
 }
 
 type LoanSummaryReport struct {
-	TotalActive  int     `json:"total_active"`
+	TotalActive      int     `json:"total_active"`
 	TotalOutstanding float64 `json:"total_outstanding"`
-	TotalDisbursed float64 `json:"total_disbursed"`
-	TotalApproved float64 `json:"total_approved"`
-	PendingCount int     `json:"pending_count"`
-	DefaultCount int     `json:"default_count"`
+	TotalDisbursed   float64 `json:"total_disbursed"`
+	TotalApproved    float64 `json:"total_approved"`
+	PendingCount     int     `json:"pending_count"`
+	DefaultCount     int     `json:"default_count"`
 }
 
 type LeaveSummaryReport struct {
-	TotalRequests     int               `json:"total_requests"`
-	Approved          int               `json:"approved"`
-	Rejected          int               `json:"rejected"`
-	Pending           int               `json:"pending"`
-	TotalDaysApproved int               `json:"total_days_approved"`
-	ByType            []LeaveTypeStat   `json:"by_type"`
+	TotalRequests     int             `json:"total_requests"`
+	Approved          int             `json:"approved"`
+	Rejected          int             `json:"rejected"`
+	Pending           int             `json:"pending"`
+	TotalDaysApproved int             `json:"total_days_approved"`
+	ByType            []LeaveTypeStat `json:"by_type"`
 }
 
 type LeaveTypeStat struct {
-	TypeName string `json:"type_name"`
-	Count    int    `json:"count"`
-	TotalDays int   `json:"total_days"`
+	TypeName  string `json:"type_name"`
+	Count     int    `json:"count"`
+	TotalDays int    `json:"total_days"`
 }
 
 type OvertimeSummaryReport struct {
-	TotalRequests  int     `json:"total_requests"`
-	Approved       int     `json:"approved"`
-	TotalHours     float64 `json:"total_hours"`
-	TotalCost      float64 `json:"total_cost"`
-	PendingCount   int     `json:"pending_count"`
+	TotalRequests int     `json:"total_requests"`
+	Approved      int     `json:"approved"`
+	TotalHours    float64 `json:"total_hours"`
+	TotalCost     float64 `json:"total_cost"`
+	PendingCount  int     `json:"pending_count"`
 }
 
 func (s *ReportService) Headcount(ctx context.Context, year int) (*HeadcountReport, error) {

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { dashboard as dashboardApi } from '$lib/api.js';
+	import { goto } from '$app/navigation';
+	import { dashboard as dashboardApi, auth, announcements as announcementsApi } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
 
 	let Chart: any;
 	let chartLoaded = false;
@@ -54,6 +56,10 @@
 		recent_employees: NewEmployee[];
 	}
 
+	// ── User / Greeting ──
+	let userName = $derived((auth.getUser() as any)?.full_name?.split(' ')[0] || 'Pengguna');
+	let todayDate = $derived(new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+
 	// ── State ──
 	let stats = $state<Stat[]>([]);
 	let pendingApprovals = $state<PendingItem[]>([]);
@@ -61,6 +67,9 @@
 	let isLoading = $state(true);
 	let errorMessage = $state('');
 	let activeTab = $state<'overview' | 'departments' | 'analytics'>('overview');
+	
+	let isEmployee = $derived((auth.getUser() as any)?.role_name === 'Employee' || (auth.getUser() as any)?.role_id === 3);
+	let employeeAnnouncements = $state<any[]>([]);
 
 	// Unique canvas refs per tab to avoid bind:this conflicts
 	let overviewAttendanceCanvas = $state<HTMLCanvasElement>(undefined!);
@@ -290,12 +299,20 @@
 		errorMessage = '';
 		try {
 			// Dynamic import Chart.js — reduces initial bundle by ~400 kB
-			if (!chartLoaded) {
+			if (!chartLoaded && !isEmployee) {
 				const chartModule = await import('chart.js');
 				Chart = chartModule.Chart;
 				Chart.register(...chartModule.registerables);
 				chartLoaded = true;
 			}
+			
+			if (isEmployee) {
+				// Fetch announcements for employee view
+				const annRes = await announcementsApi.get({ limit: 10, is_active: true });
+				employeeAnnouncements = annRes.data?.announcements || [];
+				return;
+			}
+			
 			const response = await dashboardApi.get();
 			const data: DashboardData = response.data;
 
@@ -411,7 +428,94 @@
 </script>
 
 <div class="max-w-full mx-auto">
-	<!-- Page Header -->
+	{#if isEmployee && !isLoading}
+		<!-- Employee Dashboard (Scrollable Announcements) -->
+		<div class="max-w-3xl mx-auto py-2">
+			<div class="flex items-center justify-between mb-6">
+				<div>
+					<h1 class="text-2xl font-bold text-gray-900">Halo, {userName}!</h1>
+					<p class="text-sm text-gray-500 mt-1">{todayDate}</p>
+				</div>
+			</div>
+			
+			<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col max-h-[calc(100vh-140px)]">
+				<div class="p-5 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3 shrink-0">
+					<div class="p-2 bg-blue-100 rounded-lg text-blue-600">
+						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+					</div>
+					<div>
+						<h2 class="font-semibold text-gray-900">Papan Pengumuman</h2>
+						<p class="text-xs text-gray-500 mt-0.5">Informasi terbaru dari perusahaan</p>
+					</div>
+				</div>
+				
+				<div class="overflow-y-auto flex-1 p-0 custom-scrollbar">
+					{#if employeeAnnouncements.length === 0}
+						<div class="p-10 flex flex-col items-center justify-center text-center">
+							<div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+								<svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+							</div>
+							<p class="text-gray-500 font-medium">Tidak ada pengumuman</p>
+							<p class="text-xs text-gray-400 mt-1">Belum ada informasi terbaru saat ini.</p>
+						</div>
+					{:else}
+						<div class="divide-y divide-gray-50">
+							{#each employeeAnnouncements as ann}
+								<a href="/announcements/{ann.id}" class="block p-5 hover:bg-gray-50/80 transition-colors group">
+									<div class="flex items-start justify-between gap-4">
+										<div class="flex-1 min-w-0">
+											<div class="flex items-center gap-2 mb-1.5">
+												{#if ann.is_pinned}
+													<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600 border border-red-100">
+														<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+														Pinned
+													</span>
+												{/if}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium 
+													{ann.announcement_type === 'important' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 
+													ann.announcement_type === 'emergency' ? 'bg-red-50 text-red-600 border border-red-100' : 
+													'bg-blue-50 text-blue-600 border border-blue-100'}">
+													{ann.announcement_type === 'important' ? 'Penting' : ann.announcement_type === 'emergency' ? 'Darurat' : 'Umum'}
+												</span>
+												<span class="text-xs text-gray-400 font-medium ml-1">
+													{new Date(ann.published_at || ann.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+												</span>
+											</div>
+											<h3 class="text-[15px] font-semibold text-gray-900 group-hover:text-blue-600 transition-colors mb-1 truncate">{ann.title}</h3>
+											<p class="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+												Oleh: <span class="font-medium text-gray-700">{ann.created_by_name}</span>
+											</p>
+										</div>
+										<div class="shrink-0 pt-1 text-gray-300 group-hover:text-blue-500 transition-colors">
+											<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+										</div>
+									</div>
+								</a>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+		
+		<style>
+			/* Custom scrollbar for the announcements feed */
+			.custom-scrollbar::-webkit-scrollbar {
+				width: 6px;
+			}
+			.custom-scrollbar::-webkit-scrollbar-track {
+				background: transparent;
+			}
+			.custom-scrollbar::-webkit-scrollbar-thumb {
+				background-color: #E5E7EB;
+				border-radius: 20px;
+			}
+			.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+				background-color: #D1D5DB;
+			}
+		</style>
+	{:else}
+		<!-- Page Header (Admin/HR Dashboard) -->
 	<div class="flex items-center justify-between mb-6">
 		<div>
 			<h1 class="text-xl font-bold text-gray-900">Dashboard</h1>
@@ -444,30 +548,16 @@
 
 	{#if isLoading}
 		<!-- Loading Skeleton -->
-		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-			{#each [1,2,3,4] as _}
-				<div class="bg-white border border-gray-200 rounded-xl p-5 animate-pulse">
-					<div class="h-3 bg-gray-100 rounded w-24 mb-3"></div>
-					<div class="h-7 bg-gray-100 rounded w-16 mb-2"></div>
-					<div class="h-3 bg-gray-100 rounded w-32"></div>
-				</div>
-			{/each}
-		</div>
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-			{#each [1,2] as _}
-				<div class="bg-white border border-gray-200 rounded-xl p-5 animate-pulse">
-					<div class="h-4 bg-gray-100 rounded w-40 mb-6"></div>
-					<div class="h-48 bg-gray-50 rounded"></div>
-				</div>
-			{/each}
-		</div>
-		<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-			{#each [1,2,3] as _}
-				<div class="bg-white border border-gray-200 rounded-xl p-5 animate-pulse">
-					<div class="h-4 bg-gray-100 rounded w-32 mb-6"></div>
-					<div class="h-36 bg-gray-50 rounded"></div>
-				</div>
-			{/each}
+		<div class="space-y-6">
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+				<PulseLoader variant="card" count={4} />
+			</div>
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+				<PulseLoader variant="card" count={2} />
+			</div>
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+				<PulseLoader variant="card" count={3} />
+			</div>
 		</div>
 	{:else if errorMessage}
 		<!-- Error State -->
@@ -479,8 +569,8 @@
 			<button onclick={loadDashboard} class="mt-4 text-sm text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-medium transition cursor-pointer">Coba lagi</button>
 		</div>
 	{:else}
-		<!-- ── Stat Cards ── -->
-		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+		<!-- ── Stat Cards (Desktop) ── -->
+		<div class="hidden md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 			{#each stats as stat}
 				<div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-gray-300 transition-all duration-200 group">
 					<div class="flex items-center justify-between">
@@ -497,6 +587,74 @@
 					</div>
 				</div>
 			{/each}
+		</div>
+
+		<!-- ── Mobile: Greeting + Quick Actions (Talenta Style) ── -->
+		<div class="md:hidden mb-4">
+			<!-- Greeting -->
+			<div class="flex items-center justify-between mb-4">
+				<div>
+					<h2 class="text-lg font-bold text-gray-900 dark:text-white">Hai, {userName}! 👋</h2>
+					<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{todayDate}</p>
+				</div>
+				<button
+					onclick={() => goto('/absensi')}
+					class="w-10 h-10 bg-[#1A56DB] text-white rounded-xl flex items-center justify-center shadow-sm shadow-blue-200 dark:shadow-blue-900/30 active:scale-90 transition-all duration-150 cursor-pointer"
+					aria-label="Absensi"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Quick Actions -->
+			<div class="grid grid-cols-4 gap-2 mb-4">
+				<button onclick={() => goto('/absensi')} class="flex flex-col items-center gap-1.5 p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl active:scale-90 transition-all duration-150 cursor-pointer">
+					<div class="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+						<svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+					</div>
+					<span class="text-[10px] font-medium text-gray-600 dark:text-gray-400">Absensi</span>
+				</button>
+				<button onclick={() => goto('/cuti')} class="flex flex-col items-center gap-1.5 p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl active:scale-90 transition-all duration-150 cursor-pointer">
+					<div class="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+						<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
+					</div>
+					<span class="text-[10px] font-medium text-gray-600 dark:text-gray-400">Cuti</span>
+				</button>
+				<button onclick={() => goto('/lembur')} class="flex flex-col items-center gap-1.5 p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl active:scale-90 transition-all duration-150 cursor-pointer">
+					<div class="w-10 h-10 bg-amber-50 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+						<svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+					</div>
+					<span class="text-[10px] font-medium text-gray-600 dark:text-gray-400">Lembur</span>
+				</button>
+				<button onclick={() => goto('/persetujuan')} class="flex flex-col items-center gap-1.5 p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl active:scale-90 transition-all duration-150 cursor-pointer">
+					<div class="w-10 h-10 bg-purple-50 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+						<svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+					</div>
+					<span class="text-[10px] font-medium text-gray-600 dark:text-gray-400">Setujui</span>
+				</button>
+			</div>
+
+			<!-- Stat Cards (Mobile Premium) -->
+			<div class="grid grid-cols-2 gap-2.5">
+				{#each stats as stat}
+					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-xl p-3.5 active:scale-[0.95] transition-all duration-150 shadow-sm hover:shadow-md">
+						<div class="flex items-start gap-2.5">
+							<div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 {stat.iconBg} dark:bg-opacity-20">
+								<svg class="w-5 h-5 {stat.iconColor}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d={stat.icon} />
+								</svg>
+							</div>
+							<div class="min-w-0 flex-1">
+								<div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 tracking-wider uppercase truncate">{stat.label}</div>
+								<div class="text-lg font-bold text-gray-900 dark:text-white tabular-nums mt-0.5">{stat.value}</div>
+								<div class="text-[11px] mt-0.5 font-medium {stat.changeClass} truncate">{stat.change}</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+			</div>
 		</div>
 
 		<!-- OVERVIEW TAB -->
@@ -608,8 +766,7 @@
 				</div>
 				<div class="h-72"><canvas bind:this={analyticsDeptCanvas}></canvas></div>
 			</div>
-		</div>
-
-		<p class="text-xs text-gray-400 text-center mt-8 pb-4">HRMS &mdash; Sistem Informasi Sumber Daya Manusia &copy; 2026</p>
+		</div>						<p class="text-xs text-gray-400 text-center mt-8 pb-4 hidden md:block">HRMS &mdash; Sistem Informasi Sumber Daya Manusia &copy; 2026</p>
+	{/if}
 	{/if}
 </div>

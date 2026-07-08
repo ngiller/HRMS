@@ -1,8 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { dailyJournals, employees, departments, ApiError } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme } from '$lib/avatar-theme.js';
 
-	let data = $state<any[]>([]);
+	interface JournalItem {
+		id: string; employee_name: string; department_name: string;
+		journal_date: string; work_description: string; achievements: string;
+		challenges: string; plan_tomorrow: string; status: string;
+		acknowledged_by_name: string; submitted_at: string;
+	}
+
+	interface DeptOption { id: string; name: string; }
+
+	let data = $state<JournalItem[]>([]);
 	let total = $state(0);
 	let currentPage = $state(1);
 	let perPage = $state(25);
@@ -15,10 +28,10 @@
 	let showForm = $state(false);
 	let createForm = $state({ journal_date: new Date().toISOString().split('T')[0], work_description: '', achievements: '', challenges: '', plan_tomorrow: '' });
 	let createLoading = $state(false);
-	let deptOptions = $state<any[]>([]);
+	let deptOptions = $state<DeptOption[]>([]);
 
 	let showDetail = $state(false);
-	let detailItem = $state<any>(null);
+	let detailItem = $state<JournalItem | null>(null);
 	let detailLoading = $state(false);
 
 	let actionLoading = $state(false);
@@ -32,7 +45,7 @@
 	async function loadData() {
 		isLoading = true; errorMessage = '';
 		try {
-			const res: any = await dailyJournals.list(currentPage, perPage, deptFilter, '', dateFrom, dateTo);
+			const res = await dailyJournals.list(currentPage, perPage, deptFilter, '', dateFrom, dateTo) as { success: boolean; data: JournalItem[]; meta?: { total: number } };
 			if (res?.success) { data = res.data || []; total = res.meta?.total || 0; }
 		} catch (err) { errorMessage = err instanceof ApiError ? err.message : 'Gagal memuat data'; }
 		finally { isLoading = false; }
@@ -160,53 +173,54 @@
 			</div>
 			<div class="px-6 py-5">
 				{#if detailLoading}
-					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-64"></div></div>
+					<PulseLoader variant="text" count={1} />
 				{:else if detailItem}
+					{@const item = detailItem}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Informasi</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{detailItem.employee_name}</p></div>
-								<div><span class="text-xs text-gray-400">Tanggal</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{formatDate(detailItem.journal_date)}</p></div>
-								<div><span class="text-xs text-gray-400">Departemen</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailItem.department_name || '-'}</p></div>
-								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(detailItem.status)}</p></div>
+								<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.employee_name}</p></div>
+								<div><span class="text-xs text-gray-400">Tanggal</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{formatDate(item.journal_date)}</p></div>
+								<div><span class="text-xs text-gray-400">Departemen</span><p class="text-sm text-gray-700 dark:text-gray-300">{item.department_name || '-'}</p></div>
+								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(item.status)}</p></div>
 							</div>
 						</div>
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Detail</h3>
 							<div class="space-y-3">
-								{#if detailItem.acknowledged_by_name}<div><span class="text-xs text-gray-400">Diketahui Oleh</span><p class="text-sm font-medium text-green-600">{detailItem.acknowledged_by_name}</p></div>{/if}
-								{#if detailItem.submitted_at}<div><span class="text-xs text-gray-400">Dikirim</span><p class="text-sm text-gray-500">{formatDate(detailItem.submitted_at)}</p></div>{/if}
+								{#if item.acknowledged_by_name}<div><span class="text-xs text-gray-400">Diketahui Oleh</span><p class="text-sm font-medium text-green-600">{item.acknowledged_by_name}</p></div>{/if}
+								{#if item.submitted_at}<div><span class="text-xs text-gray-400">Dikirim</span><p class="text-sm text-gray-500">{formatDate(item.submitted_at)}</p></div>{/if}
 							</div>
 						</div>
 					</div>
 					<div class="mt-6 space-y-4">
 						<div class="p-4 bg-gray-50 dark:bg-gray-800/30 rounded-lg">
 							<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Deskripsi Pekerjaan</h4>
-							<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{detailItem.work_description}</p>
+							<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.work_description}</p>
 						</div>
-						{#if detailItem.achievements}
+						{#if item.achievements}
 							<div class="p-4 bg-green-50 dark:bg-green-900/10 rounded-lg">
 								<h4 class="text-sm font-semibold text-green-700 dark:text-green-400 mb-2">🏆 Capaian</h4>
-								<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{detailItem.achievements}</p>
+								<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.achievements}</p>
 							</div>
 						{/if}
-						{#if detailItem.challenges}
+						{#if item.challenges}
 							<div class="p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg">
 								<h4 class="text-sm font-semibold text-yellow-700 dark:text-yellow-400 mb-2">⚠️ Kendala</h4>
-								<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{detailItem.challenges}</p>
+								<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.challenges}</p>
 							</div>
 						{/if}
-						{#if detailItem.plan_tomorrow}
+						{#if item.plan_tomorrow}
 							<div class="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg">
 								<h4 class="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">📋 Rencana Besok</h4>
-								<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{detailItem.plan_tomorrow}</p>
+								<p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.plan_tomorrow}</p>
 							</div>
 						{/if}
 					</div>
 					<div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
-						{#if detailItem.status === 'submitted'}
-							<button onclick={() => handleAcknowledge(detailItem.id)} disabled={actionLoading} class="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 cursor-pointer">
+						{#if item.status === 'submitted'}
+							<button onclick={() => handleAcknowledge(item.id)} disabled={actionLoading} class="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 cursor-pointer">
 								{actionLoading ? 'Memproses...' : '✓ Tandai Diketahui'}
 							</button>
 						{/if}
@@ -227,54 +241,102 @@
 		</div>
 		{#if errorMessage}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg px-4 py-3 mb-4">{errorMessage}</div>{/if}
 		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm">
-					<thead class="bg-gray-50 dark:bg-gray-800/50 text-left">
-						<tr>
-							<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Tanggal</th>
-							<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Karyawan</th>
-							<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Departemen</th>
-							<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Pekerjaan</th>
-							<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Status</th>
-							<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Aksi</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-						{#if isLoading}
-							{#each [1,2,3,4,5] as _}
-								<tr class="animate-pulse">
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-16"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-36"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-28"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-40"></div></td>
-									<td class="px-4 py-3"><div class="h-5 bg-gray-100 dark:bg-gray-800 rounded w-20"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-12"></div></td>
-								</tr>
-							{/each}
-						{:else if data.length === 0}
-							<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada jurnal harian</td></tr>
-						{:else}
-							{#each data as item}
-								<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition">
-									<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{formatDate(item.journal_date)}</td>
-									<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{item.employee_name}</td>
-									<td class="px-4 py-3 text-gray-500 dark:text-gray-400">{item.department_name || '-'}</td>
-									<td class="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-xs truncate">{item.work_description}</td>
-									<td class="px-4 py-3">{@html getStatusBadge(item.status)}</td>
-									<td class="px-4 py-3"><button onclick={() => loadDetail(item.id)} class="text-xs text-[#1A56DB] hover:underline font-medium cursor-pointer">Detail</button></td>
-								</tr>
-							{/each}
-						{/if}
-					</tbody>
-				</table>
-			</div>
-			<div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
-				<span class="text-xs text-gray-400">Total {total} data</span>
-				<div class="flex gap-1">
-					<button onclick={() => onPageChange(currentPage - 1)} disabled={currentPage <= 1} class="px-3 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">Prev</button>
-					<span class="px-3 py-1 text-sm text-gray-500">{(currentPage - 1) * perPage + 1} - {Math.min(currentPage * perPage, total)}</span>
-					<button onclick={() => onPageChange(currentPage + 1)} disabled={currentPage >= totalPages} class="px-3 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">Next</button>
+			<!-- Desktop Table -->
+			<div class="hidden md:block">
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead class="bg-gray-50 dark:bg-gray-800/50 text-left">
+							<tr>
+								<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Tanggal</th>
+								<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Karyawan</th>
+								<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Departemen</th>
+								<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Pekerjaan</th>
+								<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Status</th>
+								<th class="px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Aksi</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+							{#if isLoading}
+									<PulseLoader variant="table-row" count={5} />
+							{:else if data.length === 0}
+								<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada jurnal harian</td></tr>
+							{:else}
+								{#each data as item}
+									<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition">
+										<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{formatDate(item.journal_date)}</td>
+										<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{item.employee_name}</td>
+										<td class="px-4 py-3 text-gray-500 dark:text-gray-400">{item.department_name || '-'}</td>
+										<td class="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-xs truncate">{item.work_description}</td>
+										<td class="px-4 py-3">{@html getStatusBadge(item.status)}</td>
+										<td class="px-4 py-3"><button onclick={() => loadDetail(item.id)} class="text-xs text-[#1A56DB] hover:underline font-medium cursor-pointer">Detail</button></td>
+									</tr>
+								{/each}
+							{/if}
+						</tbody>
+					</table>
 				</div>
+				<div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+					<span class="text-xs text-gray-400">Total {total} data</span>
+					<div class="flex gap-1">
+						<button onclick={() => onPageChange(currentPage - 1)} disabled={currentPage <= 1} class="px-3 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">Prev</button>
+						<span class="px-3 py-1 text-sm text-gray-500">{(currentPage - 1) * perPage + 1} - {Math.min(currentPage * perPage, total)}</span>
+						<button onclick={() => onPageChange(currentPage + 1)} disabled={currentPage >= totalPages} class="px-3 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">Next</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Mobile Card List (Talenta Style) -->
+			<div class="md:hidden p-3 space-y-3">
+				{#if isLoading}
+					<PulseLoader variant="card" count={3} />
+				{:else if data.length === 0}
+					<EmptyState
+						variant="empty"
+						title="Belum ada jurnal harian"
+						description="Belum ada jurnal harian yang dicatat."
+					/>
+				{:else}
+					{#each data as item}
+						{@const theme = getAvatarTheme('dailyJournal')}
+						<MobileCard
+							avatar={item.employee_name}
+							avatarColor={theme.gradientClasses}
+							title={item.employee_name}
+							subtitle={item.department_name || 'Tanpa departemen'}
+							badges={[{ label: item.status === 'draft' ? 'Draft' : item.status === 'submitted' ? 'Terkirim' : item.status === 'acknowledged' ? 'Diketahui' : item.status, color: statusColors[item.status] || 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' }]}
+							onclick={() => loadDetail(item.id)}
+							clickable={true}
+						>
+							{#snippet children()}
+								<div class="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+									<div class="flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded-md">
+										<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+										</svg>
+										<span class="tabular-nums">{formatDate(item.journal_date)}</span>
+									</div>
+								</div>
+								<div class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
+									{item.work_description}
+								</div>
+							{/snippet}
+							{#snippet footer()}
+								<div class="flex justify-end pt-2">
+									<span class="text-xs font-medium text-[#1A56DB] dark:text-blue-400">Lihat Detail →</span>
+								</div>
+							{/snippet}
+						</MobileCard>
+					{/each}
+
+					<!-- Mobile Pagination -->
+					<div class="flex items-center justify-between px-1 py-2">
+						<span class="text-xs text-gray-400">{(currentPage - 1) * perPage + 1}-{Math.min(currentPage * perPage, total)} dari {total}</span>
+						<div class="flex gap-2">
+							<button onclick={() => onPageChange(currentPage - 1)} disabled={currentPage <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer active:scale-95">Prev</button>
+							<button onclick={() => onPageChange(currentPage + 1)} disabled={currentPage >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer active:scale-95">Next</button>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}

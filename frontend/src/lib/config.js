@@ -8,7 +8,7 @@
 
 const config = {
 	// Backend API URL
-	API_BASE_URL: 'http://localhost:8590',
+	API_BASE_URL: 'http://localhost:8900',
 
 	// JWT Token keys (localStorage)
 	ACCESS_TOKEN_KEY: 'hrms_access_token',

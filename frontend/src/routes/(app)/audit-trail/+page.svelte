@@ -1,13 +1,20 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { activityLogs, employees, ApiError } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 
 	let loading = $state(true);
+	let loadingMore = $state(false);
 	let items = $state<any[]>([]);
 	let total = $state(0);
 	let pageNum = $state(1);
 	const perPage = 25;
 	let error = $state('');
+	let hasMore = $state(true);
+	let sentinelEl = $state<HTMLDivElement>();
+	let observer: IntersectionObserver | null = null;
 
 	// Filters
 	let filterAction = $state('');
@@ -42,9 +49,11 @@
 	async function load() {
 		loading = true;
 		error = '';
+		pageNum = 1;
+		hasMore = true;
 		try {
 			const res = await activityLogs.list({
-				page: pageNum,
+				page: 1,
 				perPage,
 				action: filterAction,
 				entityType: filterEntityType,
@@ -55,6 +64,7 @@
 			if (res.success) {
 				items = res.data.logs || [];
 				total = res.data.total || 0;
+				hasMore = items.length < total;
 			}
 		} catch (e) {
 			if (e instanceof ApiError) error = e.message;
@@ -64,17 +74,56 @@
 		}
 	}
 
+	async function loadMore() {
+		if (loadingMore || !hasMore) return;
+		loadingMore = true;
+		try {
+			const nextPage = pageNum + 1;
+			const res = await activityLogs.list({
+				page: nextPage,
+				perPage,
+				action: filterAction,
+				entityType: filterEntityType,
+				userId: filterEmployeeId,
+				startDate: filterStartDate || undefined,
+				endDate: filterEndDate || undefined,
+			});
+			if (res.success) {
+				const newItems = res.data.logs || [];
+				items = [...items, ...newItems];
+				pageNum = nextPage;
+				hasMore = items.length < total;
+			}
+		} catch {
+			// Silent fail on load more
+		} finally {
+			loadingMore = false;
+		}
+	}
+
 	function resetFilters() {
 		filterAction = '';
 		filterEntityType = '';
 		filterEmployeeId = '';
 		filterStartDate = '';
 		filterEndDate = '';
-		pageNum = 1;
 		load();
 	}
 
-	function search() { pageNum = 1; load(); }
+	function search() { load(); }
+
+	$effect(() => {
+		if (sentinelEl && !loading) {
+			observer?.disconnect();
+			observer = new IntersectionObserver((entries) => {
+				if (entries[0].isIntersecting && hasMore && !loadingMore) {
+					loadMore();
+				}
+			}, { rootMargin: '200px' });
+			observer.observe(sentinelEl);
+		}
+		return () => observer?.disconnect();
+	});
 
 	function formatDate(dateStr: string) {
 		const d = new Date(dateStr);
@@ -99,17 +148,6 @@
 		return badges[action] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
 	}
 
-	// Skeleton loader array — Svelte doesn't support [...Array(n)] in template
-	const skeletonItems = [1, 2, 3, 4, 5, 6, 7, 8];
-
-	let totalPages = $derived(Math.max(1, Math.ceil(total / perPage)));
-
-	onMount(() => {
-		load();
-		loadEmployees();
-		loadFilterOptions();
-	});
-	onDestroy(() => {});
 </script>
 
 <div class="p-4 md:p-6">
@@ -195,12 +233,9 @@
 		<span>Total: <strong>{total}</strong> log</span>
 	</div>
 
+	<PullToRefresh onRefresh={load}>
 	{#if loading}
-		<div class="space-y-2">
-			{#each skeletonItems as _, i}
-				<div class="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-14"></div>
-			{/each}
-		</div>
+		<PulseLoader variant="text" count={8} />
 	{:else if items.length === 0}
 		<div class="text-center py-16 text-gray-400 dark:text-gray-500">
 			<span class="text-5xl block mb-4">📋</span>
@@ -208,46 +243,51 @@
 		</div>
 	{:else}
 		<div class="space-y-2">
-			{#each items as item}
-				<div class="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow">
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-3">
-							<span class="px-2 py-0.5 rounded-full text-xs font-medium {getActionBadge(item.action)}">
-								{item.action}
-							</span>
-							<div>
-								<span class="text-sm font-medium text-gray-900 dark:text-white">{item.entity_name || item.entity_type}</span>
-								<span class="text-xs text-gray-400 dark:text-gray-500 ml-2">({item.entity_type})</span>
+			{#each items as item, i}
+				<AnimatedPresence show={true} delay={Math.min(i * 20, 300)}>
+					<div class="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-3">
+								<span class="px-2 py-0.5 rounded-full text-xs font-medium {getActionBadge(item.action)}">
+									{item.action}
+								</span>
+								<div>
+									<span class="text-sm font-medium text-gray-900 dark:text-white">{item.entity_name || item.entity_type}</span>
+									<span class="text-xs text-gray-400 dark:text-gray-500 ml-2">({item.entity_type})</span>
+								</div>
+							</div>
+							<div class="text-right text-xs text-gray-400 dark:text-gray-500">
+								<div>{formatDate(item.created_at)}</div>
+								{#if item.employee_name}
+									<div class="text-gray-500 dark:text-gray-400">{item.employee_name}</div>
+								{/if}
 							</div>
 						</div>
-						<div class="text-right text-xs text-gray-400 dark:text-gray-500">
-							<div>{formatDate(item.created_at)}</div>
-							{#if item.employee_name}
-								<div class="text-gray-500 dark:text-gray-400">{item.employee_name}</div>
-							{/if}
-						</div>
 					</div>
-				</div>
+				</AnimatedPresence>
 			{/each}
 		</div>
 
-		<!-- Pagination -->
-		{#if totalPages > 1}
-			<div class="flex items-center justify-center gap-2 mt-6">
-				<button
-					onclick={() => { if (pageNum > 1) { pageNum--; load(); } }}
-					disabled={pageNum <= 1}
-					class="px-3 py-1.5 rounded text-sm disabled:opacity-40 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer"
-				>Sebelumnya</button>
-				<span class="text-sm text-gray-500 dark:text-gray-400">
-					Halaman {pageNum} dari {totalPages}
-				</span>
-				<button
-					onclick={() => { if (pageNum < totalPages) { pageNum++; load(); } }}
-					disabled={pageNum >= totalPages}
-					class="px-3 py-1.5 rounded text-sm disabled:opacity-40 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer"
-				>Selanjutnya</button>
+		<!-- Infinite scroll sentinel -->
+		{#if hasMore}
+			<div bind:this={sentinelEl} class="flex items-center justify-center py-4">
+				{#if loadingMore}
+					<div class="flex items-center gap-2 text-sm text-gray-400">
+						<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+						</svg>
+						<span>Memuat data lainnya...</span>
+					</div>
+				{:else}
+					<div class="w-6 h-6 rounded-full border-2 border-gray-200 dark:border-gray-700 border-dashed"></div>
+				{/if}
+			</div>
+		{:else if items.length > 0}
+			<div class="text-center py-4 text-xs text-gray-400 dark:text-gray-500">
+				<span>Menampilkan semua {total} log</span>
 			</div>
 		{/if}
 	{/if}
+	</PullToRefresh>
 </div>

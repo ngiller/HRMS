@@ -203,6 +203,3 @@ func DeleteDocument(ctx context.Context, id, userID string) error {
 		return err
 	})
 }
-
-
-

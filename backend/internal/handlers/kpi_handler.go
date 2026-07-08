@@ -110,12 +110,12 @@ func (h *KPIHandler) CreateKPIReview(c *fiber.Ctx) error {
 	r, err := h.kpiService.CreateReview(c.Context(), req, userID)
 	if err != nil {
 		status := fiber.StatusInternalServerError
-		
+
 		rootErr := err
 		for errors.Unwrap(rootErr) != nil {
 			rootErr = errors.Unwrap(rootErr)
 		}
-		
+
 		switch rootErr.Error() {
 		case "karyawan harus diisi", "template KPI harus diisi",
 			"periode harus diisi", "tahun harus >= 2024":

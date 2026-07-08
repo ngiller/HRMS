@@ -18,7 +18,7 @@ type ActivityLog struct {
 	UserAgent  string          `json:"user_agent,omitempty"`
 	CreatedAt  time.Time       `json:"created_at"`
 	// Joined fields
-	EmployeeName *string `json:"employee_name,omitempty"`
+	EmployeeName  *string `json:"employee_name,omitempty"`
 	EmployeeEmail *string `json:"employee_email,omitempty"`
 }
 
@@ -35,10 +35,10 @@ type ActivityLogSummary struct {
 
 // ActivityLogListResponse wraps paginated activity logs
 type ActivityLogListResponse struct {
-	Logs  []ActivityLogSummary `json:"logs"`
-	Total int                  `json:"total"`
-	Page  int                  `json:"page"`
-	PerPage int                `json:"per_page"`
+	Logs    []ActivityLogSummary `json:"logs"`
+	Total   int                  `json:"total"`
+	Page    int                  `json:"page"`
+	PerPage int                  `json:"per_page"`
 }
 
 // ActivityLogFilter holds filter parameters for activity logs
@@ -54,9 +54,9 @@ type ActivityLogFilter struct {
 
 // AuditAction constants
 const (
-	AuditActionCreate = "create"
-	AuditActionUpdate = "update"
-	AuditActionDelete = "delete"
+	AuditActionCreate  = "create"
+	AuditActionUpdate  = "update"
+	AuditActionDelete  = "delete"
 	AuditActionApprove = "approve"
 	AuditActionReject  = "reject"
 	AuditActionPay     = "pay"

@@ -2,36 +2,15 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { departments as deptApi } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
-	type Department = {
-		id: string;
-		name: string;
-		code: string;
-		parent_name: string;
-		head_name: string;
-		description: string;
-		is_active: boolean;
-		work_schedule_name: string;
-		sort_order: number;
-		employee_count: number;
-		created_at: string;
-	};
-
-	type WorkSchedule = {
-		id: string;
-		name: string;
-	};
-
-	type DepartmentForm = {
-		name: string;
-		code: string;
-		parent_id: string;
-		head_id: string;
-		work_schedule_id: string;
-		description: string;
-		is_active: boolean;
-	};
+	import type { Department, WorkSchedule, DepartmentForm, ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 
 	let departments = $state<Department[]>([]);
 	let total = $state(0);
@@ -59,7 +38,7 @@
 	// AG Grid
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -84,9 +63,9 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'name', headerName: 'Departemen', minWidth: 240, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Department>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				const desc = params.data?.description || '';
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600 shrink-0 ring-1 ring-indigo-200">${initials}</div>
@@ -98,7 +77,7 @@
 		},
 		{
 			field: 'code', headerName: 'Kode', minWidth: 100,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Department>) => {
 				if (!params.value) return '';
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-gray-100 text-gray-600">${params.value}</span>`;
 			},
@@ -109,7 +88,7 @@
 		{ field: 'parent_name', headerName: 'Induk', minWidth: 140, headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider', cellClass: 'text-sm text-gray-500' },
 		{
 			field: 'work_schedule_name', headerName: 'Jadwal', minWidth: 160,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Department>) => {
 				const dept = params.data;
 				if (!dept) return '';
 				if (schedulePickerDeptId === dept.id) {
@@ -155,7 +134,7 @@
 				editBtn.setAttribute('aria-label', 'Ubah jadwal');
 				editBtn.onclick = (e) => {
 					e.stopPropagation();
-					const wsId = dept.work_schedule_name ? (workSchedules.find((w: any) => w.name === dept.work_schedule_name)?.id || '') : '';
+					const wsId = dept.work_schedule_name ? (workSchedules.find((w: WorkSchedule) => w.name === dept.work_schedule_name)?.id || '') : '';
 					openSchedulePicker(dept.id, wsId);
 				};
 				if (hasPermission('department', 'update')) {
@@ -168,7 +147,7 @@
 		},
 		{
 			field: 'employee_count', headerName: 'Karyawan', minWidth: 100, maxWidth: 120,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Department>) => {
 				if (params.value == null) return '';
 				return `<span class="text-sm font-medium text-gray-700 tabular-nums">${params.value}</span>`;
 			},
@@ -177,7 +156,7 @@
 		},
 		{
 			field: 'is_active', headerName: 'Status', minWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Department>) => {
 				if (params.value == null) return '';
 				if (params.value) {
 					return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20">Aktif</span>';
@@ -188,13 +167,13 @@
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 130,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 110, maxWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Department>) => {
 				const dept = params.data;
 				if (!dept) return '';
 				const container = document.createElement('div');
@@ -245,10 +224,12 @@
 
 	$effect(() => {
 		if (departments.length > 0 && gridContainer && !showForm) {
-			if (!gridApi) {
+			if (!gridApi && agGridModule) {
 				gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi;
 			}
-			gridApi.updateGridOptions({ rowData: departments as any[] });
+			if (gridApi) {
+				gridApi.updateGridOptions({ rowData: departments });
+			}
 		}
 	});
 
@@ -284,7 +265,7 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await deptApi.list(page, perPage, searchQuery);
+			const response: ApiResponse<Department[]> = await deptApi.list(page, perPage, searchQuery) as ApiResponse<Department[]>;
 			const data = response.data || [];
 			departments = data;
 			total = response.meta?.total || 0;
@@ -295,8 +276,8 @@
 			totalActiveDepts = data.filter((d: Department) => d.is_active).length;
 			totalSubDepts = data.filter((d: Department) => d.parent_name).length;
 			totalEmployeesAll = data.reduce((sum: number, d: Department) => sum + (d.employee_count || 0), 0);
-		} catch (error: any) {
-			errorMessage = error.message || 'Gagal memuat data departemen';
+		} catch (error: unknown) {
+			errorMessage = (error as { message?: string }).message || 'Gagal memuat data departemen';
 			console.error('Department list error:', error);
 		} finally {
 			isLoading = false;
@@ -305,7 +286,7 @@
 
 	async function loadAllDepts() {
 		try {
-			const response: any = await deptApi.getAll();
+			const response: ApiResponse<Department[]> = await deptApi.getAll() as ApiResponse<Department[]>;
 			allDepts = response.data || [];
 		} catch {
 			allDepts = [];
@@ -314,7 +295,7 @@
 
 	async function loadWorkSchedules() {
 		try {
-			const response: any = await deptApi.getWorkSchedules();
+			const response: ApiResponse<WorkSchedule[]> = await deptApi.getWorkSchedules() as ApiResponse<WorkSchedule[]>;
 			workSchedules = response.data || [];
 		} catch {
 			workSchedules = [];
@@ -351,14 +332,16 @@
 		showForm = true;
 
 		// Load full detail for parent_id, head_id, work_schedule_id
-		deptApi.get(dept.id).then((resp: any) => {
+		deptApi.get(dept.id).then((resp) => {
 			if (resp.data) {
-				form.parent_id = resp.data.parent_id || '';
-				form.head_id = resp.data.head_id || '';
-				form.work_schedule_id = resp.data.work_schedule_id || '';
-				form.is_active = resp.data.is_active ?? true;
+				const d = resp.data as Department;
+				form.head_id = d.head_id || '';
+				form.work_schedule_id = d.work_schedule_id || '';
+				form.is_active = d.is_active ?? true;
 			}
-		}).catch(() => {});
+		}).catch((err: unknown) => {
+			console.error('Gagal memuat detail departemen:', err);
+		});
 	}
 
 	function cancelForm() {
@@ -380,7 +363,7 @@
 		isSaving = true;
 		formError = '';
 		try {
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				name: form.name.trim(),
 				code: form.code.trim().toUpperCase(),
 				description: form.description.trim(),
@@ -398,8 +381,8 @@
 			cancelForm();
 			loadDepartments();
 			loadAllDepts();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menyimpan departemen';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menyimpan departemen';
 		} finally {
 			isSaving = false;
 		}
@@ -427,8 +410,8 @@
 			deletingName = '';
 			loadDepartments();
 			loadAllDepts();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menghapus departemen';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menghapus departemen';
 			showDeleteConfirm = false;
 		} finally {
 			isSaving = false;
@@ -466,8 +449,8 @@
 			await deptApi.updateWorkSchedule(schedulePickerDeptId, selectedScheduleId);
 			closeSchedulePicker();
 			loadDepartments();
-		} catch (err: any) {
-			formError = err.message || 'Gagal mengupdate jadwal';
+		} catch (err: unknown) {
+			formError = (err as { message?: string }).message || 'Gagal mengupdate jadwal';
 		} finally {
 			isSavingSchedule = false;
 		}
@@ -478,11 +461,6 @@
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
-	function getInitials(name: string): string {
-		const parts = name.split(' ');
-		if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-		return name.substring(0, 2).toUpperCase();
-	}
 </script>
 
 <div class="w-full">
@@ -695,22 +673,7 @@
 		<!-- Table Card -->
 		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<!-- Loading Skeleton -->
-				<div class="p-6 animate-pulse">
-					<div class="space-y-3">
-						{#each [1,2,3,4,5] as _}
-							<div class="flex items-center gap-4 py-2">
-								<div class="flex-1 space-y-1.5">
-									<div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div>
-									<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div>
-								</div>
-								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-24 hidden md:block"></div>
-								<div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-20 hidden md:block"></div>
-								<div class="h-8 bg-gray-100 dark:bg-gray-800 rounded w-20"></div>
-							</div>
-						{/each}
-					</div>
-				</div>
+				<PulseLoader variant="table-row" count={5} />
 			{:else if errorMessage}
 				<!-- Error State -->
 				<div class="py-16 text-center">
@@ -726,20 +689,11 @@
 					</button>
 				</div>
 			{:else if departments.length === 0}
-				<!-- Empty State -->
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
-						<svg class="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-						</svg>
-					</div>
-					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Belum ada data departemen</h3>
-					<p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
-						{searchQuery
-							? `Tidak ditemukan departemen dengan kata kunci "${searchQuery}"`
-							: 'Data departemen akan muncul di sini setelah ditambahkan.'}
-					</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada data departemen"
+					description={searchQuery ? `Tidak ditemukan departemen dengan kata kunci "${searchQuery}"` : 'Data departemen akan muncul di sini setelah ditambahkan.'}
+				/>
 			{:else}
 				<!-- Desktop Table — AG Grid -->
 				<div class="hidden md:block">
@@ -747,53 +701,42 @@
 				</div>
 
 			<!-- Mobile Cards -->
-			<div class="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
+			<div class="md:hidden space-y-3">
+				<PullToRefresh onRefresh={loadDepartments}>
 				{#each departments as dept}
-					<div class="p-4 hover:bg-blue-50/40 transition-colors">
-						<div class="flex items-center gap-3 mb-2">
-							<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/50 dark:to-indigo-800/50 flex items-center justify-center text-xs font-semibold text-indigo-600 dark:text-indigo-300 shrink-0 ring-1 ring-indigo-200 dark:ring-indigo-800">
-								{getInitials(dept.name)}
+					<MobileCard
+						title={dept.name}
+						subtitle={dept.code}
+						avatar={getInitials(dept.name)}
+						avatarColor={getAvatarTheme('department').gradientClasses}
+						badges={[{ label: dept.is_active ? 'Aktif' : 'Nonaktif', color: dept.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800' }]}
+					>
+						{#snippet children()}
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+								{#if dept.head_name}
+									<span class="truncate">Kepala: {dept.head_name}</span>
+									<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
+								{/if}
+								{#if dept.parent_name}
+									<span class="truncate">Induk: {dept.parent_name}</span>
+									<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
+								{/if}
+								<span>{dept.employee_count} karyawan</span>
 							</div>
-							<div class="flex-1 min-w-0">
-								<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{dept.name}</div>
-								<div class="text-xs text-gray-400 dark:text-gray-500">{dept.code}</div>
-							</div>
-							<div class="flex items-center gap-1 shrink-0">
+						{/snippet}
+						{#snippet footer()}
+							<div class="flex items-center gap-2">
 								{#if hasPermission('department', 'update')}
-								<button onclick={() => openEditForm(dept)} class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-[#1A56DB] hover:bg-blue-50 dark:hover:bg-blue-900/30 transition cursor-pointer" aria-label="Edit departemen">
-									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-										<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-									</svg>
-								</button>
-							{/if}
+									<button onclick={() => openEditForm(dept)} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Edit</button>
+								{/if}
 								{#if hasPermission('department', 'delete')}
-									<button onclick={() => confirmDelete(dept.id, dept.name)} class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition cursor-pointer" aria-label="Hapus departemen">
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-											<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-										</svg>
-									</button>
+									<button onclick={() => confirmDelete(dept.id, dept.name)} class="flex-1 py-2 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">Hapus</button>
 								{/if}
 							</div>
-						</div>
-						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 dark:text-gray-500 ml-13">
-							{#if dept.head_name}
-								<span class="truncate">Kepala: {dept.head_name}</span>
-								<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
-							{/if}
-							{#if dept.parent_name}
-								<span class="truncate">Induk: {dept.parent_name}</span>
-								<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
-							{/if}
-							<span>{dept.employee_count} karyawan</span>
-							<span class="w-1 h-1 bg-gray-300 rounded-full shrink-0"></span>
-							{#if dept.is_active}
-								<span class="text-emerald-600 font-medium">Aktif</span>
-							{:else}
-								<span class="text-red-500 font-medium">Nonaktif</span>
-							{/if}
-						</div>
-					</div>
+						{/snippet}
+					</MobileCard>
 				{/each}
+				</PullToRefresh>
 			</div>
 
 				<!-- Pagination -->
@@ -835,7 +778,7 @@
 </div>
 
 <!-- Delete Confirmation Modal (tetap modal, cuma buat konfirmasi) -->
-{#if showDeleteConfirm}
+<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
@@ -888,4 +831,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

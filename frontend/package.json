@@ -10,9 +10,14 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"test:e2e": "playwright test",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix"
 	},
 	"devDependencies": {
+		"@eslint/js": "^10.0.1",
 		"@iconify-json/heroicons": "^1.2.3",
 		"@playwright/test": "^1.61.1",
 		"@sveltejs/kit": "^2.63.0",
@@ -20,11 +25,15 @@
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/leaflet": "^1.9.21",
 		"@types/node": "^26.0.1",
+		"eslint": "^10.6.0",
+		"eslint-plugin-svelte": "^3.20.0",
+		"globals": "^17.7.0",
 		"rollup-plugin-visualizer": "^6.0.11",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
 		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.62.1",
 		"unplugin-icons": "^23.0.1",
 		"vite": "^8.0.16"
 	},

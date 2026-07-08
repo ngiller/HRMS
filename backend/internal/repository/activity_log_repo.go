@@ -95,10 +95,10 @@ func (r *ActivityLogRepo) ListActivityLogs(ctx context.Context, filter *models.A
 	}
 
 	return &models.ActivityLogListResponse{
-		Logs:     logs,
-		Total:    total,
-		Page:     filter.Page,
-		PerPage:  filter.PerPage,
+		Logs:    logs,
+		Total:   total,
+		Page:    filter.Page,
+		PerPage: filter.PerPage,
 	}, nil
 }
 

@@ -2,8 +2,14 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { employeeSchedules as api, scheduleTemplates as templateApi, employees, attendanceLocations } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type EmployeeSummary = { id: string; full_name: string; employee_id: string; department_name: string; };
 	type TemplateSummary = { id: string; name: string; description: string; schedule_type: string; day_count: number; };
 	type LocationSummary = { id: string; name: string; address: string; };
@@ -79,7 +85,7 @@
 	// AG Grid
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -99,17 +105,17 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'employee_name', headerName: 'Karyawan', minWidth: 200, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<ScheduleEntry>) => {
 				if (!params.value) return '';
-				return `<div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-xs font-semibold text-blue-600">${params.value.substring(0, 2).toUpperCase()}</div><span class="text-sm font-medium text-gray-900">${params.value}</span></div>`;
+				return `<div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-xs font-semibold text-blue-600">${(params.value as string).substring(0, 2).toUpperCase()}</div><span class="text-sm font-medium text-gray-900">${params.value}</span></div>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'py-1',
 		},
 		{
 			field: 'specific_date', headerName: 'Tanggal', minWidth: 120,
-			cellRenderer: (params: any) => {
-				if (params.value) return `<span class="text-sm font-medium text-gray-900">${formatDate(params.value)}</span>`;
+			cellRenderer: (params: AgGridCellParams<ScheduleEntry>) => {
+				if (params.value) return `<span class="text-sm font-medium text-gray-900">${formatDate(params.value as string)}</span>`;
 				if (params.data?.day_of_week != null) return `<span class="text-sm text-gray-600">Setiap ${DAY_LABELS[params.data.day_of_week] || ''}</span>`;
 				return '<span class="text-xs text-gray-400">Periodik</span>';
 			},
@@ -117,27 +123,28 @@
 		},
 		{
 			field: 'template_name', headerName: 'Template', minWidth: 140,
-			cellRenderer: (params: any) => params.value ? `<span class="text-sm text-gray-700">${params.value}</span>` : '<span class="text-xs text-gray-400">Manual</span>',
+			cellRenderer: (params: AgGridCellParams<ScheduleEntry>) => params.value ? `<span class="text-sm text-gray-700">${params.value}</span>` : '<span class="text-xs text-gray-400">Manual</span>',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600',
 		},
 		{
 			field: 'start_time', headerName: 'Jam', minWidth: 120,
-			valueFormatter: (params: any) => params.data?.start_time && params.data?.end_time ? `${params.data.start_time.slice(0, 5)}-${params.data.end_time.slice(0, 5)}` : '-',
+			valueFormatter: (params: AgGridValueParams) => params.data?.start_time && params.data?.end_time ? `${(params.data as ScheduleEntry).start_time?.slice(0, 5)}-${(params.data as ScheduleEntry).end_time?.slice(0, 5)}` : '-',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'is_remote', headerName: 'Remote', minWidth: 90,
-			cellRenderer: (params: any) => params.value ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700">WFH</span>' : '',
+			cellRenderer: (params: AgGridCellParams<ScheduleEntry>) => params.value ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700">WFH</span>' : '',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 		},
 		{
 			field: 'effective_from', headerName: 'Berlaku', minWidth: 160,
-			valueFormatter: (params: any) => {
+			valueFormatter: (params: AgGridValueParams) => {
 				if (!params.data) return '';
-				const from = formatDate(params.data.effective_from);
-				const until = params.data.effective_until ? formatDate(params.data.effective_until) : '∞';
+				const d = params.data as ScheduleEntry;
+				const from = formatDate(d.effective_from);
+				const until = d.effective_until ? formatDate(d.effective_until) : '∞';
 				return `${from} - ${until}`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
@@ -150,7 +157,7 @@
 		},
 		{
 			field: 'id', headerName: '', minWidth: 80, maxWidth: 80,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<ScheduleEntry>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -180,8 +187,8 @@
 
 	$effect(() => {
 		if (schedules.length > 0 && gridContainer && activeTab === 'list') {
-			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: schedules as any[] });
+			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
+			gridApi?.updateGridOptions({ rowData: schedules });
 		}
 	});
 
@@ -201,32 +208,32 @@
 		gridApi = null;
 		isLoadingSchedules = true; schedError = '';
 		try {
-			const response: any = await api.list(schedPage, schedPerPage, schedEmployeeId);
+			const response: ApiResponse<ScheduleEntry[]> = await api.list(schedPage, schedPerPage, schedEmployeeId) as ApiResponse<ScheduleEntry[]>;
 			schedules = response.data || [];
 			totalSchedules = response.meta?.total || 0;
 			schedTotalPages = Math.ceil(totalSchedules / schedPerPage);
 			tabCounts.list = totalSchedules;
-		} catch (error: any) { schedError = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { schedError = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoadingSchedules = false; }
 	}
 
 	async function loadAllEmployees() {
 		try {
-			const response: any = await employees.list(1, 500);
+			const response: ApiResponse<EmployeeSummary[]> = await employees.list(1, 500) as ApiResponse<EmployeeSummary[]>;
 			employees_list = response.data || [];
 		} catch { employees_list = []; }
 	}
 
 	async function loadTemplates() {
 		try {
-			const response: any = await templateApi.getAll();
+			const response: ApiResponse<TemplateSummary[]> = await templateApi.getAll() as ApiResponse<TemplateSummary[]>;
 			templates = response.data || [];
 		} catch { templates = []; }
 	}
 
 	async function loadLocations() {
 		try {
-			const response: any = await attendanceLocations.getAll();
+			const response: ApiResponse<LocationSummary[]> = await attendanceLocations.getAll() as ApiResponse<LocationSummary[]>;
 			locations = response.data || [];
 		} catch { locations = []; }
 	}
@@ -237,7 +244,7 @@
 	async function handleDelete() {
 		if (!deletingId) return;
 		try { await api.remove(deletingId); showDeleteConfirm = false; deletingId = null; loadSchedules(); }
-		catch (error: any) { schedError = error.message || 'Gagal menghapus'; showDeleteConfirm = false; }
+		catch (error: unknown) { schedError = (error as { message?: string }).message || 'Gagal menghapus'; showDeleteConfirm = false; }
 	}
 
 	function openAssignTab() {
@@ -270,7 +277,7 @@
 
 		isAssigning = true; assignFormError = '';
 		try {
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				employee_id: assignForm.employee_id,
 				effective_from: assignForm.effective_from,
 				reason: assignForm.reason || '',
@@ -299,7 +306,7 @@
 			resetForm();
 			activeTab = 'list';
 			loadSchedules();
-		} catch (error: any) { assignFormError = error.message || 'Gagal menyimpan jadwal'; }
+		} catch (error: unknown) { assignFormError = (error as { message?: string }).message || 'Gagal menyimpan jadwal'; }
 		finally { isAssigning = false; }
 	}
 
@@ -311,7 +318,7 @@
 		assignedLocations = assignedLocations.filter((_, i) => i !== index);
 	}
 
-	function updateLocation(index: number, field: string, value: any) {
+	function updateLocation(index: number, field: string, value: string) {
 		assignedLocations = assignedLocations.map((loc, i) => i === index ? { ...loc, [field]: value } : loc);
 	}
 
@@ -321,9 +328,9 @@
 
 		isResolving = true; resolveError = ''; resolvedSchedule = null;
 		try {
-			const response: any = await api.resolve(resolveEmployeeId, resolveDate);
-			resolvedSchedule = response.data;
-		} catch (error: any) { resolveError = error.message || 'Gagal menentukan jadwal'; }
+			const response: ApiResponse<ResolvedSchedule> = await api.resolve(resolveEmployeeId, resolveDate) as ApiResponse<ResolvedSchedule>;
+			resolvedSchedule = response.data ?? null;
+		} catch (error: unknown) { resolveError = (error as { message?: string }).message || 'Gagal menentukan jadwal'; }
 		finally { isResolving = false; }
 	}
 
@@ -395,7 +402,7 @@
 			</div>
 
 			{#if isLoadingSchedules}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-8 bg-gray-100 rounded w-20"></div></div>{/each}</div></div>
+				<PulseLoader variant="table-row" count={5} />
 			{/if}
 			{#if !isLoadingSchedules && schedError}
 				<div class="py-16 text-center">
@@ -417,24 +424,39 @@
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<div class="md:hidden space-y-3">
+					<PullToRefresh onRefresh={loadSchedules}>
 					{#each schedules as s}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-xs font-semibold text-blue-600 shrink-0">{s.employee_name.substring(0, 2).toUpperCase()}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{s.employee_name}</div>
-									<div class="text-xs text-gray-400">
-										{s.specific_date ? formatDate(s.specific_date) : (s.day_of_week != null ? `Setiap ${DAY_LABELS[s.day_of_week]}` : 'Periodik')}
-										· {s.start_time?.slice(0,5)}-{s.end_time?.slice(0,5)}
+						<MobileCard
+							title={s.employee_name}
+							subtitle={`${s.template_name || 'Manual'} · ${s.start_time?.slice(0,5)}-${s.end_time?.slice(0,5)}`}
+							avatar={getInitials(s.employee_name)}
+							avatarColor={getAvatarTheme('schedule').gradientClasses}
+							badges={s.is_remote ? [{ label: 'WFH', color: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' }] : undefined}
+						>
+							{#snippet children()}
+								<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+									<div class="flex items-center gap-1.5">
+										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+										</svg>
+										<span>{s.specific_date ? formatDate(s.specific_date) : (s.day_of_week != null ? `Setiap ${DAY_LABELS[s.day_of_week]}` : 'Periodik')}</span>
 									</div>
 								</div>
-								<button onclick={() => confirmDelete(s.id)} class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer" aria-label="Hapus jadwal">
-									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
-								</button>
-							</div>
-						</div>
+							{/snippet}
+							{#snippet footer()}
+								<div class="flex items-center justify-between">
+									<span class="text-xs text-gray-400">
+										{formatDate(s.effective_from)}{s.effective_until ? ` - ${formatDate(s.effective_until)}` : ' - ∞'}
+									</span>
+									<button onclick={() => confirmDelete(s.id)} class="py-1.5 px-3 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">
+										Hapus
+									</button>
+								</div>
+							{/snippet}
+						</MobileCard>
 					{/each}
+					</PullToRefresh>
 				</div>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
 					<div class="text-xs text-gray-500">Menampilkan {(schedPage - 1) * schedPerPage + 1}-{Math.min(schedPage * schedPerPage, totalSchedules)} dari <span class="font-medium text-gray-700">{totalSchedules}</span></div>
@@ -740,7 +762,7 @@
 </div></div>
 
 	<!-- Delete Confirmation Modal -->
-	{#if showDeleteConfirm}
+	<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape') cancelDelete(); }} role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Hapus jadwal" tabindex="-1" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
@@ -755,4 +777,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

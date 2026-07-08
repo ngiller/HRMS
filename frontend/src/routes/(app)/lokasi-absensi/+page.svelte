@@ -2,8 +2,15 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { attendanceLocations as api } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 
 	/** @type {any} */
 	let L: any = null;
@@ -51,7 +58,7 @@
 	// AG Grid
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	// Leaflet Map
 	let mapContainer: HTMLDivElement;
@@ -113,7 +120,7 @@
 
 	// Geocoding Map Search
 	let mapSearchQuery = $state('');
-	let mapSearchResults = $state<any[]>([]);
+	let mapSearchResults = $state<{ display_name: string; lat: string; lon: string }[]>([]);
 	let mapSearchLoading = $state(false);
 	let mapSearchTimeout: ReturnType<typeof setTimeout>;
 
@@ -141,7 +148,7 @@
 		}, 650);
 	}
 
-	function selectMapResult(result: any) {
+	function selectMapResult(result: { display_name: string; lat: string; lon: string }) {
 		form.latitude = parseFloat(result.lat);
 		form.longitude = parseFloat(result.lon);
 		if (result.display_name && !form.address) {
@@ -175,9 +182,9 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'name', headerName: 'Lokasi', minWidth: 240, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<AttendanceLocation>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				const addr = params.data?.address || '';
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-xs font-semibold text-emerald-600 shrink-0 ring-1 ring-emerald-200">${initials}</div>
@@ -189,7 +196,7 @@
 		},
 		{
 			field: 'latitude', headerName: 'Koordinat', minWidth: 180,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<AttendanceLocation>) => {
 				if (params.data?.latitude == null || params.data?.longitude == null) return '';
 				return `<span class="text-sm font-mono text-gray-600">${Number(params.data.latitude).toFixed(6)}, ${Number(params.data.longitude).toFixed(6)}</span>`;
 			},
@@ -198,13 +205,13 @@
 		},
 		{
 			field: 'radius_meters', headerName: 'Radius', minWidth: 100,
-			valueFormatter: (params: any) => params.value != null ? `${params.value} m` : '',
+			valueFormatter: (params: AgGridValueParams) => params.value != null ? `${params.value} m` : '',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'is_active', headerName: 'Status', minWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<AttendanceLocation>) => {
 				if (params.value == null) return '';
 				return params.value
 					? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800">Aktif</span>'
@@ -214,13 +221,13 @@
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 130,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 100, maxWidth: 100,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<AttendanceLocation>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -261,18 +268,18 @@
 	};
 
 	$effect(() => {
-		if (showForm && gridApi) {
-			gridApi.destroy();
+		if (showForm) {
+			gridApi?.destroy();
 			gridApi = null;
 		}
 	});
 
 	$effect(() => {
 		if (items.length > 0 && gridContainer && !showForm) {
-			if (!gridApi) {
+			if (!gridApi && agGridModule) {
 				gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi;
 			}
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}
 	});
 
@@ -304,13 +311,13 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, searchQuery);
+			const response = await api.list(page, perPage, searchQuery) as ApiResponse<AttendanceLocation[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -355,12 +362,12 @@
 		isSaving = true;
 		formError = '';
 		try {
-			const payload: any = { name: form.name.trim(), address: form.address.trim(), latitude: form.latitude, longitude: form.longitude, radius_meters: form.radius_meters || 100 };
+			const payload: Record<string, unknown> = { name: form.name.trim(), address: form.address.trim(), latitude: form.latitude, longitude: form.longitude, radius_meters: form.radius_meters || 100 };
 			if (editingId) { await api.update(editingId, payload); }
 			else { await api.create(payload); }
 			confirmCancel();
 			load();
-		} catch (error: any) { formError = error.message || 'Gagal menyimpan data'; }
+		} catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menyimpan data'; }
 		finally { isSaving = false; }
 	}
 
@@ -370,14 +377,15 @@
 	async function handleDelete() {
 		if (!deletingId) return; isSaving = true;
 		try { await api.remove(deletingId); showDeleteConfirm = false; deletingId = null; deletingName = ''; load(); }
-		catch (error: any) { formError = error.message || 'Gagal menghapus data'; showDeleteConfirm = false; }
+		catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menghapus data'; showDeleteConfirm = false; }
 		finally { isSaving = false; }
 	}
 
+	let searchTimeout: ReturnType<typeof setTimeout>;
 	function onSearchInput(e: Event) {
 		const target = e.target as HTMLInputElement;
-		clearTimeout((window as any)._searchTimer);
-		(window as any)._searchTimer = setTimeout(() => { searchQuery = target.value; page = 1; load(); }, 400);
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { searchQuery = target.value; page = 1; load(); }, 400);
 	}
 
 	function formatDate(dateStr: string): string {
@@ -385,11 +393,6 @@
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
-	function getInitials(name: string): string {
-		const parts = name.split(' ');
-		if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-		return name.substring(0, 2).toUpperCase();
-	}
 </script>
 
 <div class="w-full">
@@ -507,7 +510,7 @@
 	<div class:hidden={showForm}>
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-3 bg-gray-50 rounded w-24 hidden md:block"></div><div class="h-8 bg-gray-100 rounded w-20"></div></div>{/each}</div></div>
+				<PulseLoader variant="table-row" count={5} />
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
@@ -516,38 +519,43 @@
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada data lokasi absensi</h3>
-					<p class="text-sm text-gray-500">{searchQuery ? `Tidak ditemukan dengan kata kunci "${searchQuery}"` : 'Data lokasi absensi akan muncul setelah ditambahkan.'}</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada data lokasi absensi"
+					description={searchQuery ? `Tidak ditemukan dengan kata kunci "${searchQuery}"` : 'Data lokasi absensi akan muncul setelah ditambahkan.'}
+				/>
 			{:else}
 				<!-- Desktop Table — AG Grid -->
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<div class="md:hidden space-y-3">
+					<PullToRefresh onRefresh={load}>
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-xs font-semibold text-emerald-600 ring-1 ring-emerald-200">{getInitials(item.name)}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{item.name}</div>
-									<div class="text-xs text-gray-400">{item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}</div>
+						<MobileCard
+							title={item.name}
+							subtitle={item.address || ''}
+							avatar={getInitials(item.name)}
+							avatarColor={getAvatarTheme('attendanceLocation').gradientClasses}
+							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800' }]}
+						>
+							{#snippet children()}
+								<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+									<span class="font-mono">{item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}</span>
+									<span>Radius: {item.radius_meters}m</span>
 								</div>
-								<div class="flex items-center gap-1">
-									<button onclick={() => openEditForm(item)} class="p-1.5 rounded-lg text-gray-400 hover:text-[#1A56DB] hover:bg-blue-50 transition cursor-pointer" aria-label="Edit">
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
-									</button>
+							{/snippet}
+							{#snippet footer()}
+								<div class="flex items-center gap-2">
+									<button onclick={() => openEditForm(item)} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Edit</button>
 									{#if hasPermission('attendance_location', 'delete')}
-										<button onclick={() => confirmDelete(item.id, item.name)} class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer" aria-label="Hapus">
-											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
-										</button>
+										<button onclick={() => confirmDelete(item.id, item.name)} class="flex-1 py-2 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">Hapus</button>
 									{/if}
 								</div>
-							</div>
-						</div>
+							{/snippet}
+						</MobileCard>
 					{/each}
+					</PullToRefresh>
 				</div>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
@@ -567,7 +575,7 @@
 	</div>
 </div>
 
-{#if showDeleteConfirm}
+<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
@@ -589,9 +597,9 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>
 
-{#if showCancelConfirm}
+<AnimatedPresence show={showCancelConfirm} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={abortCancel} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') abortCancel(); }}
@@ -612,4 +620,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

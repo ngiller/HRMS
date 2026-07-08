@@ -2,9 +2,14 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { payroll as payrollApi } from '$lib/api.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
 	import { hasPermission } from '$lib/permissions.js';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type PayrollPeriod = {
 		id: string;
 		month: number;
@@ -32,7 +37,7 @@
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true,
@@ -58,14 +63,14 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const res: any = await payrollApi.listPeriods(currentPage, perPage);
+			const res: ApiResponse<PayrollPeriod[]> = await payrollApi.listPeriods(currentPage, perPage) as ApiResponse<PayrollPeriod[]>;
 			periods = res.data || [];
 			total = res.meta?.total || 0;
 			currentPage = res.meta?.page || 1;
 			perPage = res.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (err: any) {
-			errorMessage = err.message || 'Gagal memuat data penggajian';
+		} catch (err: unknown) {
+			errorMessage = (err as { message?: string }).message || 'Gagal memuat data penggajian';
 		} finally {
 			isLoading = false;
 		}
@@ -91,8 +96,8 @@
 			await payrollApi.createPeriod(formData);
 			cancelForm();
 			loadPeriods();
-		} catch (err: any) {
-			formError = err.message || 'Gagal membuat periode';
+		} catch (err: unknown) {
+			formError = (err as { message?: string }).message || 'Gagal membuat periode';
 		} finally {
 			isSaving = false;
 		}
@@ -119,8 +124,8 @@
 			}
 			showConfirm = false;
 			loadPeriods();
-		} catch (err: any) {
-			alert(err.message || 'Gagal memproses');
+		} catch (err: unknown) {
+			errorMessage = (err as { message?: string }).message || 'Gagal memproses';
 			showConfirm = false;
 		} finally {
 			isSaving = false;
@@ -169,12 +174,12 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'period_name', headerName: 'Periode', minWidth: 200, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<PayrollPeriod>) => {
 				if (!params.value) return '';
-				const initials = params.value.substring(0, 2).toUpperCase();
+				const initials = (params.value as string).substring(0, 2).toUpperCase();
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center text-xs font-semibold text-blue-600 dark:text-blue-300 shrink-0 ring-1 ring-blue-200 dark:ring-blue-800">${initials}</div>
-					<div><div class="text-sm font-medium text-gray-900 dark:text-white">${params.value}</div><div class="text-xs text-gray-400 dark:text-gray-500">${monthName(params.data?.month)} ${params.data?.year || ''}</div></div>
+					<div><div class="text-sm font-medium text-gray-900 dark:text-white">${params.value}</div><div class="text-xs text-gray-400 dark:text-gray-500">${monthName((params.data as PayrollPeriod)?.month)} ${(params.data as PayrollPeriod)?.year || ''}</div></div>
 				</div>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
@@ -182,45 +187,48 @@
 		},
 		{
 			field: 'start_date', headerName: 'Tanggal', minWidth: 200,
-			valueFormatter: (params: any) => params.data?.start_date && params.data?.end_date ? `${formatDate(params.data.start_date)} — ${formatDate(params.data.end_date)}` : '-',
+			valueFormatter: (params: AgGridValueParams) => {
+				const d = params.data as PayrollPeriod;
+				return d?.start_date && d?.end_date ? `${formatDate(d.start_date)} — ${formatDate(d.end_date)}` : '-';
+			},
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'total_employee', headerName: 'Karyawan', minWidth: 100, maxWidth: 120,
-			valueFormatter: (params: any) => params.value != null ? String(params.value) : '',
+			valueFormatter: (params: AgGridValueParams) => params.value != null ? String(params.value) : '',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm font-medium text-gray-900 dark:text-white text-center tabular-nums',
 		},
 		{
 			field: 'total_gross', headerName: 'Total Gross', minWidth: 140, type: 'rightAligned',
-			valueFormatter: (params: any) => params.value > 0 ? formatCurrency(params.value) : '-',
+			valueFormatter: (params: AgGridValueParams) => (params.value as number) > 0 ? formatCurrency(params.value as number) : '-',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-900 dark:text-white text-right tabular-nums',
 		},
 		{
 			field: 'total_net', headerName: 'Total Net', minWidth: 140, type: 'rightAligned',
-			valueFormatter: (params: any) => params.value > 0 ? formatCurrency(params.value) : '-',
+			valueFormatter: (params: AgGridValueParams) => (params.value as number) > 0 ? formatCurrency(params.value as number) : '-',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm font-semibold text-gray-900 dark:text-white text-right tabular-nums',
 		},
 		{
 			field: 'status', headerName: 'Status', minWidth: 120, maxWidth: 150,
-			cellRenderer: (params: any) => {
-				const status = params.value || '';
+			cellRenderer: (params: AgGridCellParams<PayrollPeriod>) => {
+				const status = (params.value as string) || '';
 				return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset capitalize ${getStatusColor(status)}">${statusLabel(status)}</span>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 		},
 		{
 			field: 'approved_by_name', headerName: 'Disetujui', minWidth: 120,
-			valueFormatter: (params: any) => params.value || '-',
+			valueFormatter: (params: AgGridValueParams) => (params.value as string) || '-',
 			headerClass: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500 dark:text-gray-400',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 140, maxWidth: 140,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<PayrollPeriod>) => {
 				const p = params.data;
 				if (!p) return '';
 				const container = document.createElement('div');
@@ -279,9 +287,9 @@
 	});
 
 	$effect(() => {
-		if (periods.length > 0 && gridContainer && !showForm) {
+		if (periods.length > 0 && gridContainer && agGridModule && !showForm) {
 			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: periods as any[] });
+			gridApi.updateGridOptions({ rowData: periods });
 		}
 	});
 
@@ -394,21 +402,20 @@
 		</div>
 	{/if}
 
-	<!-- Summary Stats -->
-	<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+	<!-- Summary Stats -->		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+		<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5 shadow-sm hover:shadow-md transition-all duration-200">
 			<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Total Periode</span>
 			<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : total}</p>
 		</div>
-		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+		<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5 shadow-sm hover:shadow-md transition-all duration-200">
 			<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Draft</span>
 			<p class="text-xl font-bold text-gray-400 dark:text-gray-500 mt-1 tabular-nums">{isLoading ? '-' : periods.filter(p => p.status === 'draft').length}</p>
 		</div>
-		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+		<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5 shadow-sm hover:shadow-md transition-all duration-200">
 			<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Telah Dihitung</span>
 			<p class="text-xl font-bold text-blue-600 mt-1 tabular-nums">{isLoading ? '-' : periods.filter(p => p.status === 'calculated').length}</p>
 		</div>
-		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+		<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5 shadow-sm hover:shadow-md transition-all duration-200">
 			<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Dibayarkan</span>
 			<p class="text-xl font-bold text-purple-600 mt-1 tabular-nums">{isLoading ? '-' : periods.filter(p => p.status === 'paid').length}</p>
 		</div>
@@ -417,15 +424,7 @@
 	<!-- Periods Table -->
 	<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 		{#if isLoading}
-			<div class="p-6 animate-pulse space-y-3">
-				{#each [1,2,3] as _}
-					<div class="flex items-center gap-4 py-3">
-						<div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-36"></div>
-						<div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-20"></div>
-						<div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-24 ml-auto"></div>
-					</div>
-				{/each}
-			</div>
+			<div class="p-6"><PulseLoader variant="table-row" count={3} /></div>
 		{:else if errorMessage}
 			<div class="py-16 text-center">
 				<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{errorMessage}</p>
@@ -447,26 +446,37 @@
 				<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 			</div>
 
-			<!-- Mobile Cards -->
-			<div class="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
+			<PullToRefresh onRefresh={loadPeriods}>
+			<div class="md:hidden space-y-3">
 				{#each periods as p}
-					<div class="p-4 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors cursor-pointer" onclick={() => viewDetail(p.id)} onkeydown={(e) => { if (e.key === 'Enter') viewDetail(p.id); }} role="presentation">
-						<div class="flex items-center justify-between mb-2">
-							<div class="text-sm font-semibold text-gray-900 dark:text-white">{p.period_name}</div>
-							<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset capitalize {getStatusColor(p.status)}">
-								{statusLabel(p.status)}
-							</span>
-						</div>
-						<div class="text-xs text-gray-400 dark:text-gray-500 mb-2">{formatDate(p.start_date)} — {formatDate(p.end_date)}</div>
-						<div class="flex items-center gap-4 text-xs">
-							<span class="text-gray-500 dark:text-gray-400">{p.total_employee} karyawan</span>
-							{#if p.total_net > 0}
-								<span class="font-medium text-gray-900 dark:text-white">{formatCurrency(p.total_net)}</span>
-							{/if}
-						</div>
-					</div>
+					<MobileCard
+						title={p.period_name}
+						subtitle={`${monthName(p.month)} ${p.year}`}
+						avatar={getInitials(p.period_name)}
+						avatarColor={getAvatarTheme('payroll').gradientClasses}
+						badges={[{ label: statusLabel(p.status), color: getStatusColor(p.status) }]}
+						onclick={() => viewDetail(p.id)}
+					>
+						{#snippet children()}
+							<div class="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+								<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+								</svg>
+								{formatDate(p.start_date)} — {formatDate(p.end_date)}
+							</div>
+						{/snippet}
+						{#snippet footer()}
+							<div class="flex items-center justify-between">
+								<span class="text-xs text-gray-500 dark:text-gray-400">{p.total_employee} karyawan</span>
+								{#if p.total_net > 0}
+									<span class="text-xs font-semibold text-gray-900 dark:text-white">{formatCurrency(p.total_net)}</span>
+								{/if}
+							</div>
+						{/snippet}
+					</MobileCard>
 				{/each}
 			</div>
+			</PullToRefresh>
 
 			<!-- Pagination -->
 			<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">

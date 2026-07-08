@@ -8,15 +8,15 @@ import (
 
 // Role — full role object from database
 type Role struct {
-	ID           uuid.UUID                      `json:"id"`
-	Name         string                         `json:"name"`
-	Slug         string                         `json:"slug"`
-	Description  string                         `json:"description"`
-	Permissions  map[string]map[string]bool     `json:"permissions"`
-	IsSystemRole bool                           `json:"is_system_role"`
-	IsActive     bool                           `json:"is_active"`
-	CreatedAt    time.Time                      `json:"created_at"`
-	UpdatedAt    time.Time                      `json:"updated_at"`
+	ID           uuid.UUID                  `json:"id"`
+	Name         string                     `json:"name"`
+	Slug         string                     `json:"slug"`
+	Description  string                     `json:"description"`
+	Permissions  map[string]map[string]bool `json:"permissions"`
+	IsSystemRole bool                       `json:"is_system_role"`
+	IsActive     bool                       `json:"is_active"`
+	CreatedAt    time.Time                  `json:"created_at"`
+	UpdatedAt    time.Time                  `json:"updated_at"`
 }
 
 // RoleSummary — for list views
@@ -41,11 +41,11 @@ type CreateRoleRequest struct {
 
 // UpdateRoleRequest — payload for updating a role
 type UpdateRoleRequest struct {
-	Name        *string                    `json:"name"`
-	Slug        *string                    `json:"slug"`
-	Description *string                    `json:"description"`
+	Name        *string                     `json:"name"`
+	Slug        *string                     `json:"slug"`
+	Description *string                     `json:"description"`
 	Permissions *map[string]map[string]bool `json:"permissions"`
-	IsActive    *bool                      `json:"is_active"`
+	IsActive    *bool                       `json:"is_active"`
 }
 
 // RoleListResponse — paginated response

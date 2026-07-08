@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { announcements as api } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import type { ApiResponse } from '$lib/types.js';
 
 	type Announcement = {
 		id: string;
@@ -14,6 +16,7 @@
 		published_at: string;
 		expired_at: string | null;
 		created_at: string;
+		read_count?: number;
 	};
 
 	type FormData = {
@@ -57,7 +60,7 @@
 
 	let showDetail = $state(false);
 	let detailId = $state<string | null>(null);
-	let detailData = $state<any>(null);
+	let detailData = $state<Announcement | null>(null);
 	let isDetailLoading = $state(false);
 
 	// Card Delete Actions
@@ -71,14 +74,14 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, typeFilter);
+			const response = await api.list(page, perPage, typeFilter) as ApiResponse<Announcement[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.max(1, Math.ceil(total / perPage));
-		} catch (error: any) {
-			errorMessage = error.message || 'Gagal memuat data';
+		} catch (error: unknown) {
+			errorMessage = (error as { message?: string }).message || 'Gagal memuat data';
 		} finally {
 			isLoading = false;
 		}
@@ -108,8 +111,8 @@
 		showForm = true;
 		showDetail = false;
 		try {
-			const response: any = await api.get(id);
-			const d = response.data;
+			const response = await api.get(id) as ApiResponse<Announcement>;
+			const d = response.data ?? {} as Announcement;
 			form = {
 				title: d.title || '',
 				content: d.content || '',
@@ -142,7 +145,7 @@
 		isSaving = true;
 		formError = '';
 		try {
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				title: form.title.trim(),
 				content: form.content.trim(),
 				announcement_type: form.announcement_type,
@@ -157,8 +160,8 @@
 			}
 			cancelForm();
 			load();
-		} catch (error: any) {
-			formError = error.message || 'Gagal menyimpan data';
+		} catch (error: unknown) {
+			formError = (error as { message?: string }).message || 'Gagal menyimpan data';
 		} finally {
 			isSaving = false;
 		}
@@ -171,8 +174,8 @@
 		isDetailLoading = true;
 		detailData = null;
 		try {
-			const response: any = await api.get(id);
-			detailData = response.data;
+			const response = await api.get(id) as ApiResponse<Announcement>;
+			detailData = response.data ?? null;
 			await api.markRead(id);
 		} catch (_) {
 			detailData = null;
@@ -195,8 +198,8 @@
 				closeDetail();
 			}
 			load();
-		} catch (error: any) {
-			errorMessage = error.message || 'Gagal menghapus';
+		} catch (error: unknown) {
+			errorMessage = (error as { message?: string }).message || 'Gagal menghapus';
 		} finally {
 			isSaving = false;
 		}
@@ -250,6 +253,7 @@
 			{/if}
 
 			<!-- Announcement Cards -->
+			<PullToRefresh onRefresh={load}>
 			{#if isLoading}
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					{#each [1, 2, 3, 4] as _}
@@ -353,6 +357,7 @@
 					</div>
 				</div>
 			{/if}
+		</PullToRefresh>
 		</div>
 		{/if}
 

@@ -146,7 +146,13 @@
 				</button>
 			</form>
 
-			<p class="text-xs text-gray-400 text-center mt-8">
+			<!-- Demo Credentials -->
+			<div class="mt-6 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+				<p class="text-xs font-semibold text-blue-700 mb-1">🔑 Demo Super Admin</p>
+				<p class="text-xs text-blue-600 font-mono">admin@company.com / admin123</p>
+			</div>
+
+			<p class="text-xs text-gray-400 text-center mt-6">
 				<span class="text-[#1A56DB]">HRMS</span> &mdash; Sistem Informasi Sumber Daya Manusia
 			</p>
 		</div>
@@ -214,6 +220,12 @@
 				{/if}
 			</button>
 			<button type="button" onclick={goToForgotPassword} class="block text-center text-xs text-[#1A56DB] font-medium w-full cursor-pointer">Lupa password?</button>
+
+			<!-- Demo Credentials Mobile -->
+			<div class="mx-6 mb-4 p-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+				<p class="text-[11px] font-semibold text-blue-700 mb-0.5">🔑 Demo Super Admin</p>
+				<p class="text-[11px] text-blue-600 font-mono">admin@company.com / admin123</p>
+			</div>
 		</form>
 	</div>
 </div>

@@ -111,7 +111,21 @@ func (s *LeaveService) Create(ctx context.Context, employeeID string, req *model
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat pengajuan cuti: %w", err)
 	}
+
+	// Initialize workflow tracking (non-blocking, ignore errors)
+	err = s.initWorkflowTracking(ctx, "leave", r.ID.String(), employeeID, float64(r.TotalDays))
+	if err != nil {
+		// Log warning but don't fail - leave was created successfully
+		fmt.Printf("[WARN] Leave workflow init: %v\n", err)
+	}
+
 	return r, nil
+}
+
+func (s *LeaveService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+	wfSvc := NewApprovalWorkflowService()
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	return err
 }
 
 func (s *LeaveService) Approve(ctx context.Context, id, approverID string) (*models.LeaveRequest, error) {
@@ -168,5 +182,10 @@ func (s *LeaveService) Cancel(ctx context.Context, id, employeeID, cancelReason 
 	if err != nil {
 		return fmt.Errorf("gagal membatalkan pengajuan cuti: %w", err)
 	}
+
+	// Cancel workflow tracking (non-blocking, ignore errors)
+	wfSvc := NewApprovalWorkflowService()
+	_ = wfSvc.CancelWorkflowTracking(ctx, "leave", id)
+
 	return nil
 }

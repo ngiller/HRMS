@@ -2,8 +2,15 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { scheduleTemplates as api } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 
 	type DayEntry = {
 		day_of_week: number | null;
@@ -60,7 +67,7 @@
 
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -107,11 +114,11 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'name', headerName: 'Template', minWidth: 240, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Template>) => {
 				if (!params.value) return '';
 				const desc = params.data?.description || '';
 				return '<div class="flex items-center gap-3">'
-					+ '<div class="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-50 to-cyan-100 flex items-center justify-center text-xs font-semibold text-cyan-600 shrink-0 ring-1 ring-cyan-200">' + params.value.substring(0, 2).toUpperCase() + '</div>'
+					+ '<div class="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-50 to-cyan-100 flex items-center justify-center text-xs font-semibold text-cyan-600 shrink-0 ring-1 ring-cyan-200">' + (params.value as string).substring(0, 2).toUpperCase() + '</div>'
 					+ '<div><div class="text-sm font-medium text-gray-900">' + params.value + '</div>' + (desc ? '<div class="text-xs text-gray-400 truncate max-w-48">' + desc + '</div>' : '') + '</div>'
 					+ '</div>';
 			},
@@ -120,24 +127,25 @@
 		},
 		{
 			field: 'schedule_type', headerName: 'Tipe', minWidth: 120,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Template>) => {
 				if (!params.value) return '';
+				const val = params.value as string;
 				const labels: Record<string, string> = { weekly: 'Mingguan', shift: 'Shift', flexible: 'Fleksibel' };
 				const colors: Record<string, string> = { weekly: 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200 ring-blue-200 dark:ring-blue-800', shift: 'bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-200 ring-purple-200 dark:ring-purple-800', flexible: 'bg-amber-50 text-amber-700 dark:bg-amber-900 dark:text-amber-200 ring-amber-200 dark:ring-amber-800' };
-				return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium ring-1 ' + (colors[params.value] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300 ring-gray-200 dark:ring-gray-700') + '">' + (labels[params.value] || params.value) + '</span>';
+				return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium ring-1 ' + (colors[val] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300 ring-gray-200 dark:ring-gray-700') + '">' + (labels[val] || val) + '</span>';
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600',
 		},
 		{
 			field: 'day_count', headerName: 'Hari', minWidth: 80, maxWidth: 100,
-			valueFormatter: (params: any) => params.value != null ? params.value + ' hari' : '',
+			valueFormatter: (params: AgGridValueParams) => params.value != null ? params.value + ' hari' : '',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'is_active', headerName: 'Status', minWidth: 110,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Template>) => {
 				if (params.value == null) return '';
 				return params.value
 					? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800">Aktif</span>'
@@ -147,13 +155,13 @@
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 130,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: 'Aksi', minWidth: 120,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Template>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -197,9 +205,9 @@
 	$effect(() => {
 		if (items.length > 0 && gridContainer && agGridModule && !showForm && !showDetail) {
 			if (!gridApi) {
-				gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi;
+				gridApi = agGridModule!.createGrid(gridContainer, gridOptions) as GridApi;
 			}
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			gridApi.updateGridOptions({ rowData: items });
 			gridApi.sizeColumnsToFit();
 		}
 	});
@@ -217,13 +225,13 @@
 		gridApi = null;
 		isLoading = true; errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, searchQuery);
+			const response: ApiResponse<Template[]> = await api.list(page, perPage, searchQuery) as ApiResponse<Template[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -242,11 +250,11 @@
 		formTitle = 'Edit Template Jadwal';
 		editingId = item.id;
 		try {
-			const resp: any = await api.get(item.id);
+			const resp: ApiResponse<Template> = await api.get(item.id) as ApiResponse<Template>;
 			const d = resp.data;
 			if (d) {
 				const days = d.days && d.days.length > 0
-					? d.days.map((day: any) => ({
+					? d.days.map((day: DayEntry) => ({
 						day_of_week: day.day_of_week,
 						start_time: day.start_time || '08:00',
 						end_time: day.end_time || '17:00',
@@ -275,7 +283,7 @@
 		isSaving = true; formError = '';
 		try {
 			const activeDays = form.days.filter(d => d.start_time && d.end_time);
-			const payload: any = {
+			const payload: Record<string, unknown> = {
 				name: form.name.trim(),
 				description: form.description.trim(),
 				schedule_type: form.schedule_type,
@@ -293,7 +301,7 @@
 			else { await api.create(payload); }
 			cancelForm();
 			load();
-		} catch (error: any) { formError = error.message || 'Gagal menyimpan data'; }
+		} catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menyimpan data'; }
 		finally { isSaving = false; }
 	}
 
@@ -303,27 +311,22 @@
 	async function handleDelete() {
 		if (!deletingId) return; isSaving = true;
 		try { await api.remove(deletingId); showDeleteConfirm = false; deletingId = null; deletingName = ''; load(); }
-		catch (error: any) { formError = error.message || 'Gagal menghapus data'; showDeleteConfirm = false; }
+		catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menghapus data'; showDeleteConfirm = false; }
 		finally { isSaving = false; }
 	}
 
 	function viewDetail(item: Template) { detailItem = item; showDetail = true; }
 
+	let searchTimeout: ReturnType<typeof setTimeout>;
 	function onSearchInput(e: Event) {
 		const target = e.target as HTMLInputElement;
-		clearTimeout((window as any)._searchTimer);
-		(window as any)._searchTimer = setTimeout(() => { searchQuery = target.value; page = 1; load(); }, 400);
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { searchQuery = target.value; page = 1; load(); }, 400);
 	}
 
 	function formatDate(dateStr: string): string {
 		if (!dateStr) return '-';
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-	}
-
-	function getInitials(name: string): string {
-		const parts = name.split(' ');
-		if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-		return name.substring(0, 2).toUpperCase();
 	}
 
 	function onTypeChange() {
@@ -454,22 +457,37 @@
 
 	{#if showDetail && detailItem}
 		<div>
-			<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-				<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-					<h2 class="text-lg font-semibold text-gray-900">{detailItem.name}</h2>
-					<button onclick={() => { showDetail = false; detailItem = null; }} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer">
+			<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+				<div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+					<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{detailItem.name}</h2>
+					<button onclick={() => { showDetail = false; detailItem = null; }} aria-label="Tutup" class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">
 						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
 					</button>
 				</div>
-				<div class="px-6 py-5 space-y-4">
+				<div class="px-5 py-5 space-y-4">
 					<div class="grid grid-cols-2 gap-4 text-sm">
-						<div><span class="text-gray-500">Tipe:</span> <span class="font-medium">{form.schedule_type === 'weekly' ? 'Mingguan' : form.schedule_type === 'shift' ? 'Shift' : 'Fleksibel'}</span></div>
-						<div><span class="text-gray-500">Jumlah Hari:</span> <span class="font-medium">{detailItem.day_count} hari</span></div>
-						<div><span class="text-gray-500">Status:</span> <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {detailItem.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}">{detailItem.is_active ? 'Aktif' : 'Nonaktif'}</span></div>
-						<div><span class="text-gray-500">Dibuat:</span> <span class="font-medium">{formatDate(detailItem.created_at)}</span></div>
+						<div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3">
+							<div class="text-xs text-gray-400 dark:text-gray-500">Tipe</div>
+							<div class="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{form.schedule_type === 'weekly' ? 'Mingguan' : form.schedule_type === 'shift' ? 'Shift' : 'Fleksibel'}</div>
+						</div>
+						<div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3">
+							<div class="text-xs text-gray-400 dark:text-gray-500">Jumlah Hari</div>
+							<div class="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{detailItem.day_count} hari</div>
+						</div>
+						<div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3">
+							<div class="text-xs text-gray-400 dark:text-gray-500">Status</div>
+							<div class="mt-0.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {detailItem.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">{detailItem.is_active ? 'Aktif' : 'Nonaktif'}</span></div>
+						</div>
+						<div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3">
+							<div class="text-xs text-gray-400 dark:text-gray-500">Dibuat</div>
+							<div class="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{formatDate(detailItem.created_at)}</div>
+						</div>
 					</div>
 					{#if detailItem.description}
-						<div class="text-sm"><span class="text-gray-500">Deskripsi:</span> <span>{detailItem.description}</span></div>
+						<div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3 text-sm">
+							<div class="text-xs text-gray-400 dark:text-gray-500 mb-1">Deskripsi</div>
+							<div class="text-gray-700 dark:text-gray-300">{detailItem.description}</div>
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -479,20 +497,7 @@
 	<div class:hidden={showForm || showDetail}>
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse">
-					<div class="space-y-3">
-						{#each [1,2,3,4,5] as _}
-							<div class="flex items-center gap-4 py-2">
-								<div class="flex-1 space-y-1.5">
-									<div class="h-4 bg-gray-100 rounded w-44"></div>
-									<div class="h-3 bg-gray-50 rounded w-28"></div>
-								</div>
-								<div class="h-3 bg-gray-50 rounded w-24 hidden md:block"></div>
-								<div class="h-8 bg-gray-100 rounded w-20"></div>
-							</div>
-						{/each}
-					</div>
-				</div>
+				<PulseLoader variant="table-row" count={5} />
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
@@ -503,41 +508,46 @@
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center">
-						<svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-					</div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada template jadwal</h3>
-					<p class="text-sm text-gray-500">{searchQuery ? 'Tidak ditemukan dengan kata kunci "' + searchQuery + '"' : 'Buat template jadwal untuk dipakai oleh karyawan.'}</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada template jadwal"
+					description={searchQuery ? `Tidak ditemukan dengan kata kunci "${searchQuery}"` : 'Buat template jadwal untuk dipakai oleh karyawan.'}
+				/>
 			{:else}
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<div class="md:hidden space-y-3">
+					<PullToRefresh onRefresh={load}>
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-50 to-cyan-100 flex items-center justify-center text-xs font-semibold text-cyan-600 shrink-0 ring-1 ring-cyan-200">{getInitials(item.name)}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{item.name}</div>
-									<div class="text-xs text-gray-400">{item.day_count} hari · {item.schedule_type}</div>
+						<MobileCard
+							title={item.name}
+							subtitle={`${item.schedule_type === 'weekly' ? 'Mingguan' : item.schedule_type === 'shift' ? 'Shift' : 'Fleksibel'} · ${item.day_count} hari`}
+							avatar={getInitials(item.name)}
+							avatarColor={getAvatarTheme('schedule').gradientClasses}
+							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800' }]}
+							onclick={() => viewDetail(item)}
+						>
+							{#snippet children()}
+								<div class="text-xs text-gray-400 dark:text-gray-500">
+									Dibuat: {formatDate(item.created_at)}
 								</div>
-							</div>
-						</div>
+							{/snippet}
+						</MobileCard>
 					{/each}
+					</PullToRefresh>
 				</div>
-				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
-					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
+				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30">
+					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
-						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
+						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
 						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
 							{@const pageNum = getPageNum(i)}
 							{#if pageNum <= totalPages}
-								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
+								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>
 							{/if}
 						{/each}
-						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
+						<button onclick={() => goToPage(page + 1)} disabled={page >= totalPages} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
 					</div>
 				</div>
 			{/if}
@@ -545,7 +555,7 @@
 	</div>
 </div>
 
-{#if showDeleteConfirm}
+<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<button type="button" onclick={cancelDelete} aria-label="Tutup" class="absolute inset-0 cursor-default border-none bg-transparent"></button>
 		<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') cancelDelete(); }} role="dialog" tabindex="-1" aria-modal="true" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative">
@@ -572,4 +582,4 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>

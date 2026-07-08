@@ -103,19 +103,20 @@ func (h *OvertimeHandler) ApproveOvertimeRequest(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.overtimeService.Approve(c.Context(), id, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "overtime", id, userID, "approve", "")
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "pengajuan lembur tidak ditemukan":
+		case "pengajuan lembur tidak ditemukan", "tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "pengajuan lembur sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Pengajuan lembur berhasil disetujui"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Pengajuan lembur berhasil disetujui"))
 }
 
 // RejectOvertimeRequest rejects an overtime request
@@ -133,19 +134,20 @@ func (h *OvertimeHandler) RejectOvertimeRequest(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.overtimeService.Reject(c.Context(), id, req.RejectionReason, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "overtime", id, userID, "reject", req.RejectionReason)
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "pengajuan lembur tidak ditemukan":
+		case "pengajuan lembur tidak ditemukan", "tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "pengajuan lembur sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Pengajuan lembur berhasil ditolak"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Pengajuan lembur berhasil ditolak"))
 }
 
 // CancelOvertimeRequest cancels an overtime request

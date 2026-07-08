@@ -51,15 +51,16 @@
 	onMount(async () => {
 		hasPayrollRead = hasPermission('payroll', 'read');
 		try {
-			let res: any;
+			interface PayslipResponse { success: boolean; data?: PayslipData; }
+			let res: PayslipResponse;
 			if (hasPayrollRead) {
-				res = await payrollApi.getPayslip(periodId, employeeId);
+				res = await payrollApi.getPayslip(periodId, employeeId) as PayslipResponse;
 			} else {
-				res = await payrollApi.getMyPayslip(periodId);
+				res = await payrollApi.getMyPayslip(periodId) as PayslipResponse;
 			}
 			payslip = res.data || null;
-		} catch (err: any) {
-			errorMessage = err.message || 'Gagal memuat slip gaji';
+		} catch (err: unknown) {
+			errorMessage = (err as { message?: string }).message || 'Gagal memuat slip gaji';
 		} finally {
 			isLoading = false;
 		}
@@ -399,29 +400,39 @@
 				</div>
 
 				<!-- ═══════ TAKE HOME PAY ═══════ -->
-				<div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 flex items-center justify-between shadow-sm">
-					<div class="flex items-center gap-3">
-						<div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shadow-sm">
-							<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+				<div class="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between shadow-xl shadow-indigo-900/20 text-white gap-6 group hover:shadow-2xl hover:shadow-indigo-900/30 transition-all duration-300 border border-white/10">
+					<!-- decorative shapes -->
+					<div class="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full bg-white/10 blur-3xl group-hover:bg-white/20 transition-all duration-500"></div>
+					<div class="absolute bottom-0 left-0 -ml-8 -mb-8 w-32 h-32 rounded-full bg-white/10 blur-2xl"></div>
+					
+					<div class="relative z-10 flex flex-col gap-2 w-full">
+						<div class="flex items-center gap-2 text-blue-100 mb-1">
+							<svg class="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 							</svg>
+							<span class="text-sm font-semibold tracking-widest uppercase opacity-90">Take Home Pay</span>
 						</div>
-						<div>
-							<span class="text-base font-bold text-blue-700">Take Home Pay</span>
-							<div class="flex items-center gap-2 mt-0.5">
-								<p class="text-xs text-blue-500">Gaji Bersih yang Diterima</p>
-								<div class="flex items-center gap-1 text-xs text-blue-400">
-									<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-									</svg>
-									<span>
-										{formatCurrency(payslip.gross_salary)} - {formatCurrency(payslip.total_deductions)} = <strong>{formatCurrency(payslip.net_salary)}</strong>
-									</span>
-								</div>
+						<div class="flex items-baseline">
+							<span class="text-4xl md:text-5xl font-extrabold tabular-nums tracking-tight drop-shadow-md">{formatCurrency(payslip.net_salary)}</span>
+						</div>
+						
+						<!-- Calculation Breakdown -->
+						<div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs sm:text-sm text-blue-50 font-medium bg-white/10 w-fit px-3.5 py-2 rounded-xl backdrop-blur-md border border-white/10 shadow-inner">
+							<div class="flex items-center gap-1.5 opacity-90">
+								<span>Kotor:</span>
+								<span>{formatCurrency(payslip.gross_salary)}</span>
+							</div>
+							<span class="hidden sm:inline text-white/40 px-1">•</span>
+							<div class="flex items-center gap-1.5 opacity-90">
+								<span>Potongan:</span>
+								<span class="text-red-200">-{formatCurrency(payslip.total_deductions)}</span>
 							</div>
 						</div>
 					</div>
-					<span class="text-3xl font-bold text-blue-700 tabular-nums">{formatCurrency(payslip.net_salary)}</span>
+					
+					<div class="relative z-10 hidden md:flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
+						<span class="text-3xl drop-shadow-sm">💰</span>
+					</div>
 				</div>
 
 

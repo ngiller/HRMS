@@ -1,9 +1,17 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { overtime as api, employees } from '$lib/api.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import SwipeActions from '$lib/components/SwipeActions.svelte';
+	import BottomSheet from '$lib/components/BottomSheet.svelte';
+import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme } from '$lib/avatar-theme.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type OvertimeRequest = {
 		id: string;
 		employee_id: string;
@@ -14,6 +22,11 @@
 		reason: string;
 		status: string;
 		created_at: string;
+		start_time: string;
+		end_time: string;
+		is_mandatory: boolean;
+		overtime_pay: number | null;
+		hourly_rate: number;
 	};
 
 	type FormData = {
@@ -46,7 +59,7 @@
 
 	let showDetail = $state(false);
 	let detailId = $state<string | null>(null);
-	let detailData = $state<any>(null);
+	let detailData = $state<OvertimeRequest | null>(null);
 	let isDetailLoading = $state(false);
 
 	let showRejectModal = $state(false);
@@ -57,6 +70,7 @@
 	let cancelRequestId = $state<string | null>(null);
 
 	let showCancelFormConfirm = $state(false);
+	let showMobileForm = $state(false);
 
 	const statusColors: Record<string, string> = {
     pending: 'bg-yellow-50 text-yellow-700 ring-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:ring-yellow-800',
@@ -88,7 +102,7 @@ function getStatusBadge(status: string) {
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -119,9 +133,9 @@ function getStatusBadge(status: string) {
 	const columnDefs: ColDef[] = [
 		{
 			field: 'employee_name', headerName: 'Karyawan', minWidth: 220, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<OvertimeRequest>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center text-xs font-semibold text-amber-600 shrink-0 ring-1 ring-amber-200">${initials}</div>
 					<div class="text-sm font-medium text-gray-900">${params.value}</div>
@@ -132,15 +146,15 @@ function getStatusBadge(status: string) {
 		},
 		{
 			field: 'date', headerName: 'Tanggal', minWidth: 120,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600',
 		},
 		{
 			field: 'overtime_type', headerName: 'Tipe', minWidth: 120,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<OvertimeRequest>) => {
 				if (!params.value) return '';
-				const label = overtimeTypeLabels[params.value] || params.value;
+				const label = overtimeTypeLabels[params.value as string] || params.value as string;
 				return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">${label}</span>`;
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
@@ -148,27 +162,27 @@ function getStatusBadge(status: string) {
 		},
 		{
 			field: 'total_hours', headerName: 'Jam', minWidth: 80, maxWidth: 100,
-			valueFormatter: (params: any) => params.value != null ? `${params.value} jam` : '',
+			valueFormatter: (params: AgGridValueParams) => params.value != null ? `${params.value} jam` : '',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm font-medium text-gray-700 tabular-nums',
 		},
 		{
 			field: 'status', headerName: 'Status', minWidth: 120, maxWidth: 140,
-			cellRenderer: (params: any) => {
-				const status = params.value || '';
+			cellRenderer: (params: AgGridCellParams<OvertimeRequest>) => {
+				const status = (params.value as string) || '';
 				return getStatusBadge(status);
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 120,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 140, maxWidth: 140,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<OvertimeRequest>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -220,16 +234,16 @@ function getStatusBadge(status: string) {
 	};
 
 	$effect(() => {
-		if ((showForm || showDetail) && gridApi) {
-			gridApi.destroy();
+		if (showForm || showDetail) {
+			gridApi?.destroy();
 			gridApi = null;
 		}
 	});
 
 	$effect(() => {
 		if (items.length > 0 && gridContainer && !showForm && !showDetail) {
-			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
+			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}
 	});
 
@@ -249,13 +263,13 @@ function getStatusBadge(status: string) {
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, statusFilter);
+			const response = await api.list(page, perPage, statusFilter) as ApiResponse<OvertimeRequest[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -319,7 +333,7 @@ function getStatusBadge(status: string) {
 			});
 			confirmCancelForm();
 			load();
-		} catch (error: any) { formError = error.message || 'Gagal menyimpan data'; }
+		} catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menyimpan data'; }
 		finally { isSaving = false; }
 	}
 
@@ -329,8 +343,8 @@ function getStatusBadge(status: string) {
 		isDetailLoading = true;
 		detailData = null;
 		try {
-			const response: any = await api.get(id);
-			detailData = response.data;
+			const response = await api.get(id) as ApiResponse<OvertimeRequest>;
+			detailData = response.data ?? null;
 		} catch (_) { detailData = null; }
 		finally { isDetailLoading = false; }
 	}
@@ -340,7 +354,7 @@ function getStatusBadge(status: string) {
 	async function handleApprove(id: string) {
 		isSaving = true;
 		try { await api.approve(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menyetujui'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menyetujui'; }
 		finally { isSaving = false; }
 	}
 
@@ -351,7 +365,7 @@ function getStatusBadge(status: string) {
 		if (!rejectId) return;
 		isSaving = true;
 		try { await api.reject(rejectId, { rejection_reason: rejectReason }); showRejectModal = false; rejectId = null; rejectReason = ''; load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menolak'; showRejectModal = false; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menolak'; showRejectModal = false; }
 		finally { isSaving = false; }
 	}
 
@@ -373,10 +387,19 @@ function getStatusBadge(status: string) {
 			showCancelRequestConfirm = false;
 			cancelRequestId = null;
 			load();
-		} catch (error: any) {
-			errorMessage = error.message || 'Gagal membatalkan';
+		} catch (error: unknown) {
+			errorMessage = (error as { message?: string }).message || 'Gagal membatalkan';
 		} finally {
 			isSaving = false;
+		}
+	}
+
+	function parseApprovalTrail(trail: string): any[] {
+		try {
+			const parsed = JSON.parse(trail);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
 		}
 	}
 
@@ -408,9 +431,13 @@ function getStatusBadge(status: string) {
 			<p class="text-sm text-gray-500 mt-0.5">Ajukan dan kelola pengajuan lembur karyawan</p>
 		</div>
 		{#if !showForm && hasPermission('overtime', 'create')}
-			<button onclick={openCreateForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
+			<button onclick={openCreateForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer hidden sm:inline-flex">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 				Ajukan Lembur
+			</button>
+			<button onclick={() => { openCreateForm(); showMobileForm = true; }} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer sm:hidden">
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+				Ajukan
 			</button>
 		{/if}
 	</div>
@@ -502,6 +529,54 @@ function getStatusBadge(status: string) {
 				{#if isDetailLoading}
 					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 rounded w-48"></div><div class="h-4 bg-gray-50 rounded w-64"></div><div class="h-4 bg-gray-50 rounded w-40"></div></div>
 				{:else if detailData}
+					{#if (detailData as any).approval_trail && (detailData as any).approval_trail !== '[]' && (detailData as any).approval_trail !== ''}
+						{@const trail = parseApprovalTrail((detailData as any).approval_trail)}
+						<div class="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl p-4 border border-indigo-100 dark:border-indigo-900/30 mb-6">
+							<div class="flex items-center gap-2 mb-3">
+								<svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+								<h3 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Progress Approval</h3>
+							</div>
+							<div class="space-y-2">
+								{#each trail as step}
+									{@const isPending = step.status === 'pending'}
+									{@const isApproved = step.status === 'approved'}
+									{@const isRejected = step.status === 'rejected'}
+									<div class="flex items-center gap-3">
+										<div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {isApproved ? 'bg-emerald-100 text-emerald-600' : isRejected ? 'bg-red-100 text-red-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}">
+											{#if isApproved}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+											{:else if isRejected}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+											{:else}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+											{/if}
+										</div>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm font-medium {isApproved ? 'text-emerald-700 dark:text-emerald-300' : isRejected ? 'text-red-700 dark:text-red-300' : 'text-gray-700 dark:text-gray-300'}">
+												{step.approver_name || 'Approver'} 
+												<span class="text-xs font-normal text-gray-400">Level {step.level || step.step}</span>
+											</p>
+											{#if step.note}
+												<p class="text-xs text-gray-400 truncate">{step.note}{#if step.date} &middot; {step.date || '-'}{/if}</p>
+											{/if}
+										</div>
+										<div>
+											{#if isApproved}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Disetujui</span>
+											{:else if isRejected}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Ditolak</span>
+											{:else}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200 animate-pulse">Menunggu</span>
+											{/if}
+										</div>
+									</div>
+									{#if step !== trail[trail.length - 1]}
+										<div class="ml-3.5 border-l-2 border-gray-200 dark:border-gray-700 h-3"></div>
+									{/if}
+								{/each}
+							</div>
+						</div>
+					{/if}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Informasi Pengajuan</h3>
@@ -550,40 +625,90 @@ function getStatusBadge(status: string) {
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada pengajuan lembur</h3>
-					<p class="text-sm text-gray-500">Belum ada pengajuan lembur yang diajukan.</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada pengajuan lembur"
+					description="Belum ada pengajuan lembur yang diajukan."
+				/>
 			{:else}
 				<!-- Desktop Table — AG Grid -->
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<PullToRefresh onRefresh={load}>
+				<div class="md:hidden space-y-3">
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center text-xs font-semibold text-amber-600 ring-1 ring-amber-200">{getInitials(item.employee_name)}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{item.employee_name}</div>
-									<div class="text-xs text-gray-400">{formatDate(item.date)} &middot; {item.total_hours} jam</div>
+						<SwipeActions
+							onApprove={item.status === 'pending' && hasPermission('overtime', 'approve') ? () => handleApprove(item.id) : undefined}
+							onReject={item.status === 'pending' && hasPermission('overtime', 'approve') ? () => openReject(item.id) : undefined}
+						>
+						<MobileCard
+							avatar={item.employee_name}
+							avatarColor={getAvatarTheme('overtime').gradientClasses}
+							title={item.employee_name}
+							subtitle={overtimeTypeLabels[item.overtime_type] || item.overtime_type}
+							badges={[{ label: item.status === 'pending' ? 'Menunggu' : item.status === 'approved' ? 'Disetujui' : item.status === 'rejected' ? 'Ditolak' : item.status === 'cancelled' ? 'Dibatalkan' : item.status, color: statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }]}
+							onclick={() => openDetail(item.id)}
+							clickable={true}
+						>
+							{#snippet children()}
+								<div class="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+									<div class="flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded-md">
+										<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+										</svg>
+										<span class="tabular-nums">{formatDate(item.date)}</span>
+									</div>
+									<div class="flex items-center gap-1 px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded-md">
+										<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+										</svg>
+										<span>{item.total_hours} jam</span>
+									</div>
 								</div>
-								{@html getStatusBadge(item.status)}
-							</div>
-							<div class="flex items-center gap-1 mt-2">
-								<button onclick={() => openDetail(item.id)} class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition cursor-pointer">Detail</button>
-								{#if item.status === 'pending' && hasPermission('overtime', 'approve')}
-									<button onclick={() => handleApprove(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition cursor-pointer">Setujui</button>
-									<button onclick={() => openReject(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition cursor-pointer">Tolak</button>
+							{/snippet}
+							{#snippet footer()}
+								{#if item.status === 'pending'}
+									<div class="flex items-center gap-2 pt-2">
+										<button
+											onclick={(e) => { e.stopPropagation(); openDetail(item.id); }}
+											class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95"
+										>
+											Detail
+										</button>
+										{#if hasPermission('overtime', 'approve')}
+											<button
+												onclick={(e) => { e.stopPropagation(); handleApprove(item.id); }}
+												class="flex-1 py-2 text-xs font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+												Setujui
+											</button>
+											<button
+												onclick={(e) => { e.stopPropagation(); openReject(item.id); }}
+												class="flex-1 py-2 text-xs font-semibold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+												Tolak
+											</button>
+										{/if}
+										{#if hasPermission('overtime', 'create')}
+											<button
+												onclick={(e) => { e.stopPropagation(); handleCancel(item.id); }}
+												class="flex-1 py-2 text-xs font-medium text-orange-600 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/30 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+												Batalkan
+											</button>
+										{/if}
+									</div>
 								{/if}
-								{#if (item.status === 'pending') && hasPermission('overtime', 'create')}
-									<button onclick={() => handleCancel(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 transition cursor-pointer">Batalkan</button>
-								{/if}
-							</div>
-						</div>
+							{/snippet}
+						</MobileCard>
+						</SwipeActions>
 					{/each}
 				</div>
+				</PullToRefresh>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
 					<div class="flex items-center gap-1.5">
@@ -600,9 +725,61 @@ function getStatusBadge(status: string) {
 			{/if}
 		</div>
 	{/if}
-</div>
+</div>	<!-- Mobile Bottom Sheet Form -->
+	<BottomSheet bind:open={showMobileForm} title="Ajukan Lembur">
+		{#snippet footer()}
+			<div class="flex items-center gap-3">
+				<button onclick={() => { showMobileForm = false; showForm = false; formError = ''; }} class="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">Batal</button>
+				<button onclick={handleSave} disabled={isSaving} class="flex-1 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 cursor-pointer">
+					{#if isSaving}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{/if}
+					Ajukan
+				</button>
+			</div>
+		{/snippet}
+		<div class="space-y-4">
+			{#if formError}<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{formError}</div>{/if}
+			<div>
+				<label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Tanggal <span class="text-red-500">*</span></label>
+				<input type="date" bind:value={form.date} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 dark:bg-gray-800 dark:text-white" />
+			</div>
+			<div>
+				<label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Tipe Lembur <span class="text-red-500">*</span></label>
+				<select bind:value={form.overtime_type} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 dark:bg-gray-800 dark:text-white bg-white dark:bg-gray-800">
+					<option value="weekday">Hari Kerja</option>
+					<option value="weekend">Akhir Pekan</option>
+					<option value="holiday">Hari Libur</option>
+				</select>
+			</div>
+			<div>
+				<label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Waktu <span class="text-red-500">*</span></label>
+				<div class="grid grid-cols-2 gap-2">
+					<input type="datetime-local" bind:value={form.start_time} oninput={calcHours} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 dark:bg-gray-800 dark:text-white" />
+					<input type="datetime-local" bind:value={form.end_time} oninput={calcHours} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 dark:bg-gray-800 dark:text-white" />
+				</div>
+			</div>
+			<div class="grid grid-cols-2 gap-2">
+				<div>
+					<label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Total Jam</label>
+					<div class="flex items-center gap-2">
+						<input type="number" step="0.5" min="0.5" bind:value={form.total_hours} class="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 dark:bg-gray-800 dark:text-white" />
+						<span class="text-xs text-gray-500">jam</span>
+					</div>
+				</div>
+				<div class="flex items-end pb-2">
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" bind:checked={form.is_mandatory} class="rounded border-gray-300 text-[#1A56DB] focus:ring-[#1A56DB]/30" />
+						<span class="text-xs text-gray-600 dark:text-gray-400">Wajib</span>
+					</label>
+				</div>
+			</div>
+			<div>
+				<label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Alasan <span class="text-red-500">*</span></label>
+				<textarea bind:value={form.reason} rows="3" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 dark:bg-gray-800 dark:text-white resize-none" placeholder="Jelaskan alasan lembur..."></textarea>
+			</div>
+		</div>
+	</BottomSheet>
 
-{#if showRejectModal}
+	<AnimatedPresence show={showRejectModal} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
@@ -625,7 +802,7 @@ function getStatusBadge(status: string) {
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>
 
 {#if showCancelRequestConfirm}
 	<!-- svelte-ignore a11y_interactive_supports_focus -->

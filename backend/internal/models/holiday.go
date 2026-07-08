@@ -8,17 +8,17 @@ import (
 
 // CompanyHoliday — full holiday object
 type CompanyHoliday struct {
-	ID              uuid.UUID  `json:"id"`
-	Date            string     `json:"date"`
-	Name            string     `json:"name"`
-	HolidayType     string     `json:"holiday_type"`
-	IsRecurringYearly bool    `json:"is_recurring_yearly"`
-	Description     string     `json:"description"`
-	IsActive        bool       `json:"is_active"`
-	CreatedBy       *uuid.UUID `json:"created_by,omitempty"`
-	CreatedByName   string     `json:"created_by_name,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	Date              string     `json:"date"`
+	Name              string     `json:"name"`
+	HolidayType       string     `json:"holiday_type"`
+	IsRecurringYearly bool       `json:"is_recurring_yearly"`
+	Description       string     `json:"description"`
+	IsActive          bool       `json:"is_active"`
+	CreatedBy         *uuid.UUID `json:"created_by,omitempty"`
+	CreatedByName     string     `json:"created_by_name,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type CreateHolidayReq struct {

@@ -2,11 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"hrms-backend/internal/models"
 	"hrms-backend/internal/repository"
 
@@ -17,6 +22,36 @@ type AttendanceRecordService struct{}
 
 func NewAttendanceRecordService() *AttendanceRecordService {
 	return &AttendanceRecordService{}
+}
+
+func saveBase64Photo(b64data *string, prefix string) (*string, error) {
+	if b64data == nil || *b64data == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(*b64data, ",")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("format foto tidak valid")
+	}
+
+	data, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("gagal decode foto: %w", err)
+	}
+
+	filename := fmt.Sprintf("%s_%d_%s.jpg", prefix, time.Now().Unix(), uuid.New().String()[:8])
+	dir := filepath.Join("uploads", "attendance")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("gagal membuat direktori upload: %w", err)
+	}
+
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return nil, fmt.Errorf("gagal menyimpan foto: %w", err)
+	}
+
+	url := "/uploads/attendance/" + filename
+	return &url, nil
 }
 
 func (s *AttendanceRecordService) GetTodayStatus(ctx context.Context, employeeID string) (*models.TodayAttendanceStatus, error) {
@@ -51,6 +86,9 @@ func (s *AttendanceRecordService) GetTodayStatus(ctx context.Context, employeeID
 			LateMinutes:         record.LateMinutes,
 			TotalWorkHours:      record.TotalWorkHours,
 			CheckInLocationName: record.CheckInLocationName,
+			CheckInPhotoURL:     record.CheckInPhotoURL,
+			CheckOutLocationName: record.CheckOutLocationName,
+			CheckOutPhotoURL:    record.CheckOutPhotoURL,
 		}
 	}
 
@@ -102,7 +140,12 @@ func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string
 		}
 	}
 
-	record, err := repository.CreateCheckIn(ctx, employeeID, *scheduleID, req.Lat, req.Lng, locID, locNamePtr, isLate, lateMinutes)
+	photoURL, err := saveBase64Photo(req.Photo, "in")
+	if err != nil {
+		return nil, err
+	}
+
+	record, err := repository.CreateCheckIn(ctx, employeeID, *scheduleID, req.Lat, req.Lng, locID, locNamePtr, isLate, lateMinutes, photoURL)
 	if err != nil {
 		return nil, fmt.Errorf("gagal melakukan check-in: %w", err)
 	}
@@ -142,7 +185,12 @@ func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID strin
 		totalWorkHours = &duration
 	}
 
-	updated, err := repository.UpdateCheckOut(ctx, record.ID.String(), req.Lat, req.Lng, locID, locNamePtr, totalWorkHours)
+	photoURL, err := saveBase64Photo(req.Photo, "out")
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := repository.UpdateCheckOut(ctx, record.ID.String(), req.Lat, req.Lng, locID, locNamePtr, totalWorkHours, photoURL)
 	if err != nil {
 		return nil, fmt.Errorf("gagal melakukan check-out: %w", err)
 	}

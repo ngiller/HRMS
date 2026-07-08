@@ -76,18 +76,18 @@ type EmployeeWorkScheduleOverride struct {
 }
 
 type DashboardResponse struct {
-	TotalEmployees     int                   `json:"total_employees"`
-	ActiveEmployees    int                   `json:"active_employees"`
-	PresentToday       int                   `json:"present_today"`
-	AttendanceRate     float64               `json:"attendance_rate"`
-	PendingApprovals   int                   `json:"pending_approvals"`
-	PayrollThisMonth   string                `json:"payroll_this_month"`
-	AttendanceByDay    []AttendanceDay       `json:"attendance_by_day"`
-	MonthlyTrend       []MonthlyTrend        `json:"monthly_trend"`
-	Composition        []EmployeeComposition `json:"composition"`
-	GenderBreakdown    []GenderBreakdown     `json:"gender_breakdown"`
-	DepartmentStats    []DepartmentStat      `json:"department_stats"`
-	RecentEmployees    []EmployeeSummary     `json:"recent_employees"`
+	TotalEmployees   int                   `json:"total_employees"`
+	ActiveEmployees  int                   `json:"active_employees"`
+	PresentToday     int                   `json:"present_today"`
+	AttendanceRate   float64               `json:"attendance_rate"`
+	PendingApprovals int                   `json:"pending_approvals"`
+	PayrollThisMonth string                `json:"payroll_this_month"`
+	AttendanceByDay  []AttendanceDay       `json:"attendance_by_day"`
+	MonthlyTrend     []MonthlyTrend        `json:"monthly_trend"`
+	Composition      []EmployeeComposition `json:"composition"`
+	GenderBreakdown  []GenderBreakdown     `json:"gender_breakdown"`
+	DepartmentStats  []DepartmentStat      `json:"department_stats"`
+	RecentEmployees  []EmployeeSummary     `json:"recent_employees"`
 }
 
 type MonthlyTrend struct {
@@ -106,25 +106,25 @@ type DepartmentStat struct {
 }
 
 type ManagerDashboardResponse struct {
-	TeamSize        int                   `json:"team_size"`
-	ActiveTeam      int                   `json:"active_team"`
-	PendingApprovals int                  `json:"pending_approvals"`
+	TeamSize         int                   `json:"team_size"`
+	ActiveTeam       int                   `json:"active_team"`
+	PendingApprovals int                   `json:"pending_approvals"`
 	Composition      []EmployeeComposition `json:"composition"`
 	RecentMembers    []EmployeeSummary     `json:"recent_members"`
 	AttendanceToday  int                   `json:"attendance_today"`
 }
 
 type HRDashboardResponse struct {
-	TotalEmployees    int                   `json:"total_employees"`
-	ActiveEmployees   int                   `json:"active_employees"`
-	DepartmentCount   int                   `json:"department_count"`
-	HiringThisMonth   int                   `json:"hiring_this_month"`
-	Composition       []EmployeeComposition `json:"composition"`
-	GenderBreakdown   []GenderBreakdown     `json:"gender_breakdown"`
-	DepartmentStats   []DepartmentStat      `json:"department_stats"`
-	BirthdaysThisMonth []EmployeeSummary    `json:"birthdays_this_month"`
-	ContractExpiring  []EmployeeSummary     `json:"contract_expiring"`
-	RecentEmployees   []EmployeeSummary     `json:"recent_employees"`
+	TotalEmployees     int                   `json:"total_employees"`
+	ActiveEmployees    int                   `json:"active_employees"`
+	DepartmentCount    int                   `json:"department_count"`
+	HiringThisMonth    int                   `json:"hiring_this_month"`
+	Composition        []EmployeeComposition `json:"composition"`
+	GenderBreakdown    []GenderBreakdown     `json:"gender_breakdown"`
+	DepartmentStats    []DepartmentStat      `json:"department_stats"`
+	BirthdaysThisMonth []EmployeeSummary     `json:"birthdays_this_month"`
+	ContractExpiring   []EmployeeSummary     `json:"contract_expiring"`
+	RecentEmployees    []EmployeeSummary     `json:"recent_employees"`
 }
 
 type AttendanceDay struct {
@@ -144,23 +144,23 @@ type CreateEmployeeRequest struct {
 	Password         string   `json:"password"`
 	BaseSalary       *float64 `json:"base_salary"`
 	DailyWage        *float64 `json:"daily_wage"`
-	Gender           string `json:"gender"`
-	PlaceOfBirth     string `json:"place_of_birth"`
-	DateOfBirth      string `json:"date_of_birth"`
-	Religion         string `json:"religion"`
-	MaritalStatus    string `json:"marital_status"`
-	JoinDate         string `json:"join_date"`
-	EmploymentStatus string `json:"employment_status"`
-	Phone            string `json:"phone"`
-	Address          string `json:"address"`
-	NIK              string `json:"nik"`
-	NPWP             string `json:"npwp"`
-	BankName         string `json:"bank_name"`
-	BankAccount      string `json:"bank_account"`
-	AddressKTP       string `json:"address_ktp"`
-	RoleID           string `json:"role_id"`
-	PositionID       string `json:"position_id"`
-	DepartmentID     string `json:"department_id"`
+	Gender           string   `json:"gender"`
+	PlaceOfBirth     string   `json:"place_of_birth"`
+	DateOfBirth      string   `json:"date_of_birth"`
+	Religion         string   `json:"religion"`
+	MaritalStatus    string   `json:"marital_status"`
+	JoinDate         string   `json:"join_date"`
+	EmploymentStatus string   `json:"employment_status"`
+	Phone            string   `json:"phone"`
+	Address          string   `json:"address"`
+	NIK              string   `json:"nik"`
+	NPWP             string   `json:"npwp"`
+	BankName         string   `json:"bank_name"`
+	BankAccount      string   `json:"bank_account"`
+	AddressKTP       string   `json:"address_ktp"`
+	RoleID           string   `json:"role_id"`
+	PositionID       string   `json:"position_id"`
+	DepartmentID     string   `json:"department_id"`
 }
 
 type EmployeeHistory struct {

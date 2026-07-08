@@ -45,6 +45,7 @@ func main() {
 	overtimeService := service.NewOvertimeService()
 	reimbursementService := service.NewReimbursementService()
 	payrollService := service.NewPayrollService()
+	companyService := service.NewCompanyService()
 	attendanceRecordService := service.NewAttendanceRecordService()
 	scheduleService := service.NewScheduleService()
 	leaveService := service.NewLeaveService()
@@ -56,10 +57,19 @@ func main() {
 	reprimandService := service.NewReprimandService()
 	dailyJournalService := service.NewDailyJournalService()
 	reportService := service.NewReportService()
-	notificationService := service.NewNotificationService()
+	emailService := service.NewEmailService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPFrom, cfg.SMTPFromName)
+
+	// Initialize global email service for use by ApprovalWorkflowService and others
+	service.InitGlobalEmailService(emailService)
+
+	notificationService := service.NewNotificationService(emailService)
 	activityLogService := service.NewActivityLogService()
+	approvalWorkflowService := service.NewApprovalWorkflowService()
+	manualAttendanceService := service.NewManualAttendanceService()
+	resignService := service.NewResignService()
 
 	// Initialize handlers
+	companyHandler := handlers.NewCompanyHandler(companyService)
 	authHandler := handlers.NewAuthHandler(authService)
 	employeeHandler := handlers.NewEmployeeHandler(employeeService)
 	departmentHandler := handlers.NewDepartmentHandler(departmentService)
@@ -73,7 +83,7 @@ func main() {
 	shiftChangeHandler := handlers.NewShiftChangeHandler(shiftChangeService)
 	overtimeHandler := handlers.NewOvertimeHandler(overtimeService)
 	reimbursementHandler := handlers.NewReimbursementHandler(reimbursementService)
-	payrollHandler := handlers.NewPayrollHandler(payrollService)
+	payrollHandler := handlers.NewPayrollHandler(payrollService, companyService)
 	attendanceRecordHandler := handlers.NewAttendanceRecordHandler(attendanceRecordService)
 	scheduleHandler := handlers.NewScheduleHandler(scheduleService)
 	leaveHandler := handlers.NewLeaveHandler(leaveService)
@@ -87,6 +97,9 @@ func main() {
 	reportHandler := handlers.NewReportHandler(reportService)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 	activityLogHandler := handlers.NewActivityLogHandler(activityLogService)
+	approvalWorkflowHandler := handlers.NewApprovalWorkflowHandler(approvalWorkflowService)
+	manualAttendanceHandler := handlers.NewManualAttendanceHandler(manualAttendanceService)
+	resignHandler := handlers.NewResignHandler(resignService)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -103,6 +116,11 @@ func main() {
 	app.Use(helmet.New())
 	app.Use(middleware.CORSConfig(cfg))
 
+	// Security middleware
+	secConfig := middleware.DefaultSecurityConfig()
+	app.Use(middleware.SecurityHeadersMiddleware(secConfig))
+	app.Use(middleware.FileUploadValidator(secConfig))
+
 	// Serve uploaded files
 	app.Static("/uploads", cfg.UploadDir)
 
@@ -114,6 +132,10 @@ func main() {
 		documentHandler, announcementHandler, holidayHandler,
 		loanHandler, kpiHandler, reprimandHandler, dailyJournalHandler, reportHandler,
 		notificationHandler, activityLogHandler,
+		companyHandler,
+		manualAttendanceHandler,
+		resignHandler,
+		approvalWorkflowHandler,
 		authService)
 
 	// Start server

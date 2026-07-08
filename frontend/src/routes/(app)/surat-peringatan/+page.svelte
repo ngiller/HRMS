@@ -1,8 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { reprimands, employees, ApiError } from '$lib/api.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+import MobileCard from '$lib/components/MobileCard.svelte';
+import EmptyState from '$lib/components/EmptyState.svelte';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 
-	let data = $state<any[]>([]);
+	interface ReprimandItem {
+		id: string; employee_name: string; reprimand_type: string; title: string;
+		status: string; created_at: string; issued_date: string; expired_at: string | null;
+		description: string; issued_by_name: string; acknowledgment_date: string | null;
+	}
+
+	interface EmployeeOption { id: string; full_name: string; }
+
+	let data = $state<ReprimandItem[]>([]);
 	let total = $state(0);
 	let currentPage = $state(1);
 	let perPage = $state(25);
@@ -13,10 +26,10 @@
 	let showForm = $state(false);
 	let createForm = $state({ employee_id: '', reprimand_type: 'sp1', title: '', description: '', violation_date: '', violation_details: '', effective_period_months: 6 });
 	let createLoading = $state(false);
-	let employeeOptions = $state<any[]>([]);
+	let employeeOptions = $state<EmployeeOption[]>([]);
 
 	let showDetail = $state(false);
-	let detailItem = $state<any>(null);
+	let detailItem = $state<ReprimandItem | null>(null);
 	let detailLoading = $state(false);
 
 	let actionLoading = $state(false);
@@ -30,7 +43,7 @@
 	async function loadData() {
 		isLoading = true; errorMessage = '';
 		try {
-			const res: any = await reprimands.list(currentPage, perPage, statusFilter);
+			const res = await reprimands.list(currentPage, perPage, statusFilter) as { success: boolean; data: ReprimandItem[]; meta?: { total: number } };
 			if (res?.success) { data = res.data || []; total = res.meta?.total || 0; }
 		} catch (err) { errorMessage = err instanceof ApiError ? err.message : 'Gagal memuat data'; }
 		finally { isLoading = false; }
@@ -186,32 +199,33 @@
 			</div>
 			<div class="px-6 py-5">
 				{#if detailLoading}
-					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-48"></div><div class="h-4 bg-gray-50 dark:bg-gray-800 rounded w-64"></div></div>
+					<PulseLoader variant="text" count={1} />
 				{:else if detailItem}
+					{@const item = detailItem}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Informasi SP</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{detailItem.employee_name}</p></div>
-								<div><span class="text-xs text-gray-400">Tipe</span><p>{@html getTypeBadge(detailItem.reprimand_type)}</p></div>
-								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(detailItem.status)}</p></div>
-								<div><span class="text-xs text-gray-400">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{detailItem.title}</p></div>
-								<div><span class="text-xs text-gray-400">Tanggal Diterbitkan</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(detailItem.issued_date)}</p></div>
-								{#if detailItem.expired_at}<div><span class="text-xs text-gray-400">Kadaluarsa</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(detailItem.expired_at)}</p></div>{/if}
+								<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.employee_name}</p></div>
+								<div><span class="text-xs text-gray-400">Tipe</span><p>{@html getTypeBadge(item.reprimand_type)}</p></div>
+								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(item.status)}</p></div>
+								<div><span class="text-xs text-gray-400">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.title}</p></div>
+								<div><span class="text-xs text-gray-400">Tanggal Diterbitkan</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.issued_date)}</p></div>
+								{#if item.expired_at}<div><span class="text-xs text-gray-400">Kadaluarsa</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.expired_at)}</p></div>{/if}
 							</div>
 						</div>
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Detail</h3>
 							<div class="space-y-3">
-								{#if detailItem.description}<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{detailItem.description}</p></div>{/if}
-								{#if detailItem.issued_by_name}<div><span class="text-xs text-gray-400">Diterbitkan Oleh</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{detailItem.issued_by_name}</p></div>{/if}
-								{#if detailItem.acknowledgment_date}<div><span class="text-xs text-gray-400">Diakui Pada</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(detailItem.acknowledgment_date)}</p></div>{/if}
+								{#if item.description}<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700 dark:text-gray-300">{item.description}</p></div>{/if}
+								{#if item.issued_by_name}<div><span class="text-xs text-gray-400">Diterbitkan Oleh</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.issued_by_name}</p></div>{/if}
+								{#if item.acknowledgment_date}<div><span class="text-xs text-gray-400">Diakui Pada</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.acknowledgment_date)}</p></div>{/if}
 							</div>
 						</div>
 					</div>
 					<div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
-						{#if detailItem.status === 'issued'}
-							<button onclick={() => handleAcknowledge(detailItem.id)} disabled={actionLoading} class="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 cursor-pointer">
+						{#if item.status === 'issued'}
+							<button onclick={() => handleAcknowledge(item.id)} disabled={actionLoading} class="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 cursor-pointer">
 								{actionLoading ? 'Memproses...' : 'Akui (Tanda Terima)'}
 							</button>
 						{/if}
@@ -245,16 +259,7 @@
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 						{#if isLoading}
-							{#each [1,2,3,4,5] as _}
-								<tr class="animate-pulse">
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-36"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-14"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-40"></div></td>
-									<td class="px-4 py-3"><div class="h-5 bg-gray-100 dark:bg-gray-800 rounded-full w-20"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-16"></div></td>
-									<td class="px-4 py-3"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-12"></div></td>
-								</tr>
-							{/each}
+							<PulseLoader variant="table-row" count={5} />
 						{:else if data.length === 0}
 							<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada surat peringatan</td></tr>
 						{:else}
@@ -272,6 +277,42 @@
 					</tbody>
 				</table>
 			</div>
+			<!-- Mobile Cards -->
+			<PullToRefresh onRefresh={loadData}>				<div class="md:hidden space-y-3">
+				{#if isLoading}
+					<PulseLoader variant="card" count={3} />
+				{:else if data.length === 0}
+					<EmptyState
+						variant="empty"
+						title="Belum ada surat peringatan"
+						description="Belum ada surat peringatan yang diterbitkan."
+					/>
+				{:else}
+					{#each data as item}
+						<MobileCard
+							title={item.employee_name}
+							subtitle={item.title}
+							avatar={getInitials(item.employee_name)}
+							avatarColor={getAvatarTheme('reprimand').gradientClasses}
+							badges={[{ label: typeLabels[item.reprimand_type] || item.reprimand_type, color: typeColors[item.reprimand_type] || 'bg-gray-100 text-gray-600' }]}
+							onclick={() => loadDetail(item.id)}
+						>
+							{#snippet children()}
+								<div class="flex items-center justify-between">
+									<div class="flex items-center gap-2">
+										{@html getStatusBadge(item.status)}
+										<span class="text-xs text-gray-400 dark:text-gray-500">{formatDate(item.created_at)}</span>
+									</div>
+									<svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+									</svg>
+								</div>
+							{/snippet}
+						</MobileCard>
+					{/each}
+				{/if}
+			</div>
+			</PullToRefresh>
 			<div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
 				<span class="text-xs text-gray-400">Total {total} data</span>
 				<div class="flex gap-1">

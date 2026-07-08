@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { attendance } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import config from '$lib/config.js';
 
 	interface TodayStatus {
 		has_checked_in: boolean;
@@ -50,6 +52,14 @@
 	let gpsStatus = $state('');
 	let gpsCoords = $state<{ lat: number; lng: number } | null>(null);
 	let isExporting = $state(false);
+
+	// Camera Face Attendance
+	let videoElement = $state<HTMLVideoElement | undefined>();
+	let stream = $state<MediaStream | null>(null);
+	let showCamera = $state(false);
+
+	// Mobile-specific state
+	let currentTime = $state(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
 	
 	let expandedRecordId = $state<string | null>(null);
 	
@@ -69,7 +79,7 @@
 			a.click();
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
-		} catch (err: any) {
+		} catch (err: unknown) {
 			console.error('Export error:', err);
 		} finally {
 			isExporting = false;
@@ -79,6 +89,11 @@
 	onMount(() => {
 		loadTodayStatus();
 		loadHistory();
+		// Real-time clock update every 30s
+		const interval = setInterval(() => {
+			currentTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+		}, 30000);
+		return () => clearInterval(interval);
 	});
 
 	async function loadTodayStatus() {
@@ -87,7 +102,7 @@
 			if (res.success) {
 				status = res.data;
 			}
-		} catch (e: any) {
+		} catch (_e: unknown) {
 			error = 'Gagal memuat status absensi';
 		} finally {
 			loading = false;
@@ -100,7 +115,7 @@
 			if (res.success) {
 				history = res.data || [];
 			}
-		} catch (e: any) {
+		} catch (_e: unknown) {
 			// silently fail
 		}
 	}
@@ -128,40 +143,97 @@
 		});
 	}
 
+	async function startCamera() {
+		try {
+			stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+			showCamera = true;
+			await tick();
+			if (videoElement) {
+				videoElement.srcObject = stream;
+			}
+		} catch (err) {
+			error = 'Gagal mengakses kamera. Pastikan izin kamera diberikan.';
+		}
+	}
+
+	function stopCamera() {
+		if (stream) {
+			stream.getTracks().forEach(track => track.stop());
+			stream = null;
+		}
+		showCamera = false;
+	}
+
+	function capturePhoto(): string {
+		if (!videoElement) return '';
+		const canvas = document.createElement('canvas');
+		canvas.width = videoElement.videoWidth;
+		canvas.height = videoElement.videoHeight;
+		const ctx = canvas.getContext('2d');
+		if (ctx) {
+			// Mirror the canvas to match the mirrored video
+			ctx.translate(canvas.width, 0);
+			ctx.scale(-1, 1);
+			ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+			return canvas.toDataURL('image/jpeg', 0.8);
+		}
+		return '';
+	}
+
+	onDestroy(() => {
+		stopCamera();
+	});
+
 	async function handleCheckIn() {
+		if (!showCamera) {
+			await startCamera();
+			return;
+		}
+
 		checkingIn = true;
 		error = '';
 		try {
+			const photo = capturePhoto();
 			const coords = await getGPS();
 			const res = await attendance.checkIn({
 				lat: coords.lat,
 				lng: coords.lng,
+				photo: photo
 			});
 			if (res.success) {
 				await loadTodayStatus();
+				stopCamera();
 			}
-		} catch (e: any) {
-			error = e.message || 'Gagal check-in';
+		} catch (e: unknown) {
+			error = (e as { message?: string }).message || 'Gagal check-in';
 		} finally {
 			checkingIn = false;
 		}
 	}
 
 	async function handleCheckOut() {
+		if (!showCamera) {
+			await startCamera();
+			return;
+		}
+
 		checkingOut = true;
 		error = '';
 		try {
+			const photo = capturePhoto();
 			const coords = await getGPS();
 			const res = await attendance.checkOut({
 				lat: coords.lat,
 				lng: coords.lng,
+				photo: photo
 			});
 			if (res.success) {
 				await loadTodayStatus();
 				await loadHistory();
+				stopCamera();
 			}
-		} catch (e: any) {
-			error = e.message || 'Gagal check-out';
+		} catch (e: unknown) {
+			error = (e as { message?: string }).message || 'Gagal check-out';
 		} finally {
 			checkingOut = false;
 		}
@@ -185,6 +257,12 @@
 			tanpa_keterangan: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
 		};
 		return map[s] || 'bg-gray-100 text-gray-800';
+	}
+
+	function getPhotoUrl(url: string | null | undefined): string {
+		if (!url) return '';
+		if (url.startsWith('http')) return url;
+		return config.API_BASE_URL + url;
 	}
 </script>
 
@@ -210,80 +288,184 @@
 		<div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">{error}</div>
 	{/if}
 
-	<!-- Today's Status Card -->
-	<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-		<div class="flex items-center justify-between mb-4">
-			<h2 class="text-lg font-semibold text-gray-900 dark:text-white">Hari Ini</h2>
-			<span class="text-sm text-gray-500 dark:text-gray-400">
-				{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-			</span>
-		</div>
-
-		{#if status}
-			<div class="space-y-4">
-				<!-- Schedule Info -->
-				<div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-					</svg>
+	<!-- Today's Status Card -- Talenta Style -->
+	<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+		<!-- Header dengan jam real-time -->
+		<div class="bg-gradient-to-r from-[#1A56DB] to-[#1e40af] px-5 py-4">
+			<div class="flex items-center justify-between text-white">
+				<div>
+					<p class="text-xs text-blue-200 font-medium">Hari Ini</p>
+					<p class="text-sm font-semibold mt-0.5">
+						{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+					</p>
+				</div>
+				<div class="text-right">
+					<p class="text-2xl font-bold tabular-nums tracking-tight">{currentTime}</p>
+				</div>
+			</div>
+			{#if status}
+				<div class="flex items-center gap-2 mt-3 text-xs text-blue-100">
+					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
 					<span>{status.schedule_name || 'Tidak ada jadwal'}</span>
 					{#if status.schedule_start}
-						<span class="text-gray-400">|</span>
+						<span class="opacity-50">|</span>
 						<span>{status.schedule_start} - {status.schedule_end}</span>
 					{/if}
 				</div>
+			{/if}
+		</div>
 
-				<!-- Check In Status -->
-				<div class="grid grid-cols-2 gap-4">
-					<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-center">
-						<div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Check In</div>
-						<div class="text-xl font-bold" class:text-green-600={status.has_checked_in} class:text-gray-400={!status.has_checked_in}>
+		{#if status}
+			<div class="p-5 space-y-4">
+				<!-- Check In/Out Status -- Talenta style -->
+				<div class="flex items-center gap-3">
+					<div class="flex-1 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center border border-gray-100 dark:border-gray-700">
+						<div class="flex items-center justify-center gap-2 mb-2">
+							<div class="w-2.5 h-2.5 rounded-full {status.has_checked_in ? 'bg-green-500' : 'bg-gray-300'}"></div>
+							<span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Check In</span>
+						</div>
+						<div class="text-2xl font-bold tabular-nums {status.has_checked_in ? 'text-green-600 dark:text-green-400' : 'text-gray-300 dark:text-gray-600'}">
 							{status.has_checked_in ? formatTime(status.record?.check_in_time ?? null) : '—'}
 						</div>
 						{#if status.record?.is_late}
-							<div class="text-xs text-yellow-600 dark:text-yellow-400 mt-1">Terlambat {status.record.late_minutes} menit</div>
+							<div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[10px] font-medium">
+								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/></svg>
+								{status.record.late_minutes} menit terlambat
+							</div>
+						{/if}
+						{#if status.record?.check_in_photo_url}
+							<div class="mt-2 flex justify-center">
+								<img src={getPhotoUrl(status.record.check_in_photo_url)} alt="Check In Photo" class="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-gray-600 shadow-sm" />
+							</div>
 						{/if}
 						{#if status.record?.check_in_location_name}
-							<div class="text-xs text-gray-400 mt-1">{status.record.check_in_location_name}</div>
+							<div class="text-[10px] text-gray-400 mt-1.5 flex items-center justify-center gap-1">
+								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg>
+								{status.record.check_in_location_name}
+							</div>
 						{/if}
 					</div>
-					<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-center">
-						<div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Check Out</div>
-						<div class="text-xl font-bold" class:text-red-600={status.has_checked_out} class:text-gray-400={!status.has_checked_out}>
+					<div class="flex-1 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center border border-gray-100 dark:border-gray-700">
+						<div class="flex items-center justify-center gap-2 mb-2">
+							<div class="w-2.5 h-2.5 rounded-full {status.has_checked_out ? 'bg-green-500' : status.has_checked_in ? 'bg-amber-400' : 'bg-gray-300'}"></div>
+							<span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Check Out</span>
+						</div>
+						<div class="text-2xl font-bold tabular-nums {status.has_checked_out ? 'text-green-600 dark:text-green-400' : status.has_checked_in ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}">
 							{status.has_checked_out ? formatTime(status.record?.check_out_time ?? null) : '—'}
 						</div>
 						{#if status.record?.total_work_hours}
-							<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{status.record.total_work_hours.toFixed(1)} jam</div>
+							<div class="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+								{status.record.total_work_hours.toFixed(1)} jam
+							</div>
+						{/if}
+						{#if status.record?.check_out_photo_url}
+							<div class="mt-2 flex justify-center">
+								<img src={getPhotoUrl(status.record.check_out_photo_url)} alt="Check Out Photo" class="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-gray-600 shadow-sm" />
+							</div>
+						{/if}
+						{#if status.record?.check_out_location_name}
+							<div class="text-[10px] text-gray-400 mt-1.5 flex items-center justify-center gap-1">
+								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg>
+								{status.record.check_out_location_name}
+							</div>
 						{/if}
 					</div>
 				</div>
 
-				<!-- Action Buttons -->
+				<!-- Face Attendance Camera -->
+				{#if showCamera}
+					<div class="relative rounded-2xl overflow-hidden bg-black aspect-[3/4] max-w-sm mx-auto shadow-inner border border-gray-200 dark:border-gray-700 animate-in fade-in duration-300">
+						<!-- svelte-ignore a11y_media_has_caption -->
+						<video
+							bind:this={videoElement}
+							autoplay
+							playsinline
+							class="w-full h-full object-cover transform scale-x-[-1]"
+						></video>
+						
+						<!-- Face outline guide: Face + Ears + Neck + Shoulders Silhouette -->
+						<div class="absolute inset-0 pointer-events-none">
+							<svg class="w-full h-full" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice">
+								<defs>
+									<mask id="faceMask">
+										<rect width="100%" height="100%" fill="white" />
+										<path d="
+											M 40 600
+											L 40 480
+											C 40 400, 160 420, 160 350
+											L 160 314.5
+											A 100 125 0 0 1 100.3 210
+											A 12 20 0 0 0 102.9 170
+											A 100 125 0 0 1 297.1 170
+											A 12 20 0 0 0 299.7 210
+											A 100 125 0 0 1 240 314.5
+											L 240 350
+											C 240 420, 360 400, 360 480
+											L 360 600 Z" 
+											fill="black" 
+										/>
+									</mask>
+								</defs>
+								<rect width="100%" height="100%" fill="rgba(0,0,0,0.6)" mask="url(#faceMask)" />
+								<path d="
+									M 40 600
+									L 40 480
+									C 40 400, 160 420, 160 350
+									L 160 314.5
+									A 100 125 0 0 1 100.3 210
+									A 12 20 0 0 0 102.9 170
+									A 100 125 0 0 1 297.1 170
+									A 12 20 0 0 0 299.7 210
+									A 100 125 0 0 1 240 314.5
+									L 240 350
+									C 240 420, 360 400, 360 480
+									L 360 600 Z" 
+									fill="none" 
+									stroke="rgba(255,255,255,0.7)" 
+									stroke-width="3" 
+									stroke-linecap="round"
+								/>
+							</svg>
+						</div>
+						
+						<!-- Cancel button -->
+						<button 
+							onclick={(e) => { e.stopPropagation(); stopCamera(); }}
+							class="absolute top-4 right-4 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm hover:bg-black/70 transition-colors"
+						>
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+						</button>
+						
+						<div class="absolute bottom-4 left-0 w-full text-center text-white text-xs font-medium drop-shadow-md tracking-wide uppercase">
+							POSISIKAN WAJAH ANDA
+						</div>
+					</div>
+				{/if}
+
+				<!-- Action Buttons -- Premium -->
 				<div class="flex gap-3">
 					{#if !status.has_checked_in}
 						<button
 							onclick={handleCheckIn}
 							disabled={checkingIn}
-							class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+							class="flex-1 bg-gradient-to-r from-[#1A56DB] to-[#1e40af] hover:from-[#1e40af] hover:to-[#1e3a8a] disabled:opacity-60 text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-200/50 dark:shadow-blue-900/30 active:scale-[0.97] cursor-pointer"
 						>
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-							</svg>
-							{checkingIn ? 'Memproses...' : 'Check In'}
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+							{showCamera ? (checkingIn ? 'Memproses...' : 'Ambil Foto & Check In') : 'Check In'}
 						</button>
 					{:else if !status.has_checked_out}
 						<button
 							onclick={handleCheckOut}
 							disabled={checkingOut}
-							class="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+							class="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-60 text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30 active:scale-[0.97] cursor-pointer"
 						>
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4.553 2.276A1 1 0 013 15.382V8.618a1 1 0 011.447-.894L9 10m0 0V7a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2h-6a2 2 0 01-2-2v-3z" />
-							</svg>
-							{checkingOut ? 'Memproses...' : 'Check Out'}
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4.553 2.276A1 1 0 013 15.382V8.618a1 1 0 011.447-.894L9 10m0 0V7a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2h-6a2 2 0 01-2-2v-3z"/></svg>
+							{showCamera ? (checkingOut ? 'Memproses...' : 'Ambil Foto & Check Out') : 'Check Out'}
 						</button>
 					{:else}
-						<div class="flex-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-semibold py-3 px-6 rounded-lg text-center">
+						<div class="flex-1 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 font-bold py-3.5 px-6 rounded-xl text-center flex items-center justify-center gap-2">
+							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
 							Selesai — {status.record?.total_work_hours?.toFixed(1) ?? '—'} jam
 						</div>
 					{/if}
@@ -291,13 +473,17 @@
 
 				<!-- GPS Status -->
 				{#if gpsStatus}
-					<div class="text-xs text-gray-400 dark:text-gray-500 text-center">{gpsStatus}</div>
+					<div class="text-xs text-gray-400 dark:text-gray-500 text-center flex items-center justify-center gap-1.5">
+						<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z"/></svg>
+						{gpsStatus}
+					</div>
 				{/if}
 			</div>
 		{/if}
 	</div>
 
 	<!-- Recent History -->
+	<PullToRefresh onRefresh={async () => { await Promise.all([loadTodayStatus(), loadHistory()]); }}>
 	<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
 		<h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Riwayat Terbaru</h2>
 
@@ -306,47 +492,42 @@
 		{:else}
 			<div class="space-y-2">
 				{#each history as r}
-					<div class="border-b border-gray-100 dark:border-gray-700 last:border-0">
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div 
-							onclick={() => toggleExpand(r.id)}
-							class="flex items-center justify-between py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg px-2 -mx-2 transition-colors"
-						>
-							<div>
-								<div class="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div 
+						onclick={() => toggleExpand(r.id)}
+						class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 active:scale-[0.98] transition-all duration-150 shadow-sm cursor-pointer"
+					>
+						<div class="flex items-center justify-between mb-2">
+							<div class="min-w-0 flex-1">
+								<div class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
 									{formatDate(r.date)}
-									<svg class="w-4 h-4 text-gray-400 transition-transform {expandedRecordId === r.id ? "rotate-180" : ""}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+									<svg class="w-4 h-4 text-gray-400 transition-transform shrink-0 {expandedRecordId === r.id ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
 								</div>
 								<div class="text-xs text-gray-500 dark:text-gray-400">{r.day_name}</div>
 							</div>
-							<div class="text-right">
-								<div class="text-sm text-gray-700 dark:text-gray-300">
-									{formatTime(r.check_in_time)} — {formatTime(r.check_out_time)}
-								</div>
-								<div class="flex items-center gap-2 justify-end mt-1">
-									<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium {statusBadge(r.status)}">
-										{r.status}
-									</span>
-									{#if r.total_work_hours}
-										<span class="text-xs text-gray-400">{r.total_work_hours.toFixed(1)}j</span>
-									{/if}
-								</div>
-							</div>
+							<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium shrink-0 {statusBadge(r.status)}">
+								{r.status}
+							</span>
+						</div>
+						<div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+							<span class="tabular-nums">{formatTime(r.check_in_time)} — {formatTime(r.check_out_time)}</span>
+							{#if r.total_work_hours}
+								<span class="tabular-nums">{r.total_work_hours.toFixed(1)} jam</span>
+							{/if}
 						</div>
 						
 						{#if expandedRecordId === r.id}
-							<div class="px-2 pb-4 pt-1 animate-in slide-in-from-top-2 duration-200">
+							<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 animate-in slide-in-from-top-2 duration-200">
 								<div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-									<!-- Check In Detail -->
 									<div class="space-y-3">
 										<h4 class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 text-sm">
 											<svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
 											Check In: <span class="text-gray-900 dark:text-white">{formatTime(r.check_in_time)}</span>
 										</h4>
 										{#if r.check_in_photo_url}
-											<div class="aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden relative border border-gray-200 dark:border-gray-700">
-												<img src={r.check_in_photo_url} alt="Check In" class="w-full h-full object-cover" />
+											<div class="aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+												<img src={getPhotoUrl(r.check_in_photo_url)} alt="Check In Photo" class="w-full h-full object-cover" />
 											</div>
 										{/if}
 										<div class="text-xs">
@@ -361,7 +542,6 @@
 										</div>
 									</div>
 
-									<!-- Check Out Detail -->
 									<div class="space-y-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-4">
 										<h4 class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 text-sm">
 											<svg class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
@@ -369,8 +549,8 @@
 										</h4>
 										{#if r.check_out_time}
 											{#if r.check_out_photo_url}
-												<div class="aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden relative border border-gray-200 dark:border-gray-700">
-													<img src={r.check_out_photo_url} alt="Check Out" class="w-full h-full object-cover" />
+												<div class="aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+													<img src={getPhotoUrl(r.check_out_photo_url)} alt="Check Out Photo" class="w-full h-full object-cover" />
 												</div>
 											{/if}
 											<div class="text-xs">
@@ -395,4 +575,5 @@
 			</div>
 		{/if}
 	</div>
+	</PullToRefresh>
 </div>

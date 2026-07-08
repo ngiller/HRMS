@@ -37,13 +37,13 @@ type WorkSchedule struct {
 }
 
 type WorkScheduleSummary struct {
-	ID                   uuid.UUID `json:"id"`
-	Name                 string    `json:"name"`
-	ScheduleType         string    `json:"schedule_type"`
-	Description          string    `json:"description"`
-	WeeklyHours          float64   `json:"weekly_hours"`
-	IsActive             bool      `json:"is_active"`
-	CreatedAt            time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	ScheduleType string    `json:"schedule_type"`
+	Description  string    `json:"description"`
+	WeeklyHours  float64   `json:"weekly_hours"`
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type CreateWorkScheduleRequest struct {

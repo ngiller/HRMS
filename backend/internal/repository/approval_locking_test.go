@@ -15,11 +15,11 @@ package repository
 
 import (
 	"context"
+	"log"
 	"os"
 	"sync"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"hrms-backend/internal/config"
 	"hrms-backend/internal/database"
 )
@@ -30,9 +30,11 @@ func TestMain(m *testing.M) {
 	if os.Getenv("RUN_INTEGRATION_TESTS") != "true" {
 		os.Exit(0) // Skip entirely if not integration mode
 	}
-	cfg := config.LoadConfig()
-	database.ConnectDB(cfg)
-	defer database.Pool.Close()
+	cfg := config.Load()
+	if err := database.Connect(cfg.DatabaseURL(), cfg.EncryptionKey); err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer database.Close()
 	os.Exit(m.Run())
 }
 
@@ -66,7 +68,7 @@ func setupTestApprovals(t *testing.T, ctx context.Context) func() {
 	// Seed data seharusnya sudah ada dari migration + cmd/seed
 	var empID string
 	err := database.Pool.QueryRow(ctx,
-		`SELECT id::text FROM employees WHERE employee_id = 'EMP001' LIMIT 1`,
+		`SELECT id::text FROM employees WHERE employee_id = 'EMP-001' LIMIT 1`,
 	).Scan(&empID)
 	if err != nil {
 		t.Fatalf("seed employee EMP001 not found — jalankan seed dulu: %v", err)
@@ -114,7 +116,7 @@ func TestOptimisticLocking_Leave_UpdateStatus_DoubleApprove(t *testing.T) {
 	err := database.Pool.QueryRow(ctx,
 		`SELECT e.id::text, lt.id::text FROM employees e
 		 CROSS JOIN leave_types lt
-		 WHERE e.employee_id = 'EMP001' AND lt.code = 'tahunan'
+		 WHERE e.employee_id = 'EMP-001' AND lt.code = 'tahunan'
 		 LIMIT 1`,
 	).Scan(&empID, &leaveTypeID)
 	if err != nil {
@@ -154,7 +156,7 @@ func TestOptimisticLocking_Leave_UpdateStatus_DoubleApprove(t *testing.T) {
 				successCount++
 			}
 			mu.Unlock()
-		}(string(rune('1'+i))) // "1" atau "2"
+		}(string(rune('1' + i))) // "1" atau "2"
 	}
 	wg.Wait()
 
@@ -192,7 +194,7 @@ func TestOptimisticLocking_Leave_UpdateStatus_AlreadyProcessed(t *testing.T) {
 	err := database.Pool.QueryRow(ctx,
 		`SELECT e.id::text, lt.id::text FROM employees e
 		 CROSS JOIN leave_types lt
-		 WHERE e.employee_id = 'EMP001' AND lt.code = 'tahunan'
+		 WHERE e.employee_id = 'EMP-001' AND lt.code = 'tahunan'
 		 LIMIT 1`,
 	).Scan(&empID, &leaveTypeID)
 	if err != nil {
@@ -248,7 +250,7 @@ func TestOptimisticLocking_ShiftChange_UpdateStatus(t *testing.T) {
 	err := database.Pool.QueryRow(ctx,
 		`SELECT e.id::text, ws.id::text FROM employees e
 		 CROSS JOIN work_schedules ws
-		 WHERE e.employee_id = 'EMP001' AND ws.name = '5 Hari Kerja'
+		 WHERE e.employee_id = 'EMP-001' AND ws.name = '5 Hari Kerja'
 		 LIMIT 1`,
 	).Scan(&empID, &wsID)
 	if err != nil {
@@ -257,17 +259,17 @@ func TestOptimisticLocking_ShiftChange_UpdateStatus(t *testing.T) {
 
 	// Buat 1 shift change request (tipe individual)
 	req := &struct {
-		RequestType       string
-		TargetDate        string
-		CurrentScheduleID string
+		RequestType         string
+		TargetDate          string
+		CurrentScheduleID   string
 		RequestedScheduleID string
-		Reason            string
+		Reason              string
 	}{
-		RequestType:       "individual",
-		TargetDate:        "2026-07-15",
-		CurrentScheduleID: "",
+		RequestType:         "individual",
+		TargetDate:          "2026-07-15",
+		CurrentScheduleID:   "",
 		RequestedScheduleID: wsID,
-		Reason:            "[TEST] Shift change locking",
+		Reason:              "[TEST] Shift change locking",
 	}
 
 	var scID string
@@ -322,7 +324,7 @@ func TestOptimisticLocking_Reimbursement(t *testing.T) {
 
 	var empID string
 	err := database.Pool.QueryRow(ctx,
-		`SELECT id::text FROM employees WHERE employee_id = 'EMP001' LIMIT 1`,
+		`SELECT id::text FROM employees WHERE employee_id = 'EMP-001' LIMIT 1`,
 	).Scan(&empID)
 	if err != nil {
 		t.Skipf("Skip — seed employee not found: %v", err)
@@ -374,7 +376,7 @@ func TestOptimisticLocking_Loan(t *testing.T) {
 
 	var empID string
 	err := database.Pool.QueryRow(ctx,
-		`SELECT id::text FROM employees WHERE employee_id = 'EMP001' LIMIT 1`,
+		`SELECT id::text FROM employees WHERE employee_id = 'EMP-001' LIMIT 1`,
 	).Scan(&empID)
 	if err != nil {
 		t.Skipf("Skip — seed employee not found: %v", err)
@@ -383,8 +385,8 @@ func TestOptimisticLocking_Loan(t *testing.T) {
 	// Buat loan request
 	var loanID string
 	err = database.Pool.QueryRow(ctx, `
-		INSERT INTO loans (employee_id, type, amount, total_installments, description, status)
-		VALUES ($1::uuid, 'regular'::loan_type, 1000000, 12, '[TEST] Loan locking', 'pending'::loan_status)
+		INSERT INTO loans (employee_id, loan_type, amount, interest_rate, installment_count, installment_amount, total_amount, remaining_balance, purpose, status)
+		VALUES ($1::uuid, 'regular'::loan_type, 1000000, 0, 12, 83333, 1000000, 1000000, '[TEST] Loan locking', 'pending'::loan_status)
 		RETURNING id::text
 	`, empID).Scan(&loanID)
 	if err != nil {
@@ -422,7 +424,7 @@ func TestOptimisticLocking_Overtime(t *testing.T) {
 	err := database.Pool.QueryRow(ctx,
 		`SELECT e.id::text, ws.id::text FROM employees e
 		 CROSS JOIN work_schedules ws
-		 WHERE e.employee_id = 'EMP001' AND ws.name = '5 Hari Kerja'
+		 WHERE e.employee_id = 'EMP-001' AND ws.name = '5 Hari Kerja'
 		 LIMIT 1`,
 	).Scan(&empID, &wsID)
 	if err != nil {

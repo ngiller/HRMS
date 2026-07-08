@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { reimbursements as api, employees } from '$lib/api.js';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import SwipeActions from '$lib/components/SwipeActions.svelte';
+import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import MobileCard from '$lib/components/MobileCard.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { getAvatarTheme } from '$lib/avatar-theme.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
+	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
 	type Reimbursement = {
 		id: string;
 		employee_id: string;
@@ -13,6 +20,10 @@
 		description: string;
 		status: string;
 		created_at: string;
+		receipt_urls: string[];
+		payment_method: string;
+		paid_at: string | null;
+		paid_by_name: string | null;
 	};
 
 	type FormData = {
@@ -50,7 +61,7 @@
 
 	let showDetail = $state(false);
 	let detailId = $state<string | null>(null);
-	let detailData = $state<any>(null);
+	let detailData = $state<Reimbursement | null>(null);
 	let isDetailLoading = $state(false);
 
 	let showRejectModal = $state(false);
@@ -87,7 +98,7 @@
 	// ── AG Grid ──
 	let gridContainer = $state<HTMLDivElement>(undefined!);
 	let gridApi: GridApi | null = null;
-	let agGridModule: any = null;
+	let agGridModule: typeof import('ag-grid-community') | null = null;
 
 	const defaultColDef: ColDef = {
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
@@ -121,9 +132,9 @@
 	const columnDefs: ColDef[] = [
 		{
 			field: 'employee_name', headerName: 'Karyawan', minWidth: 220, flex: 1,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Reimbursement>) => {
 				if (!params.value) return '';
-				const initials = getInitials(params.value);
+				const initials = getInitials(params.value as string);
 				return `<div class="flex items-center gap-3">
 					<div class="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center text-xs font-semibold text-teal-600 shrink-0 ring-1 ring-teal-200">${initials}</div>
 					<div class="text-sm font-medium text-gray-900">${params.value}</div>
@@ -134,33 +145,33 @@
 		},
 		{
 			field: 'type', headerName: 'Tipe', minWidth: 140,
-			valueFormatter: (params: any) => reimbursementTypes[params.value] || params.value || '',
+			valueFormatter: (params: AgGridValueParams) => reimbursementTypes[params.value as string] || (params.value as string) || '',
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-600',
 		},
 		{
 			field: 'amount', headerName: 'Jumlah', minWidth: 140, type: 'rightAligned',
-			valueFormatter: (params: any) => formatCurrency(params.value || 0),
+			valueFormatter: (params: AgGridValueParams) => formatCurrency((params.value as number) || 0),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm font-semibold text-gray-900 text-right tabular-nums',
 		},
 		{
 			field: 'status', headerName: 'Status', minWidth: 120, maxWidth: 140,
-			cellRenderer: (params: any) => {
-				const status = params.value || '';
+			cellRenderer: (params: AgGridCellParams<Reimbursement>) => {
+				const status = (params.value as string) || '';
 				return getStatusBadge(status);
 			},
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 		},
 		{
 			field: 'created_at', headerName: 'Dibuat', minWidth: 120,
-			valueFormatter: (params: any) => formatDate(params.value),
+			valueFormatter: (params: AgGridValueParams) => formatDate(params.value as string),
 			headerClass: 'text-xs font-semibold text-gray-500 uppercase tracking-wider',
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
 			field: 'id', headerName: '', minWidth: 150, maxWidth: 150,
-			cellRenderer: (params: any) => {
+			cellRenderer: (params: AgGridCellParams<Reimbursement>) => {
 				const item = params.data;
 				if (!item) return '';
 				const container = document.createElement('div');
@@ -219,16 +230,16 @@
 	};
 
 	$effect(() => {
-		if ((showForm || showDetail) && gridApi) {
-			gridApi.destroy();
+		if (showForm || showDetail) {
+			gridApi?.destroy();
 			gridApi = null;
 		}
 	});
 
 	$effect(() => {
 		if (items.length > 0 && gridContainer && !showForm && !showDetail) {
-			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi.updateGridOptions({ rowData: items as any[] });
+			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
+			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}
 	});
 
@@ -248,13 +259,13 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const response: any = await api.list(page, perPage, statusFilter);
+			const response = await api.list(page, perPage, statusFilter) as ApiResponse<Reimbursement[]>;
 			items = response.data || [];
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
 			perPage = response.meta?.per_page || 25;
 			totalPages = Math.ceil(total / perPage);
-		} catch (error: any) { errorMessage = error.message || 'Gagal memuat data'; }
+		} catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal memuat data'; }
 		finally { isLoading = false; }
 	}
 
@@ -311,7 +322,7 @@
 			const uploadedUrls = [...form.receipt_urls];
 			for (const file of form.receipt_files) {
 				try {
-					const resp: any = await api.uploadReceipt(file);
+					const resp = await api.uploadReceipt(file) as { data?: { url: string } };
 					if (resp?.data?.url) {
 						uploadedUrls.push(resp.data.url);
 					}
@@ -330,7 +341,7 @@
 			});
 			cancelForm();
 			load();
-		} catch (error: any) { formError = error.message || 'Gagal menyimpan data'; }
+		} catch (error: unknown) { formError = (error as { message?: string }).message || 'Gagal menyimpan data'; }
 		finally { isSaving = false; }
 	}
 
@@ -340,8 +351,8 @@
 		isDetailLoading = true;
 		detailData = null;
 		try {
-			const response: any = await api.get(id);
-			detailData = response.data;
+			const response = await api.get(id) as ApiResponse<Reimbursement>;
+			detailData = response.data ?? null;
 		} catch (_) { detailData = null; }
 		finally { isDetailLoading = false; }
 	}
@@ -351,7 +362,7 @@
 	async function handleApprove(id: string) {
 		isSaving = true;
 		try { await api.approve(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menyetujui'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menyetujui'; }
 		finally { isSaving = false; }
 	}
 
@@ -362,7 +373,7 @@
 		if (!rejectId) return;
 		isSaving = true;
 		try { await api.reject(rejectId, { rejection_reason: rejectReason }); showRejectModal = false; rejectId = null; rejectReason = ''; load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal menolak'; showRejectModal = false; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal menolak'; showRejectModal = false; }
 		finally { isSaving = false; }
 	}
 
@@ -373,15 +384,24 @@
 		if (!payId) return;
 		isSaving = true;
 		try { await api.pay(payId, { payment_method: payMethod }); showPayModal = false; payId = null; load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal membayar'; showPayModal = false; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal membayar'; showPayModal = false; }
 		finally { isSaving = false; }
 	}
 
 	async function handleCancel(id: string) {
 		isSaving = true;
 		try { await api.cancel(id); load(); }
-		catch (error: any) { errorMessage = error.message || 'Gagal membatalkan'; }
+		catch (error: unknown) { errorMessage = (error as { message?: string }).message || 'Gagal membatalkan'; }
 		finally { isSaving = false; }
+	}
+
+	function parseApprovalTrail(trail: string): any[] {
+		try {
+			const parsed = JSON.parse(trail);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
 	}
 
 	function formatDate(dateStr: string): string {
@@ -515,19 +535,68 @@
 				{#if isDetailLoading}
 					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 rounded w-48"></div><div class="h-4 bg-gray-50 rounded w-64"></div><div class="h-4 bg-gray-50 rounded w-40"></div></div>
 				{:else if detailData}
+					{@const dd = detailData}
+					{#if (detailData as any).approval_trail && (detailData as any).approval_trail !== '[]' && (detailData as any).approval_trail !== ''}
+						{@const trail = parseApprovalTrail((detailData as any).approval_trail)}
+						<div class="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl p-4 border border-indigo-100 dark:border-indigo-900/30 mb-6">
+							<div class="flex items-center gap-2 mb-3">
+								<svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+								<h3 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Progress Approval</h3>
+							</div>
+							<div class="space-y-2">
+								{#each trail as step}
+									{@const isPending = step.status === 'pending'}
+									{@const isApproved = step.status === 'approved'}
+									{@const isRejected = step.status === 'rejected'}
+									<div class="flex items-center gap-3">
+										<div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {isApproved ? 'bg-emerald-100 text-emerald-600' : isRejected ? 'bg-red-100 text-red-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}">
+											{#if isApproved}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+											{:else if isRejected}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+											{:else}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+											{/if}
+										</div>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm font-medium {isApproved ? 'text-emerald-700 dark:text-emerald-300' : isRejected ? 'text-red-700 dark:text-red-300' : 'text-gray-700 dark:text-gray-300'}">
+												{step.approver_name || 'Approver'} 
+												<span class="text-xs font-normal text-gray-400">Level {step.level || step.step}</span>
+											</p>
+											{#if step.note}
+												<p class="text-xs text-gray-400 truncate">{step.note}{#if step.date} &middot; {step.date || '-'}{/if}</p>
+											{/if}
+										</div>
+										<div>
+											{#if isApproved}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Disetujui</span>
+											{:else if isRejected}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Ditolak</span>
+											{:else}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200 animate-pulse">Menunggu</span>
+											{/if}
+										</div>
+									</div>
+									{#if step !== trail[trail.length - 1]}
+										<div class="ml-3.5 border-l-2 border-gray-200 dark:border-gray-700 h-3"></div>
+									{/if}
+								{/each}
+							</div>
+						</div>
+					{/if}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Informasi Pengajuan</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(detailData.status)}</p></div>
-								<div><span class="text-xs text-gray-400">Tipe</span><p class="text-sm font-medium text-gray-900">{reimbursementTypes[detailData.type] || detailData.type}</p></div>
-								<div><span class="text-xs text-gray-400">Jumlah</span><p class="text-sm font-bold text-gray-900">{formatCurrency(detailData.amount)}</p></div>
-								<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700">{detailData.description || '-'}</p></div>
-								{#if detailData.receipt_urls && detailData.receipt_urls.length > 0}
+								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(dd.status)}</p></div>
+								<div><span class="text-xs text-gray-400">Tipe</span><p class="text-sm font-medium text-gray-900">{reimbursementTypes[dd.type] || dd.type}</p></div>
+								<div><span class="text-xs text-gray-400">Jumlah</span><p class="text-sm font-bold text-gray-900">{formatCurrency(dd.amount)}</p></div>
+								<div><span class="text-xs text-gray-400">Deskripsi</span><p class="text-sm text-gray-700">{dd.description || '-'}</p></div>
+								{#if dd.receipt_urls && dd.receipt_urls.length > 0}
 									<div>
-										<span class="text-xs text-gray-400 mb-2 block">Lampiran ({detailData.receipt_urls.length})</span>
+										<span class="text-xs text-gray-400 mb-2 block">Lampiran ({dd.receipt_urls.length})</span>
 										<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-											{#each detailData.receipt_urls as url}
+											{#each dd.receipt_urls as url}
 												<button onclick={() => window.open(url, '_blank')} class="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 hover:ring-2 hover:ring-[#1A56DB] transition cursor-pointer group relative">
 													<img src={url} alt="Bukti" class="w-full h-full object-cover" loading="lazy" />
 													<div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition flex items-center justify-center">
@@ -538,19 +607,19 @@
 										</div>
 									</div>
 								{/if}
-								<div><span class="text-xs text-gray-400">Diajukan Pada</span><p class="text-sm text-gray-700">{formatDate(detailData.created_at)}</p></div>
+								<div><span class="text-xs text-gray-400">Diajukan Pada</span><p class="text-sm text-gray-700">{formatDate(dd.created_at)}</p></div>
 							</div>
 						</div>
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Karyawan & Pembayaran</h3>
 							<div class="space-y-3">
-								<div><span class="text-xs text-gray-400">Pengaju</span><p class="text-sm font-medium text-gray-900">{detailData.employee_name || '-'}</p></div>
-								<div><span class="text-xs text-gray-400">Metode Pembayaran</span><p class="text-sm text-gray-700">{detailData.payment_method === 'payroll' ? 'Potong Gaji' : detailData.payment_method === 'manual_transfer' ? 'Transfer Manual' : '-'}</p></div>
-								{#if detailData.paid_at}<div><span class="text-xs text-gray-400">Dibayar Pada</span><p class="text-sm text-gray-700">{formatDate(detailData.paid_at)}</p></div>{/if}
-								{#if detailData.paid_by_name}<div><span class="text-xs text-gray-400">Dibayar Oleh</span><p class="text-sm text-gray-700">{detailData.paid_by_name}</p></div>{/if}
+								<div><span class="text-xs text-gray-400">Pengaju</span><p class="text-sm font-medium text-gray-900">{dd.employee_name || '-'}</p></div>
+								<div><span class="text-xs text-gray-400">Metode Pembayaran</span><p class="text-sm text-gray-700">{dd.payment_method === 'payroll' ? 'Potong Gaji' : dd.payment_method === 'manual_transfer' ? 'Transfer Manual' : '-'}</p></div>
+								{#if dd.paid_at}<div><span class="text-xs text-gray-400">Dibayar Pada</span><p class="text-sm text-gray-700">{formatDate(dd.paid_at)}</p></div>{/if}
+								{#if dd.paid_by_name}<div><span class="text-xs text-gray-400">Dibayar Oleh</span><p class="text-sm text-gray-700">{dd.paid_by_name}</p></div>{/if}
 							</div>
-							{#if detailData.status === 'approved' && hasPermission('reimbursement', 'update')}
-								<button onclick={() => openPay(detailData.id)} disabled={isSaving} class="mt-4 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer">
+							{#if dd.status === 'approved' && hasPermission('reimbursement', 'update')}
+								<button onclick={() => openPay(dd.id)} disabled={isSaving} class="mt-4 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer">
 									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 0 4.5 6h.75m13.5 0h.75a.75.75 0 0 0 .75-.75V4.5M12 3v18m-9-4.5h18" /></svg>
 									Bayarkan
 								</button>
@@ -574,43 +643,78 @@
 					<button onclick={load} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Muat Ulang</button>
 				</div>
 			{:else if items.length === 0}
-				<div class="py-16 text-center">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg></div>
-					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada pengajuan reimbursement</h3>
-					<p class="text-sm text-gray-500">Belum ada pengajuan reimbursement yang diajukan.</p>
-				</div>
+				<EmptyState
+					variant="empty"
+					title="Belum ada pengajuan reimbursement"
+					description="Belum ada pengajuan reimbursement yang diajukan."
+				/>
 			{:else}
 				<!-- Desktop Table — AG Grid -->
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden divide-y divide-gray-100">
+				<PullToRefresh onRefresh={load}>
+				<div class="md:hidden space-y-3">
 					{#each items as item}
-						<div class="p-4 hover:bg-blue-50/40 transition-colors">
-							<div class="flex items-center gap-3 mb-2">
-								<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center text-xs font-semibold text-teal-600 ring-1 ring-teal-200">{getInitials(item.employee_name)}</div>
-								<div class="flex-1 min-w-0">
-									<div class="text-sm font-medium text-gray-900 truncate">{item.employee_name}</div>
-									<div class="text-xs text-gray-400">{reimbursementTypes[item.type] || item.type}</div>
+						<SwipeActions
+							onApprove={item.status === 'pending' && hasPermission('reimbursement', 'approve') ? () => handleApprove(item.id) : undefined}
+							onReject={item.status === 'pending' && hasPermission('reimbursement', 'approve') ? () => openReject(item.id) : undefined}
+						>
+						<MobileCard
+							avatar={item.employee_name}
+							avatarColor={getAvatarTheme('reimbursement').gradientClasses}
+							title={item.employee_name}
+							subtitle={reimbursementTypes[item.type] || item.type}
+							badges={[{ label: item.status === 'pending' ? 'Menunggu' : item.status === 'approved' ? 'Disetujui' : item.status === 'rejected' ? 'Ditolak' : item.status === 'paid' ? 'Dibayar' : item.status === 'cancelled' ? 'Dibatalkan' : item.status, color: statusColors[item.status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }]}
+							onclick={() => openDetail(item.id)}
+							clickable={true}
+						>
+							{#snippet children()}
+								<div class="text-sm font-bold text-gray-900 dark:text-white mb-2">{formatCurrency(item.amount)}</div>
+								<div class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-1">
+									{item.description || 'Tidak ada deskripsi'}
 								</div>
-								<div class="text-right">
-									<div class="text-sm font-semibold text-gray-900">{formatCurrency(item.amount)}</div>
-									<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {statusColors[item.status] || 'bg-gray-50 text-gray-600'}">{statusLabels[item.status] || item.status}</span>
+							{/snippet}
+							{#snippet footer()}
+								<div class="flex items-center gap-2 pt-2">
+									<button
+										onclick={(e) => { e.stopPropagation(); openDetail(item.id); }}
+										class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95"
+									>
+										Detail
+									</button>
+									{#if item.status === 'pending' && hasPermission('reimbursement', 'approve')}
+										<button
+											onclick={(e) => { e.stopPropagation(); handleApprove(item.id); }}
+											class="flex-1 py-2 text-xs font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+											Setujui
+										</button>
+										<button
+											onclick={(e) => { e.stopPropagation(); openReject(item.id); }}
+											class="flex-1 py-2 text-xs font-semibold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+											Tolak
+										</button>
+									{/if}
+									{#if item.status === 'approved' && hasPermission('reimbursement', 'update')}
+										<button
+											onclick={(e) => { e.stopPropagation(); openPay(item.id); }}
+											class="flex-1 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer active:scale-95 inline-flex items-center justify-center gap-1"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 0 4.5 6h.75m13.5 0h.75a.75.75 0 0 0 .75-.75V4.5M12 3v18m-9-4.5h18" /></svg>
+											Bayar
+										</button>
+									{/if}
 								</div>
-							</div>
-							<div class="flex items-center gap-1 mt-2">
-								<button onclick={() => openDetail(item.id)} class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition cursor-pointer">Detail</button>
-								{#if item.status === 'pending' && hasPermission('reimbursement', 'approve')}
-									<button onclick={() => handleApprove(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition cursor-pointer">Setujui</button>
-									<button onclick={() => openReject(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition cursor-pointer">Tolak</button>
-								{/if}
-								{#if item.status === 'approved' && hasPermission('reimbursement', 'update')}
-									<button onclick={() => openPay(item.id)} disabled={isSaving} class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition cursor-pointer">Bayar</button>
-								{/if}
-							</div>
-						</div>
+							{/snippet}
+						</MobileCard>
+						</SwipeActions>
 					{/each}
 				</div>
+				</PullToRefresh>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
 					<div class="flex items-center gap-1.5">
@@ -629,7 +733,7 @@
 	{/if}
 </div>
 
-{#if showRejectModal}
+<AnimatedPresence show={showRejectModal} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
@@ -652,7 +756,7 @@
 			</div>
 		</div>
 	</div>
-{/if}
+</AnimatedPresence>
 
 {#if showPayModal}
 	<!-- svelte-ignore a11y_interactive_supports_focus -->

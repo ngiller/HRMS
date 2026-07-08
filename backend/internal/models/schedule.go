@@ -11,15 +11,15 @@ import (
 // ============================================================
 
 type ScheduleTemplate struct {
-	ID           uuid.UUID  `json:"id"`
-	Name         string     `json:"name"`
-	Description  string     `json:"description"`
-	ScheduleType string     `json:"schedule_type"` // weekly, shift, flexible
-	IsActive     bool       `json:"is_active"`
+	ID           uuid.UUID             `json:"id"`
+	Name         string                `json:"name"`
+	Description  string                `json:"description"`
+	ScheduleType string                `json:"schedule_type"` // weekly, shift, flexible
+	IsActive     bool                  `json:"is_active"`
 	Days         []ScheduleTemplateDay `json:"days,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt    time.Time             `json:"created_at"`
+	UpdatedAt    time.Time             `json:"updated_at"`
+	DeletedAt    *time.Time            `json:"deleted_at,omitempty"`
 }
 
 type ScheduleTemplateSummary struct {
@@ -47,9 +47,9 @@ type ScheduleTemplateDay struct {
 }
 
 type CreateScheduleTemplateRequest struct {
-	Name         string                     `json:"name"`
-	Description  string                     `json:"description"`
-	ScheduleType string                     `json:"schedule_type"`
+	Name         string                      `json:"name"`
+	Description  string                      `json:"description"`
+	ScheduleType string                      `json:"schedule_type"`
 	Days         []CreateScheduleTemplateDay `json:"days"`
 }
 
@@ -64,10 +64,10 @@ type CreateScheduleTemplateDay struct {
 }
 
 type UpdateScheduleTemplateRequest struct {
-	Name         *string                    `json:"name"`
-	Description  *string                    `json:"description"`
-	ScheduleType *string                    `json:"schedule_type"`
-	IsActive     *bool                      `json:"is_active"`
+	Name         *string                     `json:"name"`
+	Description  *string                     `json:"description"`
+	ScheduleType *string                     `json:"schedule_type"`
+	IsActive     *bool                       `json:"is_active"`
 	Days         []CreateScheduleTemplateDay `json:"days"`
 }
 
@@ -76,43 +76,43 @@ type UpdateScheduleTemplateRequest struct {
 // ============================================================
 
 type EmployeeSchedule struct {
-	ID              uuid.UUID  `json:"id"`
-	EmployeeID      uuid.UUID  `json:"employee_id"`
-	TemplateID      *uuid.UUID `json:"template_id,omitempty"`
-	TemplateName    string     `json:"template_name,omitempty"`
-	DayOfWeek       *int       `json:"day_of_week"`
-	SpecificDate    *string    `json:"specific_date"`
-	StartTime       *string    `json:"start_time"`
-	EndTime         *string    `json:"end_time"`
-	BreakStart      *string    `json:"break_start"`
-	BreakEnd        *string    `json:"break_end"`
-	IsRemote        bool       `json:"is_remote"`
-	EffectiveFrom   string     `json:"effective_from"`
-	EffectiveUntil  *string    `json:"effective_until"`
-	Priority        int        `json:"priority"`
-	Reason          string     `json:"reason"`
-	IsActive        bool       `json:"is_active"`
-	Locations       []EmployeeScheduleLocation `json:"locations,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID             uuid.UUID                  `json:"id"`
+	EmployeeID     uuid.UUID                  `json:"employee_id"`
+	TemplateID     *uuid.UUID                 `json:"template_id,omitempty"`
+	TemplateName   string                     `json:"template_name,omitempty"`
+	DayOfWeek      *int                       `json:"day_of_week"`
+	SpecificDate   *string                    `json:"specific_date"`
+	StartTime      *string                    `json:"start_time"`
+	EndTime        *string                    `json:"end_time"`
+	BreakStart     *string                    `json:"break_start"`
+	BreakEnd       *string                    `json:"break_end"`
+	IsRemote       bool                       `json:"is_remote"`
+	EffectiveFrom  string                     `json:"effective_from"`
+	EffectiveUntil *string                    `json:"effective_until"`
+	Priority       int                        `json:"priority"`
+	Reason         string                     `json:"reason"`
+	IsActive       bool                       `json:"is_active"`
+	Locations      []EmployeeScheduleLocation `json:"locations,omitempty"`
+	CreatedAt      time.Time                  `json:"created_at"`
+	UpdatedAt      time.Time                  `json:"updated_at"`
 }
 
 type EmployeeScheduleSummary struct {
-	ID              uuid.UUID  `json:"id"`
-	EmployeeID      uuid.UUID  `json:"employee_id"`
-	EmployeeName    string     `json:"employee_name"`
-	TemplateName    string     `json:"template_name"`
-	DayOfWeek       *int       `json:"day_of_week"`
-	SpecificDate    *string    `json:"specific_date"`
-	StartTime       *string    `json:"start_time"`
-	EndTime         *string    `json:"end_time"`
-	IsRemote        bool       `json:"is_remote"`
-	EffectiveFrom   string     `json:"effective_from"`
-	EffectiveUntil  *string    `json:"effective_until"`
-	Priority        int        `json:"priority"`
-	IsActive        bool       `json:"is_active"`
-	LocationNames   string     `json:"location_names"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID             uuid.UUID `json:"id"`
+	EmployeeID     uuid.UUID `json:"employee_id"`
+	EmployeeName   string    `json:"employee_name"`
+	TemplateName   string    `json:"template_name"`
+	DayOfWeek      *int      `json:"day_of_week"`
+	SpecificDate   *string   `json:"specific_date"`
+	StartTime      *string   `json:"start_time"`
+	EndTime        *string   `json:"end_time"`
+	IsRemote       bool      `json:"is_remote"`
+	EffectiveFrom  string    `json:"effective_from"`
+	EffectiveUntil *string   `json:"effective_until"`
+	Priority       int       `json:"priority"`
+	IsActive       bool      `json:"is_active"`
+	LocationNames  string    `json:"location_names"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type EmployeeScheduleLocation struct {
@@ -126,20 +126,20 @@ type EmployeeScheduleLocation struct {
 }
 
 type CreateEmployeeScheduleRequest struct {
-	EmployeeID   string                       `json:"employee_id"`
-	TemplateID   string                       `json:"template_id,omitempty"`
-	DayOfWeek    *int                         `json:"day_of_week"`
-	SpecificDate *string                      `json:"specific_date"`
-	StartTime    *string                      `json:"start_time"`
-	EndTime      *string                      `json:"end_time"`
-	BreakStart   *string                      `json:"break_start"`
-	BreakEnd     *string                      `json:"break_end"`
-	IsRemote     *bool                        `json:"is_remote"`
-	EffectiveFrom string                      `json:"effective_from"`
-	EffectiveUntil *string                    `json:"effective_until"`
-	Priority     *int                         `json:"priority"`
-	Reason       string                       `json:"reason"`
-	Locations    []CreateScheduleLocation     `json:"locations"`
+	EmployeeID     string                   `json:"employee_id"`
+	TemplateID     string                   `json:"template_id,omitempty"`
+	DayOfWeek      *int                     `json:"day_of_week"`
+	SpecificDate   *string                  `json:"specific_date"`
+	StartTime      *string                  `json:"start_time"`
+	EndTime        *string                  `json:"end_time"`
+	BreakStart     *string                  `json:"break_start"`
+	BreakEnd       *string                  `json:"break_end"`
+	IsRemote       *bool                    `json:"is_remote"`
+	EffectiveFrom  string                   `json:"effective_from"`
+	EffectiveUntil *string                  `json:"effective_until"`
+	Priority       *int                     `json:"priority"`
+	Reason         string                   `json:"reason"`
+	Locations      []CreateScheduleLocation `json:"locations"`
 }
 
 type CreateScheduleLocation struct {
@@ -149,18 +149,18 @@ type CreateScheduleLocation struct {
 }
 
 type UpdateEmployeeScheduleRequest struct {
-	TemplateID    *string                      `json:"template_id"`
-	StartTime     *string                      `json:"start_time"`
-	EndTime       *string                      `json:"end_time"`
-	BreakStart    *string                      `json:"break_start"`
-	BreakEnd      *string                      `json:"break_end"`
-	IsRemote      *bool                        `json:"is_remote"`
-	EffectiveFrom *string                      `json:"effective_from"`
-	EffectiveUntil *string                     `json:"effective_until"`
-	Priority      *int                         `json:"priority"`
-	Reason        *string                      `json:"reason"`
-	IsActive      *bool                        `json:"is_active"`
-	Locations     []CreateScheduleLocation     `json:"locations"`
+	TemplateID     *string                  `json:"template_id"`
+	StartTime      *string                  `json:"start_time"`
+	EndTime        *string                  `json:"end_time"`
+	BreakStart     *string                  `json:"break_start"`
+	BreakEnd       *string                  `json:"break_end"`
+	IsRemote       *bool                    `json:"is_remote"`
+	EffectiveFrom  *string                  `json:"effective_from"`
+	EffectiveUntil *string                  `json:"effective_until"`
+	Priority       *int                     `json:"priority"`
+	Reason         *string                  `json:"reason"`
+	IsActive       *bool                    `json:"is_active"`
+	Locations      []CreateScheduleLocation `json:"locations"`
 }
 
 // ============================================================
@@ -168,14 +168,14 @@ type UpdateEmployeeScheduleRequest struct {
 // ============================================================
 
 type ResolvedSchedule struct {
-	ScheduleID   uuid.UUID `json:"schedule_id"`
-	Source       string    `json:"source"` // date_override, weekly_schedule, work_schedule, department_schedule
-	StartTime    string    `json:"start_time"`
-	EndTime      string    `json:"end_time"`
-	BreakStart   string    `json:"break_start"`
-	BreakEnd     string    `json:"break_end"`
-	IsRemote     bool      `json:"is_remote"`
-	Location     *ResolvedLocation `json:"location,omitempty"`
+	ScheduleID uuid.UUID         `json:"schedule_id"`
+	Source     string            `json:"source"` // date_override, weekly_schedule, work_schedule, department_schedule
+	StartTime  string            `json:"start_time"`
+	EndTime    string            `json:"end_time"`
+	BreakStart string            `json:"break_start"`
+	BreakEnd   string            `json:"break_end"`
+	IsRemote   bool              `json:"is_remote"`
+	Location   *ResolvedLocation `json:"location,omitempty"`
 }
 
 type ResolvedLocation struct {

@@ -104,19 +104,20 @@ func (h *ShiftChangeHandler) ApproveShiftChangeRequest(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.shiftChangeService.Approve(c.Context(), id, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "shift_change", id, userID, "approve", "")
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "permintaan shift tidak ditemukan":
+		case "permintaan shift tidak ditemukan", "tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "permintaan shift sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Permintaan shift berhasil disetujui"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Permintaan shift berhasil disetujui"))
 }
 
 // RejectShiftChangeRequest rejects a shift change request
@@ -134,19 +135,20 @@ func (h *ShiftChangeHandler) RejectShiftChangeRequest(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.shiftChangeService.Reject(c.Context(), id, req.RejectionReason, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "shift_change", id, userID, "reject", req.RejectionReason)
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "permintaan shift tidak ditemukan":
+		case "permintaan shift tidak ditemukan", "tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "permintaan shift sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Permintaan shift berhasil ditolak"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Permintaan shift berhasil ditolak"))
 }
 
 // ConfirmSwapShiftChangeRequest confirms swap partner

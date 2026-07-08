@@ -465,7 +465,7 @@ func GetPayslip(ctx context.Context, periodID, employeeID string) (*models.Paysl
 }
 
 // UpdatePayrollPeriodSummary refreshes the summary counts in payroll_periods
-func 	UpdatePayrollPeriodSummary(ctx context.Context, periodID string) error {
+func UpdatePayrollPeriodSummary(ctx context.Context, periodID string) error {
 	query := `
 		UPDATE payroll_periods pp
 		SET
@@ -612,6 +612,3 @@ func ListMyPayslips(ctx context.Context, employeeID string) ([]models.PayslipRes
 
 	return items, nil
 }
-
-
-

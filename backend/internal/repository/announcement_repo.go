@@ -242,7 +242,6 @@ func DeleteAnnouncement(ctx context.Context, id, userID string) error {
 	})
 }
 
-
 // MarkAnnouncementRead marks an announcement as read by an employee.
 func MarkAnnouncementRead(ctx context.Context, announcementID, employeeID string) error {
 	query := `
@@ -261,8 +260,3 @@ func MarkAnnouncementRead(ctx context.Context, announcementID, employeeID string
 	}
 	return tx.Commit(ctx)
 }
-
-
-
-
-

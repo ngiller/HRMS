@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"hrms-backend/internal/database"
@@ -360,13 +361,13 @@ func GetDashboardStats(ctx context.Context) (*models.DashboardResponse, error) {
 		defer recentRows.Close()
 		for recentRows.Next() {
 			var emp models.EmployeeSummary
-				if err := recentRows.Scan(
-					&emp.ID, &emp.EmployeeID, &emp.FullName, &emp.Email,
-					&emp.Gender, &emp.EmploymentStatus, &emp.IsActive,
-					&emp.RoleName, &emp.PositionName, &emp.DepartmentName,
-					&emp.JoinDate, &emp.Phone, &emp.DeletedAt,
-					&emp.BaseSalary,
-				); err == nil {
+			if err := recentRows.Scan(
+				&emp.ID, &emp.EmployeeID, &emp.FullName, &emp.Email,
+				&emp.Gender, &emp.EmploymentStatus, &emp.IsActive,
+				&emp.RoleName, &emp.PositionName, &emp.DepartmentName,
+				&emp.JoinDate, &emp.Phone, &emp.DeletedAt,
+				&emp.BaseSalary,
+			); err == nil {
 				resp.RecentEmployees = append(resp.RecentEmployees, emp)
 			}
 		}
@@ -442,18 +443,19 @@ func CreateEmployee(ctx context.Context, req *models.CreateEmployeeRequest, user
 
 	// If base_salary provided, also insert into employee_salary_histories
 	if req.BaseSalary != nil && *req.BaseSalary > 0 {
-		var histErr error
-		_ = database.WithUserContext(ctx, userID, func(tx pgx.Tx) error {
+		if err := database.WithUserContext(ctx, userID, func(tx pgx.Tx) error {
 			dailyWageVal := float64(0)
 			if req.DailyWage != nil {
 				dailyWageVal = *req.DailyWage
 			}
-			_, histErr = tx.Exec(ctx, `
+			_, histErr := tx.Exec(ctx, `
 				INSERT INTO employee_salary_histories (employee_id, base_salary, daily_wage, effective_date, reason, changed_by)
 				VALUES ($1::uuid, $2, $3, CURRENT_DATE, 'Initial salary from employee creation', $4::uuid)
 			`, employee.ID, *req.BaseSalary, dailyWageVal, userID)
 			return histErr
-		})
+		}); err != nil {
+			log.Printf("WARNING: Gagal insert salary history: %v", err)
+		}
 	}
 
 	return employee, nil
@@ -615,14 +617,15 @@ func UpdateEmployee(ctx context.Context, id string, req *models.UpdateEmployeeRe
 
 	// If base_salary changed, insert into employee_salary_histories
 	if req.BaseSalary != nil && *req.BaseSalary > 0 {
-		var histErr error
-		_ = database.WithUserContext(ctx, userID, func(tx pgx.Tx) error {
-			_, histErr = tx.Exec(ctx, `
+		if err := database.WithUserContext(ctx, userID, func(tx pgx.Tx) error {
+			_, histErr := tx.Exec(ctx, `
 				INSERT INTO employee_salary_histories (employee_id, base_salary, daily_wage, effective_date, reason, changed_by)
 				VALUES ($1::uuid, $2, COALESCE((SELECT daily_wage FROM employees WHERE id = $1::uuid), 0), CURRENT_DATE, 'Salary update from employee edit', $3::uuid)
 			`, employee.ID, *req.BaseSalary, userID)
 			return histErr
-		})
+		}); err != nil {
+			log.Printf("WARNING: Gagal insert salary history: %v", err)
+		}
 	}
 
 	return employee, nil

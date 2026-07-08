@@ -101,19 +101,20 @@ func (h *ReimbursementHandler) ApproveReimbursement(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.reimbursementService.Approve(c.Context(), id, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "reimbursement", id, userID, "approve", "")
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "reimbursement tidak ditemukan":
+		case "reimbursement tidak ditemukan", "tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "reimbursement sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Reimbursement berhasil disetujui"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Reimbursement berhasil disetujui"))
 }
 
 // RejectReimbursement rejects a reimbursement request
@@ -131,19 +132,20 @@ func (h *ReimbursementHandler) RejectReimbursement(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	r, err := h.reimbursementService.Reject(c.Context(), id, req.RejectionReason, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "reimbursement", id, userID, "reject", req.RejectionReason)
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "reimbursement tidak ditemukan":
+		case "reimbursement tidak ditemukan", "tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "reimbursement sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Reimbursement berhasil ditolak"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Reimbursement berhasil ditolak"))
 }
 
 // PayReimbursement marks reimbursement as paid

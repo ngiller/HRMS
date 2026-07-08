@@ -312,5 +312,3 @@ func monthName(m int) string {
 	}
 	return fmt.Sprintf("%d", m)
 }
-
-

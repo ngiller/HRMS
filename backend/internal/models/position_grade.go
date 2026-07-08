@@ -7,15 +7,15 @@ import (
 )
 
 type PositionGrade struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Level       int        `json:"level"`
-	MinSalary   *float64   `json:"min_salary"`
-	MaxSalary   *float64   `json:"max_salary"`
-	Description string     `json:"description"`
-	IsActive    bool       `json:"is_active"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Level       int       `json:"level"`
+	MinSalary   *float64  `json:"min_salary"`
+	MaxSalary   *float64  `json:"max_salary"`
+	Description string    `json:"description"`
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type PositionGradeSummary struct {

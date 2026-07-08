@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { employees as employeesApi, salaryComponents as scApi, workSchedules as wsApi } from '$lib/api.js';
+	import { employees as employeesApi, salaryComponents as scApi, workSchedules as wsApi, company as companyApi } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
+	import PulseLoader from '$lib/components/PulseLoader.svelte';
+	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 
 	let { employeeId, onclose }: { employeeId: string; onclose: () => void } = $props();
 
@@ -27,7 +29,7 @@
 				salaryDaily = String(empData.daily_wage || '');
 			}
 		} catch (err: any) {
-			alert(err.message || 'Gagal menyimpan gaji');
+			scFormError = err.message || 'Gagal menyimpan gaji';
 		} finally {
 			isSavingSalary = false;
 		}
@@ -107,7 +109,7 @@
 			employee!.photo_url = res.data?.photo_url || '';
 			photoPreview = null;
 		} catch (err: any) {
-			alert(err.message || 'Gagal upload foto');
+			errorMessage = err.message || 'Gagal upload foto';
 			photoPreview = null;
 		} finally {
 			isUploadingPhoto = false;
@@ -252,7 +254,7 @@
 			const empRes: any = await employeesApi.get(emp.id);
 			employee = empRes.data || null;
 		} catch (err: any) {
-			alert(err.message || 'Gagal menyimpan jadwal');
+			errorMessage = err.message || 'Gagal menyimpan jadwal';
 		} finally {
 			isSavingSchedule = false;
 		}
@@ -460,10 +462,88 @@
 		return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 	}
 
+		// ======================= BPJS Config =======================
+
+	type BPJSComponentConfig = {
+		enabled: boolean;
+		rate_employee?: number;
+		rate_company?: number;
+	};
+
+	type EmployeeBPJSConfig = {
+		kesehatan?: BPJSComponentConfig;
+		jht?: BPJSComponentConfig;
+		jp?: BPJSComponentConfig;
+		jkk?: BPJSComponentConfig;
+		jkm?: BPJSComponentConfig;
+	};
+
+	const BPJS_LABELS: Record<string, { label: string; description: string }> = {
+		kesehatan: { label: 'BPJS Kesehatan', description: 'Premi jaminan kesehatan (4% perusahaan, 1% karyawan)' },
+		jht: { label: 'BPJS JHT', description: 'Jaminan Hari Tua (3.7% perusahaan, 2% karyawan)' },
+		jp: { label: 'BPJS JP', description: 'Jaminan Pensiun (2% perusahaan, 1% karyawan)' },
+		jkk: { label: 'BPJS JKK', description: 'Jaminan Kecelakaan Kerja (0.24-1.74% perusahaan)' },
+		jkm: { label: 'BPJS JKM', description: 'Jaminan Kematian (0.3% perusahaan)' },
+	};
+
+	let employeeBPJSConfig = $state<EmployeeBPJSConfig>({});
+	let isLoadingBPJS = $state(false);
+	let isSavingBPJS = $state(false);
+	let bpjsError = $state('');
+	let bpjsSuccess = $state('');
+
+	async function loadEmployeeBPJSConfig() {
+		const emp = employee;
+		if (!emp) return;
+		isLoadingBPJS = true;
+		bpjsError = '';
+		try {
+			const res: any = await companyApi.getEmployeeBPJSConfig(emp.id);
+			const config = res?.data?.bpjs_config || {};
+			// Initialize all components with defaults if not set
+			employeeBPJSConfig = {
+				kesehatan: { enabled: config.kesehatan?.enabled ?? true },
+				jht: { enabled: config.jht?.enabled ?? true },
+				jp: { enabled: config.jp?.enabled ?? true },
+				jkk: { enabled: config.jkk?.enabled ?? true },
+				jkm: { enabled: config.jkm?.enabled ?? true },
+			};
+		} catch {
+			// Default to all enabled if error
+			employeeBPJSConfig = {
+				kesehatan: { enabled: true },
+				jht: { enabled: true },
+				jp: { enabled: true },
+				jkk: { enabled: true },
+				jkm: { enabled: true },
+			};
+		} finally {
+			isLoadingBPJS = false;
+		}
+	}
+
+	async function handleSaveBPJSConfig() {
+		const emp = employee;
+		if (!emp) return;
+		isSavingBPJS = true;
+		bpjsError = '';
+		bpjsSuccess = '';
+		try {
+			await companyApi.updateEmployeeBPJSConfig(emp.id, employeeBPJSConfig);
+			bpjsSuccess = 'Konfigurasi BPJS berhasil disimpan';
+			setTimeout(() => { bpjsSuccess = ''; }, 3000);
+		} catch (err: any) {
+			bpjsError = err.message || 'Gagal menyimpan konfigurasi BPJS';
+		} finally {
+			isSavingBPJS = false;
+		}
+	}
+
 	$effect(() => {
 		const emp = employee;
 		if (emp && !isLoading && hasPermission('payroll', 'read')) {
 			loadSalaryComponents();
+			loadEmployeeBPJSConfig();
 		}
 	});
 </script>
@@ -481,24 +561,7 @@
 	</button>
 
 	{#if isLoading}
-		<!-- Loading Skeleton -->
-		<div class="bg-white border border-gray-200 rounded-xl p-6 animate-pulse">
-			<div class="flex items-center gap-5 mb-8">
-				<div class="w-16 h-16 bg-gray-100 rounded-full"></div>
-				<div class="space-y-2.5">
-					<div class="h-5 bg-gray-100 rounded w-52"></div>
-					<div class="h-3.5 bg-gray-50 rounded w-36"></div>
-				</div>
-			</div>
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-				{#each [1,2,3,4,5,6] as _}
-					<div class="space-y-2">
-						<div class="h-3 bg-gray-50 rounded w-20"></div>
-						<div class="h-4 bg-gray-100 rounded w-40"></div>
-					</div>
-				{/each}
-			</div>
-		</div>
+		<PulseLoader variant="card" count={1} />
 	{:else if errorMessage}
 		<!-- Error State -->
 		<div class="bg-white border border-gray-200 rounded-xl py-16 text-center">
@@ -760,17 +823,7 @@
 			</div>
 
 			{#if isLoadingHistory}
-				<div class="animate-pulse space-y-4 py-2">
-					{#each [1,2,3] as _}
-						<div class="flex gap-3">
-							<div class="w-8 h-8 bg-gray-100 rounded-full shrink-0"></div>
-							<div class="flex-1 space-y-1.5">
-								<div class="h-4 bg-gray-100 rounded w-40"></div>
-								<div class="h-3 bg-gray-50 rounded w-56"></div>
-							</div>
-						</div>
-					{/each}
-				</div>
+				<PulseLoader variant="text" count={3} />
 			{:else if history.length === 0}
 				<p class="text-sm text-gray-400 text-center py-6">Belum ada riwayat perubahan</p>
 			{:else}
@@ -1024,16 +1077,7 @@
 
 			<!-- Loading State -->
 			{#if isLoadingSC}
-				<div class="bg-gray-50/50 rounded-xl border border-gray-200 divide-y divide-gray-100">
-					{#each [1,2,3] as _}
-						<div class="flex items-center gap-4 px-5 py-4 animate-pulse">
-							<div class="h-4 bg-gray-200 rounded w-32"></div>
-							<div class="h-6 bg-gray-200 rounded-full w-20"></div>
-							<div class="h-4 bg-gray-200 rounded w-24 ml-auto"></div>
-							<div class="h-6 w-16 bg-gray-200 rounded"></div>
-						</div>
-					{/each}
-				</div>
+				<PulseLoader variant="table-row" count={3} />
 			{:else if salaryComps.length === 0}
 				<!-- Empty State -->
 				<div class="text-center py-12 px-6">
@@ -1157,7 +1201,7 @@
 		{/if}
 
 		<!-- Delete Confirmation Modal for Salary Component -->
-		{#if showSCDelete}
+		<AnimatedPresence show={showSCDelete} type="scale" duration={200}>
 	<!-- svelte-ignore a11y_interactive_supports_focus -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div onclick={cancelSCDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelSCDelete(); }}
@@ -1185,6 +1229,6 @@
 					</div>
 				</div>
 			</div>
-		{/if}
+		</AnimatedPresence>
 	{/if}
 </div>

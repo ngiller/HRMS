@@ -105,19 +105,21 @@ func (h *LoanHandler) ApproveLoan(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	l, err := h.loanService.Approve(c.Context(), id, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "loan", id, userID, "approve", "")
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "pinjaman tidak ditemukan":
+		case "pinjaman tidak ditemukan", "data pinjaman tidak ditemukan",
+			"tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "pinjaman sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(l, "Pinjaman berhasil disetujui"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Pinjaman berhasil disetujui"))
 }
 
 // RejectLoan rejects a loan
@@ -135,19 +137,46 @@ func (h *LoanHandler) RejectLoan(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
 	}
 
-	l, err := h.loanService.Reject(c.Context(), id, req.RejectionReason, userID)
+	wfSvc := service.NewApprovalWorkflowService()
+	result, err := wfSvc.ProcessApproval(c.Context(), "loan", id, userID, "reject", req.RejectionReason)
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		switch err.Error() {
-		case "pinjaman tidak ditemukan":
+		case "pinjaman tidak ditemukan", "data pinjaman tidak ditemukan",
+			"tracking approval tidak ditemukan":
 			status = fiber.StatusNotFound
-		case "pinjaman sudah diproses":
+		case "request ini sudah diproses":
 			status = fiber.StatusConflict
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(SuccessResponse(l, "Pinjaman berhasil ditolak"))
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Pinjaman berhasil ditolak"))
+}
+
+// CancelLoan cancels a loan request
+// PUT /api/loans/:id/cancel
+func (h *LoanHandler) CancelLoan(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	userID := database.UserIDFromContext(c.Locals("user_id"))
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
+	}
+
+	err := h.loanService.Cancel(c.Context(), id, userID)
+	if err != nil {
+		status := fiber.StatusInternalServerError
+		switch err.Error() {
+		case "pinjaman tidak ditemukan":
+			status = fiber.StatusNotFound
+		case "pinjaman sudah diproses, tidak dapat dibatalkan":
+			status = fiber.StatusConflict
+		}
+		return c.Status(status).JSON(ErrorResponse(err.Error()))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(fiber.Map{}, "Pinjaman berhasil dibatalkan"))
 }
 
 // DisburseLoan disburses a loan (cairkan)

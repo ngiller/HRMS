@@ -139,7 +139,6 @@ func ListKPIReviews(ctx context.Context, page, perPage int, status, employeeID s
 		return nil, 0, err
 	}
 
-
 	offset := (page - 1) * perPage
 	finalQuery := `
 		SELECT kr.id, kr.employee_id, COALESCE(e.full_name, ''),

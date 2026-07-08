@@ -370,16 +370,16 @@ func employeeToUserResponse(ctx context.Context, employee *models.Employee) *mod
 	}
 
 	return &models.UserResponse{
-		ID:              employee.ID,
-		EmployeeID:      employee.EmployeeID,
-		FullName:        employee.FullName,
-		Email:           employee.Email,
-		RoleSlug:        employee.RoleSlug,
-		RoleName:        employee.RoleName,
-		PositionName:    employee.PositionName,
-		DepartmentName:  employee.DepartmentName,
-		AvatarInitials:  getInitials(employee.FullName),
-		Permissions:     perms,
+		ID:             employee.ID,
+		EmployeeID:     employee.EmployeeID,
+		FullName:       employee.FullName,
+		Email:          employee.Email,
+		RoleSlug:       employee.RoleSlug,
+		RoleName:       employee.RoleName,
+		PositionName:   employee.PositionName,
+		DepartmentName: employee.DepartmentName,
+		AvatarInitials: getInitials(employee.FullName),
+		Permissions:    perms,
 	}
 }
 

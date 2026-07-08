@@ -139,9 +139,9 @@ func CreateScheduleTemplate(ctx context.Context, req *models.CreateScheduleTempl
 			INSERT INTO schedule_template_days (template_id, day_of_week, start_time, end_time, break_start, break_end, late_tolerance_minutes, early_leave_tolerance)
 			VALUES ($1, $2, $3::time, $4::time, $5::time, $6::time, $7, $8)
 			RETURNING id, template_id, day_of_week, start_time::text, end_time::text, break_start::text, break_end::text, late_tolerance_minutes, early_leave_tolerance, is_active, sort_order
-		`, t.ID, d.DayOfWeek,			d.StartTime, d.EndTime,
-			d.BreakStart, d.BreakEnd, d.LateToleranceMinutes, d.EarlyLeaveTolerance,	).Scan(&day.ID, &day.TemplateID, &day.DayOfWeek, &day.StartTime, &day.EndTime,
-		&day.BreakStart, &day.BreakEnd, &day.LateToleranceMinutes, &day.EarlyLeaveTolerance, &day.IsActive, &day.SortOrder)
+		`, t.ID, d.DayOfWeek, d.StartTime, d.EndTime,
+			d.BreakStart, d.BreakEnd, d.LateToleranceMinutes, d.EarlyLeaveTolerance).Scan(&day.ID, &day.TemplateID, &day.DayOfWeek, &day.StartTime, &day.EndTime,
+			&day.BreakStart, &day.BreakEnd, &day.LateToleranceMinutes, &day.EarlyLeaveTolerance, &day.IsActive, &day.SortOrder)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +212,7 @@ func UpdateScheduleTemplate(ctx context.Context, id string, req *models.UpdateSc
 			INSERT INTO schedule_template_days (template_id, day_of_week, start_time, end_time, break_start, break_end, late_tolerance_minutes, early_leave_tolerance)
 			VALUES ($1::uuid, $2, NULLIF($3, '')::time, NULLIF($4, '')::time, NULLIF($5, '')::time, NULLIF($6, '')::time, $7, $8)
 		`, id, d.DayOfWeek, d.StartTime, d.EndTime,
-			d.BreakStart, d.BreakEnd, d.LateToleranceMinutes, d.EarlyLeaveTolerance)
+				d.BreakStart, d.BreakEnd, d.LateToleranceMinutes, d.EarlyLeaveTolerance)
 			if err != nil {
 				return nil, err
 			}
@@ -412,9 +412,9 @@ func CreateEmployeeSchedule(ctx context.Context, req *models.CreateEmployeeSched
 		&s.IsRemote, &s.EffectiveFrom, &s.EffectiveUntil, &s.Priority,
 		&s.Reason, &s.IsActive, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
-	if isPGUniqueViolation(err) {
-		return nil, fmt.Errorf("karyawan sudah memiliki jadwal di tanggal tersebut")
-	}
+		if isPGUniqueViolation(err) {
+			return nil, fmt.Errorf("karyawan sudah memiliki jadwal di tanggal tersebut")
+		}
 		return nil, err
 	}
 
@@ -717,5 +717,3 @@ func isPGUniqueViolation(err error) bool {
 	}
 	return strings.Contains(err.Error(), "duplicate key")
 }
-
-
