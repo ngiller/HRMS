@@ -1824,5 +1824,63 @@ export const resign = {
 	},
 };
 
+export const push = {
+	/**
+	 * Get VAPID public key for push subscription
+	 * @returns {Promise<ApiResponse>}
+	 */
+	getVapidPublicKey() {
+		return request('/api/push/vapid-public-key');
+	},
+
+	/**
+	 * Subscribe to push notifications
+	 * @param {PushSubscription} subscription
+	 * @param {string} [deviceName]
+	 * @returns {Promise<ApiResponse>}
+	 */
+	subscribe(subscription, deviceName = '') {
+		return request('/api/push/subscribe', {
+			method: 'POST',
+			body: {
+				endpoint: subscription.endpoint,
+				p256dh_key: arrayBufferToBase64(subscription.getKey('p256dh')),
+				auth_key: arrayBufferToBase64(subscription.getKey('auth')),
+				device_name: deviceName,
+			},
+		});
+	},
+
+	/**
+	 * Unsubscribe from push notifications
+	 * @param {string} id
+	 * @returns {Promise<ApiResponse>}
+	 */
+	unsubscribe(id) {
+		return request(`/api/push/subscribe/${id}`, {
+			method: 'DELETE',
+		});
+	},
+
+	/**
+	 * List active push subscriptions
+	 * @returns {Promise<ApiResponse>}
+	 */
+	listSubscriptions() {
+		return request('/api/push/subscriptions');
+	},
+};
+
+/** Helper: Convert ArrayBuffer to Base64 string */
+function arrayBufferToBase64(buffer) {
+	if (!buffer) return '';
+	const bytes = new Uint8Array(buffer);
+	let binary = '';
+	for (let i = 0; i < bytes.byteLength; i++) {
+		binary += String.fromCharCode(bytes[i]);
+	}
+	return btoa(binary);
+}
+
 export { ApiError };
-export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, ApiError };
+export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, ApiError };

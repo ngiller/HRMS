@@ -41,6 +41,9 @@ type Config struct {
 	SMTPPassword string
 	SMTPFrom     string
 	SMTPFromName string
+
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
 }
 
 func Load() *Config {
@@ -81,6 +84,9 @@ func Load() *Config {
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", "noreply@hrms.com"),
 		SMTPFromName: getEnv("SMTP_FROM_NAME", "HRMS System"),
+
+		VAPIDPublicKey:  getEnv("VAPID_PUBLIC_KEY", ""),
+		VAPIDPrivateKey: getEnv("VAPID_PRIVATE_KEY", ""),
 	}
 
 	// Warn if sensitive defaults are used (development only)

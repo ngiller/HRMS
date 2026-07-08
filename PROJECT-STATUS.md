@@ -92,6 +92,7 @@
 | **PWA Manifest & Icons** | ✅ **manifest.json, SVG icons, shortcuts, install prompt** | **100%** |
 | **Security Headers (CSP)** | ✅ **X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP, HSTS** | **100%** |
 | **File Upload Validation** | ✅ **MIME type + extension + size validation** | **100%** |
+| **Company Settings UI** | ✅ **Form BPJS + Profil Perusahaan + Workflow Persetujuan** | **100%** |
 
 ---
 

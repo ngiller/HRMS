@@ -255,7 +255,7 @@
 	function statusBadge(s: string): string {
 		const map: Record<string, string> = {
 			hadir: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-			terlambat: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+			terlambat: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 			izin: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
 			sakit: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 			tanpa_keterangan: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
@@ -542,9 +542,9 @@
 						</div>
 						<div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
 							<span class="tabular-nums">
-								<span class={r.is_late ? "text-red-500 font-semibold" : ""}>{formatTime(r.check_in_time)}</span> 
+								<span class={r.is_late || r.status === 'terlambat' ? "text-red-500 font-semibold" : ""}>{formatTime(r.check_in_time)}</span> 
 								— 
-								<span class={r.is_early_leave ? "text-red-500 font-semibold" : ""}>{formatTime(r.check_out_time)}</span>
+								<span class={r.is_early_leave || r.status === 'pulang_awal' ? "text-red-500 font-semibold" : ""}>{formatTime(r.check_out_time)}</span>
 							</span>
 							{#if r.total_work_hours}
 								<span class="tabular-nums">{r.total_work_hours.toFixed(1)} jam</span>
@@ -557,7 +557,7 @@
 									<div class="space-y-3">
 										<h4 class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 text-sm">
 											<svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
-											Check In: <span class={r.is_late ? "text-red-500 font-bold" : "text-gray-900 dark:text-white"}>{formatTime(r.check_in_time)}</span>
+											Check In: <span class={r.is_late || r.status === 'terlambat' ? "text-red-500 font-bold" : "text-gray-900 dark:text-white"}>{formatTime(r.check_in_time)}</span>
 										</h4>
 										{#if r.check_in_photo_url}
 											<div class="aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -579,7 +579,7 @@
 									<div class="space-y-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-4">
 										<h4 class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 text-sm">
 											<svg class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-											Check Out: <span class={r.is_early_leave ? "text-red-500 font-bold" : "text-gray-900 dark:text-white"}>{formatTime(r.check_out_time)}</span>
+											Check Out: <span class={r.is_early_leave || r.status === 'pulang_awal' ? "text-red-500 font-bold" : "text-gray-900 dark:text-white"}>{formatTime(r.check_out_time)}</span>
 										</h4>
 										{#if r.check_out_time}
 											{#if r.check_out_photo_url}
@@ -602,7 +602,7 @@
 										{/if}
 									</div>
 								</div>
-								{#if r.is_late || r.is_early_leave || !r.check_in_time || !r.check_out_time}
+								{#if r.is_late || r.status === 'terlambat' || r.is_early_leave || r.status === 'pulang_awal' || !r.check_in_time || !r.check_out_time}
 									<div class="mt-4 flex justify-end px-4 pb-4">
 										<a href="/absensi-manual" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-sm font-medium hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">
 											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>

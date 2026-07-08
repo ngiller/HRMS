@@ -10,8 +10,9 @@ import (
 
 // NotificationService handles business logic for notifications
 type NotificationService struct {
-	repo         *repository.NotificationRepo
-	emailService *EmailService
+	repo            *repository.NotificationRepo
+	emailService    *EmailService
+	webPushService  *WebPushService
 }
 
 // NewNotificationService creates a new NotificationService
@@ -20,6 +21,11 @@ func NewNotificationService(emailService *EmailService) *NotificationService {
 		repo:         repository.NewNotificationRepo(),
 		emailService: emailService,
 	}
+}
+
+// SetWebPushService sets the Web Push service for sending push notifications
+func (s *NotificationService) SetWebPushService(wps *WebPushService) {
+	s.webPushService = wps
 }
 
 // ListNotifications returns paginated notifications for a user
@@ -68,6 +74,11 @@ func (s *NotificationService) CreateNotification(ctx context.Context, req *model
 				}
 			}
 		}()
+	}
+
+	// Try to send Web Push notification asynchronously
+	if s.webPushService != nil && n != nil {
+		SendPushNotification(context.Background(), req.UserID, n)
 	}
 
 	return n, nil

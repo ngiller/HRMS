@@ -68,6 +68,13 @@ func main() {
 	manualAttendanceService := service.NewManualAttendanceService()
 	resignService := service.NewResignService()
 
+	// Initialize Web Push service (set global singleton for use by notification service)
+	webPushService := service.InitGlobalWebPushService(cfg)
+	service.SetGlobalWebPushService(webPushService)
+
+	// Update notification service with web push reference
+	notificationService.SetWebPushService(webPushService)
+
 	// Initialize handlers
 	companyHandler := handlers.NewCompanyHandler(companyService)
 	authHandler := handlers.NewAuthHandler(authService)
@@ -100,6 +107,7 @@ func main() {
 	approvalWorkflowHandler := handlers.NewApprovalWorkflowHandler(approvalWorkflowService)
 	manualAttendanceHandler := handlers.NewManualAttendanceHandler(manualAttendanceService)
 	resignHandler := handlers.NewResignHandler(resignService)
+	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(webPushService)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -136,6 +144,7 @@ func main() {
 		manualAttendanceHandler,
 		resignHandler,
 		approvalWorkflowHandler,
+		pushSubscriptionHandler,
 		authService)
 
 	// Start server

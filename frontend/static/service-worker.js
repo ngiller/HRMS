@@ -223,6 +223,77 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ==========================================
+// PUSH EVENT — receive push notifications
+// ==========================================
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  try {
+    const data = event.data.json();
+    const title = data.title || 'HRMS Notification';
+    const options = {
+      body: data.body || '',
+      icon: data.icon || '/icons/icon-192.png',
+      badge: data.badge || '/icons/icon-192.png',
+      tag: data.tag || 'default',
+      data: data.data || {},
+      vibrate: [200, 100, 200],
+      requireInteraction: true,
+      actions: [
+        {
+          action: 'open',
+          title: 'Buka'
+        },
+        {
+          action: 'close',
+          title: 'Tutup'
+        }
+      ]
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(title, options)
+    );
+  } catch (e) {
+    // Fallback for plain text payload
+    event.waitUntil(
+      self.registration.showNotification(event.data.text(), {
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png'
+      })
+    );
+  }
+});
+
+// ==========================================
+// NOTIFICATION CLICK — handle user interaction
+// ==========================================
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'close') return;
+
+  // Determine URL from notification data or default to app
+  const urlToOpen = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If we already have a window, focus it and navigate
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.navigate(urlToOpen);
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
+// ==========================================
 // HELPER: Trim cache to max entries
 // ==========================================
 function trimCache(cacheName, maxItems) {

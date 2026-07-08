@@ -45,6 +45,7 @@ func Setup(
 	manualAttendanceHandler *handlers.ManualAttendanceHandler,
 	resignHandler *handlers.ResignHandler,
 	approvalWorkflowHandler *handlers.ApprovalWorkflowHandler,
+	pushSubscriptionHandler *handlers.PushSubscriptionHandler,
 	authService *service.AuthService,
 ) {
 	// Health check
@@ -381,4 +382,11 @@ func Setup(
 	approvals.Get("/pending", approvalWorkflowHandler.GetPendingApprovals)
 	approvals.Post("/:entityType/:entityId/init", approvalWorkflowHandler.InitializeTracking)
 	approvals.Put("/:entityType/:entityId/process", approvalWorkflowHandler.ProcessApproval)
+
+	// ==================== Push Notification Routes ====================
+	push := protected.Group("/push")
+	push.Get("/vapid-public-key", pushSubscriptionHandler.GetVapidPublicKey)
+	push.Post("/subscribe", pushSubscriptionHandler.Subscribe)
+	push.Delete("/subscribe/:id", pushSubscriptionHandler.Unsubscribe)
+	push.Get("/subscriptions", pushSubscriptionHandler.ListSubscriptions)
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { dashboard as dashboardApi, auth, announcements as announcementsApi } from '$lib/api.js';
+	import { dashboard as dashboardApi, auth, announcements as announcementsApi, attendance, leaveRequests } from '$lib/api.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 
 	let Chart: any;
@@ -70,6 +70,16 @@
 	
 	let isEmployee = $derived((auth.getUser() as any)?.role_name === 'Employee' || (auth.getUser() as any)?.role_id === 3);
 	let employeeAnnouncements = $state<any[]>([]);
+	let todayStatus = $state<any>(null);
+	let leaveBalance = $state<any>(null);
+	let currentTime = $state(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+	onMount(() => {
+		const timer = setInterval(() => {
+			currentTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		}, 1000);
+		return () => clearInterval(timer);
+	});
 
 	// Unique canvas refs per tab to avoid bind:this conflicts
 	let overviewAttendanceCanvas = $state<HTMLCanvasElement>(undefined!);
@@ -307,9 +317,23 @@
 			}
 			
 			if (isEmployee) {
-				// Fetch announcements for employee view
-				const annRes = await announcementsApi.list(1, 10);
-				employeeAnnouncements = annRes.data || [];
+				// Fetch data for employee dashboard
+				try {
+					const [annRes, attRes, leaveRes] = await Promise.all([
+						announcementsApi.get({ limit: 5, is_active: true }).catch(() => ({ data: { announcements: [] } })),
+						attendance.today().catch(() => ({ data: null })),
+						leaveRequests.getMyBalances().catch(() => ({ data: [] }))
+					]);
+					
+					employeeAnnouncements = annRes.data?.announcements || [];
+					todayStatus = attRes.data;
+					
+					if (leaveRes.data && Array.isArray(leaveRes.data)) {
+						leaveBalance = leaveRes.data.find((b: any) => b.leave_type?.name === 'Tahunan' || b.leave_type?.name === 'Cuti Tahunan') || leaveRes.data[0];
+					}
+				} catch (e) {
+					console.error("Error loading employee dashboard", e);
+				}
 				return;
 			}
 			
@@ -429,90 +453,177 @@
 
 <div class="max-w-full mx-auto">
 	{#if isEmployee && !isLoading}
-		<!-- Employee Dashboard (Scrollable Announcements) -->
-		<div class="max-w-3xl mx-auto py-2">
+		<!-- Employee Dashboard (Talenta Style) -->
+		<div class="max-w-4xl mx-auto py-2">
+			<!-- Header -->
 			<div class="flex items-center justify-between mb-6">
 				<div>
 					<h1 class="text-2xl font-bold text-gray-900">Halo, {userName}!</h1>
 					<p class="text-sm text-gray-500 mt-1">{todayDate}</p>
 				</div>
+				<div class="hidden sm:block">
+					<div class="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-medium text-sm border border-blue-100 flex items-center gap-2">
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+						{currentTime}
+					</div>
+				</div>
 			</div>
 			
-			<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col max-h-[calc(100vh-140px)]">
-				<div class="p-5 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3 shrink-0">
-					<div class="p-2 bg-blue-100 rounded-lg text-blue-600">
-						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<!-- Left Column: Attendance & Quick Links -->
+				<div class="lg:col-span-2 space-y-6">
+					<!-- Live Attendance Card -->
+					<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+						<div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+							<h2 class="font-semibold text-gray-900 flex items-center gap-2">
+								<svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+								Live Attendance
+							</h2>
+							<span class="text-xs font-medium text-gray-500">{todayStatus?.schedule_name || 'Tidak ada jadwal'}</span>
+						</div>
+						
+						<div class="p-6">
+							{#if todayStatus}
+								<div class="flex flex-col sm:flex-row items-center justify-between gap-6 mb-6">
+									<div class="flex-1 w-full text-center sm:text-left">
+										<p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Check In</p>
+										<div class="text-3xl font-bold text-gray-900 tabular-nums">
+											{todayStatus.has_checked_in && todayStatus.record?.check_in_time ? new Date(todayStatus.record.check_in_time).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '--:--'}
+										</div>
+										<p class="text-xs text-gray-400 mt-1">Jadwal: {todayStatus.schedule_start || '--:--'}</p>
+									</div>
+									
+									<div class="hidden sm:block w-px h-16 bg-gray-200"></div>
+									<div class="sm:hidden w-full h-px bg-gray-200"></div>
+									
+									<div class="flex-1 w-full text-center sm:text-left">
+										<p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Check Out</p>
+										<div class="text-3xl font-bold text-gray-900 tabular-nums">
+											{todayStatus.has_checked_out && todayStatus.record?.check_out_time ? new Date(todayStatus.record.check_out_time).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '--:--'}
+										</div>
+										<p class="text-xs text-gray-400 mt-1">Jadwal: {todayStatus.schedule_end || '--:--'}</p>
+									</div>
+								</div>
+								
+								<div class="flex gap-3">
+									<button 
+										onclick={() => goto('/absensi')}
+										class="flex-1 py-3 px-4 rounded-lg font-bold text-white text-sm transition-colors text-center {todayStatus.has_checked_in ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}"
+										disabled={todayStatus.has_checked_in}
+									>
+										Check In
+									</button>
+									<button 
+										onclick={() => goto('/absensi')}
+										class="flex-1 py-3 px-4 rounded-lg font-bold text-white text-sm transition-colors text-center {todayStatus.has_checked_out || !todayStatus.has_checked_in ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}"
+										disabled={todayStatus.has_checked_out || !todayStatus.has_checked_in}
+									>
+										Check Out
+									</button>
+								</div>
+							{:else}
+								<div class="text-center py-6 text-gray-500 text-sm">Gagal memuat status absensi.</div>
+							{/if}
+						</div>
 					</div>
-					<div>
-						<h2 class="font-semibold text-gray-900">Papan Pengumuman</h2>
-						<p class="text-xs text-gray-500 mt-0.5">Informasi terbaru dari perusahaan</p>
+					
+					<!-- Shortcuts -->
+					<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-5">
+						<h2 class="font-semibold text-gray-900 mb-4">Akses Cepat</h2>
+						<div class="grid grid-cols-4 gap-2 sm:gap-4">
+							<a href="/cuti" class="flex flex-col items-center gap-2 group p-2 rounded-lg hover:bg-gray-50 transition-colors">
+								<div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+									<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+								</div>
+								<span class="text-xs font-medium text-gray-600 text-center">Ajukan Cuti</span>
+							</a>
+							<a href="/lembur" class="flex flex-col items-center gap-2 group p-2 rounded-lg hover:bg-gray-50 transition-colors">
+								<div class="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+									<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+								</div>
+								<span class="text-xs font-medium text-gray-600 text-center">Lembur</span>
+							</a>
+							<a href="/absensi-manual" class="flex flex-col items-center gap-2 group p-2 rounded-lg hover:bg-gray-50 transition-colors">
+								<div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+									<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+								</div>
+								<span class="text-xs font-medium text-gray-600 text-center">Revisi Absen</span>
+							</a>
+							<a href="/reimbursement" class="flex flex-col items-center gap-2 group p-2 rounded-lg hover:bg-gray-50 transition-colors">
+								<div class="w-12 h-12 rounded-full bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+									<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 004.5 6h.75m13.5 0h.75a.75.75 0 00.75-.75V4.5m-15 15h15" /></svg>
+								</div>
+								<span class="text-xs font-medium text-gray-600 text-center">Klaim Dana</span>
+							</a>
+						</div>
 					</div>
 				</div>
 				
-				<div class="overflow-y-auto flex-1 p-0 custom-scrollbar">
-					{#if employeeAnnouncements.length === 0}
-						<div class="p-10 flex flex-col items-center justify-center text-center">
-							<div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-								<svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+				<!-- Right Column: Leave Balances & Announcements -->
+				<div class="space-y-6">
+					<!-- Leave Balance -->
+					<div class="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-sm overflow-hidden text-white p-5">
+						<div class="flex items-center justify-between mb-4 opacity-90">
+							<h2 class="font-semibold text-sm">Sisa Cuti Tahunan</h2>
+							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+						</div>
+						
+						<div class="flex items-end gap-2">
+							<span class="text-4xl font-bold">{leaveBalance?.remaining_balance ?? '-'}</span>
+							<span class="text-blue-100 font-medium mb-1">Hari</span>
+						</div>
+						
+						{#if leaveBalance?.expired_at}
+							<div class="mt-4 text-xs text-blue-200">
+								Berlaku sampai {new Date(leaveBalance.expired_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}
 							</div>
-							<p class="text-gray-500 font-medium">Tidak ada pengumuman</p>
-							<p class="text-xs text-gray-400 mt-1">Belum ada informasi terbaru saat ini.</p>
+						{/if}
+						<a href="/cuti" class="mt-4 block text-center py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">Lihat Detail</a>
+					</div>
+					
+					<!-- Announcements Mini Feed -->
+					<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+						<div class="p-4 border-b border-gray-100 flex items-center justify-between">
+							<h2 class="font-semibold text-gray-900 text-sm">Pengumuman</h2>
+							<a href="/pengumuman" class="text-xs font-medium text-blue-600 hover:underline">Lihat Semua</a>
 						</div>
-					{:else}
-						<div class="divide-y divide-gray-50">
-							{#each employeeAnnouncements as ann}
-								<a href="/announcements/{ann.id}" class="block p-5 hover:bg-gray-50/80 transition-colors group">
-									<div class="flex items-start justify-between gap-4">
-										<div class="flex-1 min-w-0">
-											<div class="flex items-center gap-2 mb-1.5">
-												{#if ann.is_pinned}
-													<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600 border border-red-100">
-														<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-														Pinned
-													</span>
-												{/if}
-												<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium 
-													{ann.announcement_type === 'important' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 
-													ann.announcement_type === 'emergency' ? 'bg-red-50 text-red-600 border border-red-100' : 
-													'bg-blue-50 text-blue-600 border border-blue-100'}">
-													{ann.announcement_type === 'important' ? 'Penting' : ann.announcement_type === 'emergency' ? 'Darurat' : 'Umum'}
-												</span>
-												<span class="text-xs text-gray-400 font-medium ml-1">
-													{new Date(ann.published_at || ann.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-												</span>
+						
+						<div class="p-0 max-h-[300px] overflow-y-auto custom-scrollbar">
+							{#if employeeAnnouncements.length === 0}
+								<div class="p-6 text-center">
+									<p class="text-gray-400 text-xs font-medium">Tidak ada pengumuman</p>
+								</div>
+							{:else}
+								<div class="divide-y divide-gray-50">
+									{#each employeeAnnouncements as ann}
+										<a href="/announcements/{ann.id}" class="block p-4 hover:bg-gray-50 transition-colors">
+											<div class="flex gap-3">
+												<div class="shrink-0 mt-0.5">
+													<div class="w-8 h-8 rounded-full flex items-center justify-center {ann.announcement_type === 'important' ? 'bg-orange-100 text-orange-600' : ann.announcement_type === 'emergency' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}">
+														<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+													</div>
+												</div>
+												<div class="min-w-0">
+													<h3 class="text-sm font-semibold text-gray-900 truncate">{ann.title}</h3>
+													<p class="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{ann.content || 'Klik untuk melihat detail'}</p>
+													<p class="text-[10px] text-gray-400 mt-2 font-medium">{new Date(ann.published_at || ann.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</p>
+												</div>
 											</div>
-											<h3 class="text-[15px] font-semibold text-gray-900 group-hover:text-blue-600 transition-colors mb-1 truncate">{ann.title}</h3>
-											<p class="text-sm text-gray-500 line-clamp-2 leading-relaxed">
-												Oleh: <span class="font-medium text-gray-700">{ann.created_by_name}</span>
-											</p>
-										</div>
-										<div class="shrink-0 pt-1 text-gray-300 group-hover:text-blue-500 transition-colors">
-											<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-										</div>
-									</div>
-								</a>
-							{/each}
+										</a>
+									{/each}
+								</div>
+							{/if}
 						</div>
-					{/if}
+					</div>
 				</div>
 			</div>
 		</div>
 		
 		<style>
-			/* Custom scrollbar for the announcements feed */
-			.custom-scrollbar::-webkit-scrollbar {
-				width: 6px;
-			}
-			.custom-scrollbar::-webkit-scrollbar-track {
-				background: transparent;
-			}
-			.custom-scrollbar::-webkit-scrollbar-thumb {
-				background-color: #E5E7EB;
-				border-radius: 20px;
-			}
-			.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-				background-color: #D1D5DB;
-			}
+			.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+			.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+			.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #E5E7EB; border-radius: 10px; }
+			.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #D1D5DB; }
 		</style>
 	{:else}
 		<!-- Page Header (Admin/HR Dashboard) -->
