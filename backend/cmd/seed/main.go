@@ -1246,6 +1246,177 @@ func main() {
 	}
 
 	// ============================================================
+	// 🔄 SEED EMPLOYEE MUTATIONS (Mutasi & Promosi)
+	// ============================================================
+	fmt.Println("\n🔄 Seeding employee mutations...")
+
+	type mutationSeed struct {
+		EmployeeID   string
+		MutationType  string // promotion, demotion, transfer, position_change, status_change, salary_change
+		OldDeptCode   string
+		NewDeptCode   string
+		OldPosName    string
+		NewPosName    string
+		OldStatus     string
+		NewStatus     string
+		OldSalary     float64
+		NewSalary     float64
+		Reason        string
+		Status        string // pending, approved, rejected, cancelled, draft
+	}
+
+	mutationSeeds := []mutationSeed{
+		{"EMP-005", "transfer", "IT", "HR", "Staff IT", "HR Staff", "percobaan", "percobaan", 7000000, 7500000,
+			"Mutasi ke departemen HR untuk memperkuat tim pengelolaan SDM", "pending"},
+		{"EMP-007", "promotion", "MKT", "MKT", "Marketing", "Marketing", "tetap", "tetap", 6500000, 9500000,
+			"Kinerja sangat baik selama 2 tahun — kenaikan jabatan dan penyesuaian gaji", "pending"},
+		{"EMP-006", "status_change", "SALES", "SALES", "Sales", "Sales", "percobaan", "tetap", 0, 0,
+			"Masa percobaan 3 bulan selesai dengan hasil evaluasi memuaskan", "approved"},
+		{"EMP-008", "salary_change", "FIN", "FIN", "Accounting", "Accounting", "tetap", "tetap", 8000000, 11000000,
+			"Penyesuaian gaji tahunan berdasarkan evaluasi kinerja dan inflasi", "pending"},
+		{"EMP-003", "transfer", "SALES", "MKT", "Sales Executive", "Marketing", "kontrak", "kontrak", 6000000, 6500000,
+			"Restrukturisasi organisasi — pemindahan ke departemen Pemasaran", "pending"},
+		{"EMP-002", "salary_change", "FIN", "FIN", "Finance Staff", "Finance Staff", "tetap", "tetap", 9000000, 9000000,
+			"Pengajuan mutasi ditolak karena belum memenuhi syarat masa kerja minimal", "rejected"},
+	}
+
+	// Disable audit triggers for mutations
+	database.Pool.Exec(ctx, `ALTER TABLE employee_mutations DISABLE TRIGGER ALL`)
+
+	for _, ms := range mutationSeeds {
+		var count int
+		database.Pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM employee_mutations em
+			JOIN employees e ON e.id = em.employee_id
+			WHERE e.employee_id = $1 AND em.reason = $2
+		`, ms.EmployeeID, ms.Reason).Scan(&count)
+
+		if count == 0 {
+			// Get IDs
+			var empUUID, oldDeptID, newDeptID, oldPosID, newPosID string
+			database.Pool.QueryRow(ctx, `SELECT id::text FROM employees WHERE employee_id = $1`, ms.EmployeeID).Scan(&empUUID)
+			if ms.OldDeptCode != "" {
+				database.Pool.QueryRow(ctx, `SELECT id::text FROM departments WHERE code = $1`, ms.OldDeptCode).Scan(&oldDeptID)
+			}
+			if ms.NewDeptCode != "" {
+				database.Pool.QueryRow(ctx, `SELECT id::text FROM departments WHERE code = $1`, ms.NewDeptCode).Scan(&newDeptID)
+			}
+			if ms.OldPosName != "" {
+				database.Pool.QueryRow(ctx, `SELECT id::text FROM positions WHERE name = $1`, ms.OldPosName).Scan(&oldPosID)
+			}
+			if ms.NewPosName != "" {
+				database.Pool.QueryRow(ctx, `SELECT id::text FROM positions WHERE name = $1`, ms.NewPosName).Scan(&newPosID)
+			}
+
+			// Build approval_trail
+			approvalTrail := "[]"
+			approvedBy := "NULL::uuid"
+			approvedAt := "NULL::timestamptz"
+			rejectedAt := "NULL::timestamptz"
+			rejectionReason := "NULL::text"
+
+			if ms.Status == "approved" {
+				approvalTrail = fmt.Sprintf(`[{"status":"approved","approver_id":"%s","date":"%s","notes":"Disetujui oleh Super Admin"}]`, adminUUID, now)
+				approvedBy = fmt.Sprintf("'%s'::uuid", adminUUID)
+				approvedAt = fmt.Sprintf("'%s'", now)
+			} else if ms.Status == "rejected" {
+				approvalTrail = fmt.Sprintf(`[{"status":"rejected","approver_id":"%s","date":"%s","reason":"%s"}]`, adminUUID, now, ms.Reason)
+				rejectedAt = fmt.Sprintf("'%s'", now)
+				rejectionReason = fmt.Sprintf("'%s'", ms.Reason)
+			}
+
+			// Use NULLIF to handle empty IDs
+			oldDeptSQL := "NULL::uuid"
+			newDeptSQL := "NULL::uuid"
+			oldPosSQL := "NULL::uuid"
+			newPosSQL := "NULL::uuid"
+			oldGradeSQL := "NULL::uuid"
+			newGradeSQL := "NULL::uuid"
+			if oldDeptID != "" {
+				oldDeptSQL = fmt.Sprintf("'%s'::uuid", oldDeptID)
+			}
+			if newDeptID != "" {
+				newDeptSQL = fmt.Sprintf("'%s'::uuid", newDeptID)
+			}
+			if oldPosID != "" {
+				oldPosSQL = fmt.Sprintf("'%s'::uuid", oldPosID)
+			}
+			if newPosID != "" {
+				newPosSQL = fmt.Sprintf("'%s'::uuid", newPosID)
+			}
+
+			oldSalarySQL := "NULL::numeric"
+			newSalarySQL := "NULL::numeric"
+			if ms.OldSalary > 0 {
+				oldSalarySQL = fmt.Sprintf("%.0f::numeric", ms.OldSalary)
+			}
+			if ms.NewSalary > 0 {
+				newSalarySQL = fmt.Sprintf("%.0f::numeric", ms.NewSalary)
+			}
+
+			oldStatusSQL := "NULL::text"
+			newStatusSQL := "NULL::text"
+			if ms.OldStatus != "" {
+				oldStatusSQL = fmt.Sprintf("'%s'::text", ms.OldStatus)
+			}
+			if ms.NewStatus != "" {
+				newStatusSQL = fmt.Sprintf("'%s'::text", ms.NewStatus)
+			}
+
+			effectiveDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02") // 1 month from now
+
+			query := fmt.Sprintf(`
+				INSERT INTO employee_mutations (
+					employee_id, mutation_type,
+					old_department_id, new_department_id,
+					old_position_id, new_position_id,
+					old_position_grade_id, new_position_grade_id,
+					old_employment_status, new_employment_status,
+					old_base_salary, new_base_salary,
+					reason, effective_date, status,
+					approval_trail,
+					approved_by, approved_at,
+					rejected_at, rejection_reason,
+					created_by, notes
+				) VALUES (
+					'%s'::uuid, '%s',
+					%s, %s,
+					%s, %s,
+					%s, %s,
+					%s, %s,
+					%s, %s,
+					'%s', '%s'::date, '%s',
+					'%s'::jsonb,
+					%s, %s,
+					%s, %s,
+					'%s'::uuid, 'Data seed otomatis'
+				)
+			`, empUUID, ms.MutationType,
+				oldDeptSQL, newDeptSQL,
+				oldPosSQL, newPosSQL,
+				oldGradeSQL, newGradeSQL,
+				oldStatusSQL, newStatusSQL,
+				oldSalarySQL, newSalarySQL,
+				ms.Reason, effectiveDate, ms.Status,
+				approvalTrail,
+				approvedBy, approvedAt,
+				rejectedAt, rejectionReason,
+				adminUUID)
+
+			_, err := database.Pool.Exec(ctx, query)
+			if err != nil {
+				log.Printf("⚠️ Failed to seed mutation for %s: %v", ms.EmployeeID, err)
+			} else {
+				fmt.Printf("🔄 Mutation: %s — %s %s [%s]\n", ms.EmployeeID, ms.MutationType, ms.Reason[:40], ms.Status)
+			}
+		} else {
+			fmt.Printf("🔄 Mutation already exists for %s — %s, skipping\n", ms.EmployeeID, ms.Reason[:30])
+		}
+	}
+
+	database.Pool.Exec(ctx, `ALTER TABLE employee_mutations ENABLE TRIGGER ALL`)
+
+	// ============================================================
 	// 📋 SEED LEAVE BALANCES (if not auto-generated)
 	// ============================================================
 	fmt.Println("\n📋 Seeding leave balances...")
@@ -1604,7 +1775,8 @@ func main() {
 	// ============================================================
 	var total, overtimeTotal, reimbursementTotal, loanTotal, leaveTotal, kpiReviewTotal,
 		attLocationTotal, docTotal, scheduleTotal, payrollPeriodTotal, reprimandTotal,
-		shiftTotal, notifTotal, emergencyTotal, instTotal, annTotal, dailyJournalTotal int
+		shiftTotal, notifTotal, emergencyTotal, instTotal, annTotal, dailyJournalTotal,
+		mutationTotal int
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM employees WHERE deleted_at IS NULL`).Scan(&total)
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM overtime_requests WHERE deleted_at IS NULL`).Scan(&overtimeTotal)
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM reimbursements WHERE deleted_at IS NULL`).Scan(&reimbursementTotal)
@@ -1622,6 +1794,7 @@ func main() {
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM loan_installments`).Scan(&instTotal)
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM announcements`).Scan(&annTotal)
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM daily_journals WHERE deleted_at IS NULL`).Scan(&dailyJournalTotal)
+	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM employee_mutations WHERE deleted_at IS NULL`).Scan(&mutationTotal)
 
 	fmt.Printf("\n📊 DATA TOTALS\n")
 	fmt.Printf("   👥 Employees: %d\n", total)
@@ -1640,5 +1813,6 @@ func main() {
 	fmt.Printf("   🔔 Notifications: %d\n", notifTotal)
 	fmt.Printf("   📢 Announcements: %d\n", annTotal)
 	fmt.Printf("   📝 Daily Journals: %d\n", dailyJournalTotal)
+	fmt.Printf("   🔄 Employee Mutations: %d\n", mutationTotal)
 	fmt.Println("🌱 Seed completed!")
 }

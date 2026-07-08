@@ -93,6 +93,8 @@
 | **Security Headers (CSP)** | ✅ **X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP, HSTS** | **100%** |
 | **File Upload Validation** | ✅ **MIME type + extension + size validation** | **100%** |
 | **Company Settings UI** | ✅ **Form BPJS + Profil Perusahaan + Workflow Persetujuan** | **100%** |
+| **Push Notification (Web Push)** | ✅ **Backend VAPID + subscription CRUD + Frontend service worker + notif page** | **100%** |
+| **Mutasi & Promosi** | ✅ **Backend CRUD + approval workflow + Frontend halaman + seed data** | **100%** |
 
 ---
 
