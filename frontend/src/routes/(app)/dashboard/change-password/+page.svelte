@@ -63,7 +63,7 @@
 	}
 </script>
 
-<div class="max-w-lg mx-auto">
+<div class="max-w-full w-full">
 	<div class="flex items-center gap-4 mb-8">
 		<button onclick={goToProfile} class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer" aria-label="Kembali">
 			<svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">

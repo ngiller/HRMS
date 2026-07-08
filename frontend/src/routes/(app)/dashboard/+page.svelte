@@ -566,7 +566,7 @@
 				<!-- Right Column: Leave Balances & Announcements -->
 				<div class="space-y-6">
 					<!-- Leave Balance -->
-					<div class="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-sm overflow-hidden text-white p-5">
+					<a href="/cuti" class="block bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-sm overflow-hidden text-white p-5 hover:shadow-md transition-shadow active:scale-[0.98]">
 						<div class="flex items-center justify-between mb-4 opacity-90">
 							<h2 class="font-semibold text-sm">Sisa Cuti Tahunan</h2>
 							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
@@ -582,8 +582,8 @@
 								Berlaku sampai {new Date(leaveBalance.expired_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}
 							</div>
 						{/if}
-						<a href="/cuti" class="mt-4 block text-center py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">Lihat Detail</a>
-					</div>
+						<div class="mt-4 block text-center py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">Lihat Detail</div>
+					</a>
 					
 					<!-- Announcements Mini Feed -->
 					<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
@@ -600,7 +600,7 @@
 							{:else}
 								<div class="divide-y divide-gray-50">
 									{#each employeeAnnouncements as ann}
-										<a href="/announcements/{ann.id}" class="block p-4 hover:bg-gray-50 transition-colors">
+										<a href="/pengumuman" class="block p-4 hover:bg-gray-50 transition-colors">
 											<div class="flex gap-3">
 												<div class="shrink-0 mt-0.5">
 													<div class="w-8 h-8 rounded-full flex items-center justify-center {ann.announcement_type === 'important' ? 'bg-orange-100 text-orange-600' : ann.announcement_type === 'emergency' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}">
