@@ -20,6 +20,9 @@
 			late_minutes: number;
 			total_work_hours: number | null;
 			check_in_location_name: string | null;
+			check_in_photo_url?: string | null;
+			check_out_photo_url?: string | null;
+			check_out_location_name?: string | null;
 		};
 	}
 
@@ -264,6 +267,26 @@
 		if (url.startsWith('http')) return url;
 		return config.API_BASE_URL + url;
 	}
+
+	function isEarlyCheckOut(statusObj: any): boolean {
+		if (!statusObj?.has_checked_out || !statusObj?.record?.check_out_time || !statusObj?.schedule_end) return false;
+		const [h, m] = statusObj.schedule_end.split(':').map(Number);
+		if (isNaN(h) || isNaN(m)) return false;
+		const coTime = new Date(statusObj.record.check_out_time);
+		const scheduleEndTime = new Date(coTime);
+		scheduleEndTime.setHours(h, m, 0, 0);
+		return coTime < scheduleEndTime;
+	}
+
+	function isLateCheckIn(statusObj: any): boolean {
+		if (!statusObj?.has_checked_in || !statusObj?.record?.check_in_time || !statusObj?.schedule_start) return false;
+		const [h, m] = statusObj.schedule_start.split(':').map(Number);
+		if (isNaN(h) || isNaN(m)) return false;
+		const ciTime = new Date(statusObj.record.check_in_time);
+		const scheduleStartTime = new Date(ciTime);
+		scheduleStartTime.setHours(h, m, 0, 0);
+		return ciTime > scheduleStartTime;
+	}
 </script>
 
 <div class="max-w-full space-y-6">
@@ -321,16 +344,16 @@
 				<div class="flex items-center gap-3">
 					<div class="flex-1 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center border border-gray-100 dark:border-gray-700">
 						<div class="flex items-center justify-center gap-2 mb-2">
-							<div class="w-2.5 h-2.5 rounded-full {status.has_checked_in ? 'bg-green-500' : 'bg-gray-300'}"></div>
+							<div class="w-2.5 h-2.5 rounded-full {status.has_checked_in ? (isLateCheckIn(status) ? 'bg-red-500' : 'bg-green-500') : 'bg-gray-300'}"></div>
 							<span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Check In</span>
 						</div>
-						<div class="text-2xl font-bold tabular-nums {status.has_checked_in ? 'text-green-600 dark:text-green-400' : 'text-gray-300 dark:text-gray-600'}">
+						<div class="text-2xl font-bold tabular-nums {status.has_checked_in ? (isLateCheckIn(status) ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-gray-300 dark:text-gray-600'}">
 							{status.has_checked_in ? formatTime(status.record?.check_in_time ?? null) : '—'}
 						</div>
-						{#if status.record?.is_late}
+						{#if status.has_checked_in && isLateCheckIn(status)}
 							<div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[10px] font-medium">
 								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/></svg>
-								{status.record.late_minutes} menit terlambat
+								Datang terlambat
 							</div>
 						{/if}
 						{#if status.record?.check_in_photo_url}
@@ -347,12 +370,18 @@
 					</div>
 					<div class="flex-1 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center border border-gray-100 dark:border-gray-700">
 						<div class="flex items-center justify-center gap-2 mb-2">
-							<div class="w-2.5 h-2.5 rounded-full {status.has_checked_out ? 'bg-green-500' : status.has_checked_in ? 'bg-amber-400' : 'bg-gray-300'}"></div>
+							<div class="w-2.5 h-2.5 rounded-full {status.has_checked_out ? (isEarlyCheckOut(status) ? 'bg-red-500' : 'bg-green-500') : status.has_checked_in ? 'bg-amber-400' : 'bg-gray-300'}"></div>
 							<span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Check Out</span>
 						</div>
-						<div class="text-2xl font-bold tabular-nums {status.has_checked_out ? 'text-green-600 dark:text-green-400' : status.has_checked_in ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}">
+						<div class="text-2xl font-bold tabular-nums {status.has_checked_out ? (isEarlyCheckOut(status) ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : status.has_checked_in ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}">
 							{status.has_checked_out ? formatTime(status.record?.check_out_time ?? null) : '—'}
 						</div>
+						{#if status.has_checked_out && isEarlyCheckOut(status)}
+							<div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[10px] font-medium">
+								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/></svg>
+								Pulang lebih awal
+							</div>
+						{/if}
 						{#if status.record?.total_work_hours}
 							<div class="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
 								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>

@@ -308,8 +308,8 @@
 			
 			if (isEmployee) {
 				// Fetch announcements for employee view
-				const annRes = await announcementsApi.get({ limit: 10, is_active: true });
-				employeeAnnouncements = annRes.data?.announcements || [];
+				const annRes = await announcementsApi.list(1, 10);
+				employeeAnnouncements = annRes.data || [];
 				return;
 			}
 			

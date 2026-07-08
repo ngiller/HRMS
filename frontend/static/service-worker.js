@@ -40,6 +40,12 @@ self.addEventListener('activate', (event) => {
           .map((name) => caches.delete(name))
       );
     }).then(() => {
+      // Enable navigation preload for faster navigation
+      if (self.registration.navigationPreload) {
+        return self.registration.navigationPreload.enable().then(() => {
+          return self.clients.claim();
+        });
+      }
       // Take control of all pages immediately
       return self.clients.claim();
     })
@@ -164,12 +170,23 @@ self.addEventListener('fetch', (event) => {
 
   // ======================================
   // Strategy 4: Network-First for navigation
-  // with offline HTML fallback
+  // with navigationPreload + offline HTML fallback
   // ======================================
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
+      (async () => {
+        try {
+          // Try the preload response first
+          const preloadResponse = await event.preloadResponse;
+          if (preloadResponse) {
+            const clone = preloadResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, clone);
+            });
+            return preloadResponse;
+          }
+          // Fallback to normal fetch
+          const response = await fetch(request);
           if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
@@ -177,12 +194,11 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return response;
-        })
-        .catch(() => {
-          return caches.match('/').then((cached) => {
-            return cached || new Response('Offline', { status: 503 });
-          });
-        })
+        } catch {
+          const cached = await caches.match('/');
+          return cached || new Response('Offline', { status: 503 });
+        }
+      })()
     );
     return;
   }

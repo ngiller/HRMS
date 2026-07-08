@@ -4,7 +4,7 @@
 > Dibaca oleh AI agent untuk melanjutkan pekerjaan dari sesi sebelumnya.  
 > Update file ini setiap kali ada progress signifikan.
 
-**Last Updated:** 3 Juli 2026 (M15 Notifikasi & Audit Trail ✅)
+**Last Updated:** 8 Juli 2026 (PWA Mobile ✅, Security Hardening ✅, Manual Attendance ✅, Resign ✅)
 **Updated By:** AI Agent (Buffy)  
 **Project:** HRMS (Human Resource Management System)  
 **Stack:** Go (Fiber) + PostgreSQL 16 + SvelteKit (SPA)
@@ -79,6 +79,19 @@
 | **Transaction Safety (All Write Ops)** | ✅ **WithUserContext di 18+ repository files** | **100%** |
 | **Makefile** | ✅ **build, vet, test, migrate, backup, db, docker commands** | **100%** |
 | **Database Backup Script** | ✅ **Dump custom + SQL + S3 upload + retention policy** | **100%** |
+| **SMTP Email Config** | ✅ **SMTP_HOST/PORT/USER/PASSWORD/FROM/FROM_NAME di .env & config.go** | **100%** |
+| **JWT Secret Hardening** | ✅ **Random fallback secret + warning log jika tidak di-set** | **100%** |
+| **Approval Workflow Integration** | ✅ **Leave, Loan, Overtime, Reimbursement, Shift Change via ApprovalWorkflowService** | **100%** |
+| **THR Calculation Endpoint** | ✅ **GET /api/payroll/periods/:id/calculate-thr** | **100%** |
+| **Loan Cancel Endpoint** | ✅ **PUT /api/loans/:id/cancel** | **100%** |
+| **Manual Attendance Request** | ✅ **Backend CRUD + approval workflow + Frontend + API Client** | **100%** |
+| **Resign & Exit Management** | ✅ **Backend CRUD + approval workflow + exit clearance + Frontend** | **100%** |
+| **PWA Service Worker** | ✅ **5 caching strategies, offline fallback, install prompt, navigation cache** | **100%** |
+| **PWA Bottom Tab Navigation** | ✅ **BottomTabBar dengan 5 tab + slide-out menu drawer (mobile)** | **100%** |
+| **PWA Swipe Actions** | ✅ **SwipeActions.svelte — swipe approve/reject** | **100%** |
+| **PWA Manifest & Icons** | ✅ **manifest.json, SVG icons, shortcuts, install prompt** | **100%** |
+| **Security Headers (CSP)** | ✅ **X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP, HSTS** | **100%** |
+| **File Upload Validation** | ✅ **MIME type + extension + size validation** | **100%** |
 
 ---
 

@@ -45,6 +45,7 @@ type AttendanceRecordSummary struct {
 	Status               string     `json:"status"`
 	IsLate               bool       `json:"is_late"`
 	LateMinutes          int        `json:"late_minutes"`
+	IsEarlyLeave         bool       `json:"is_early_leave"`
 	TotalWorkHours       *float64   `json:"total_work_hours"`
 	CheckInLocationName  *string    `json:"check_in_location_name"`
 	CheckInPhotoURL      *string    `json:"check_in_photo_url"`

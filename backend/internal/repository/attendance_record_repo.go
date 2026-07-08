@@ -120,7 +120,7 @@ func ListMyAttendance(ctx context.Context, employeeID string, page, perPage int)
 	query := `
 		SELECT ar.id, ar.date, TO_CHAR(ar.date, 'Day') AS day_name,
 			ar.check_in_time, ar.check_out_time,
-			ar.status, ar.is_late, ar.late_minutes, ar.total_work_hours,
+			ar.status, ar.is_late, ar.late_minutes, ar.is_early_leave, ar.total_work_hours,
 			COALESCE(ar.check_in_location_name, ''), ar.check_in_photo_url,
 			ar.check_in_lat, ar.check_in_lng, COALESCE(ar.check_out_location_name, ''),
 			ar.check_out_photo_url, ar.check_out_lat, ar.check_out_lng
@@ -139,7 +139,7 @@ func ListMyAttendance(ctx context.Context, employeeID string, page, perPage int)
 	for rows.Next() {
 		var r models.AttendanceRecordSummary
 		if err := rows.Scan(&r.ID, &r.Date, &r.DayName, &r.CheckInTime, &r.CheckOutTime,
-			&r.Status, &r.IsLate, &r.LateMinutes, &r.TotalWorkHours, &r.CheckInLocationName,
+			&r.Status, &r.IsLate, &r.LateMinutes, &r.IsEarlyLeave, &r.TotalWorkHours, &r.CheckInLocationName,
 			&r.CheckInPhotoURL, &r.CheckInLat, &r.CheckInLng, &r.CheckOutLocationName,
 			&r.CheckOutPhotoURL, &r.CheckOutLat, &r.CheckOutLng); err != nil {
 			return nil, 0, err
@@ -203,7 +203,7 @@ func ListAttendanceReport(ctx context.Context, page, perPage int, deptID, status
 	query := fmt.Sprintf(`
 		SELECT ar.id, ar.date, TO_CHAR(ar.date, 'Day') AS day_name,
 			ar.check_in_time, ar.check_out_time,
-			ar.status, ar.is_late, ar.late_minutes, ar.total_work_hours,
+			ar.status, ar.is_late, ar.late_minutes, ar.is_early_leave, ar.total_work_hours,
 			COALESCE(ar.check_in_location_name, ''), ar.check_in_photo_url,
 			ar.check_in_lat, ar.check_in_lng, COALESCE(ar.check_out_location_name, ''),
 			ar.check_out_photo_url, ar.check_out_lat, ar.check_out_lng,
@@ -227,7 +227,7 @@ func ListAttendanceReport(ctx context.Context, page, perPage int, deptID, status
 	for rows.Next() {
 		var r models.AttendanceRecordSummary
 		if err := rows.Scan(&r.ID, &r.Date, &r.DayName, &r.CheckInTime, &r.CheckOutTime,
-			&r.Status, &r.IsLate, &r.LateMinutes, &r.TotalWorkHours, &r.CheckInLocationName,
+			&r.Status, &r.IsLate, &r.LateMinutes, &r.IsEarlyLeave, &r.TotalWorkHours, &r.CheckInLocationName,
 			&r.CheckInPhotoURL, &r.CheckInLat, &r.CheckInLng, &r.CheckOutLocationName,
 			&r.CheckOutPhotoURL, &r.CheckOutLat, &r.CheckOutLng,
 			&r.EmployeeName, &r.DepartmentName); err != nil {

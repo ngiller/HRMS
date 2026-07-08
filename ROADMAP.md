@@ -316,14 +316,20 @@ Optimasi, hardening, testing, dan deployment ke production.
 | **Unit Tests (Go)** | ✅ **100%** | Auth service — 5 tests PASS |
 | **TypeScript (0 errors)** | ✅ **100%** | `svelte-check` — 0 errors |
 | **Backend (Go/Fiber)** | ✅ **100%** | Semua modul — `go build` + `go vet` + `go test` ✅ |
-| **Frontend (SvelteKit)** | ✅ **100%** | 25+ halaman — `svelte-check` 0 errors ✅ |
+| **Frontend (SvelteKit)** | ✅ **100%** | 30+ halaman — `svelte-check` 0 errors ✅ |
 | **Payroll Engine** | ✅ **100%** | Backend ✅ (4 file), Frontend ✅ (payslip redesigned) |
 | **KPI & Performance** | ✅ **100%** | Template, indikator, review workflow, scoring |
 | **Reprimand Management** | ✅ **100%** | Backend 4 endpoints + Frontend AG Grid |
 | **Daily Working Journal** | ✅ **100%** | Migration 00040 + Backend + Frontend |
 | **Laporan & Analytics** | ✅ **100%** | 6 reports backend + 5 tab frontend |
 | **Notifikasi & Audit Trail** | ✅ **100%** | Backend 8 endpoints + Frontend 2 halaman |
-| **Total Proyek** | ✅ **~97%** (Fase 1-3 selesai ✅, Fase 4 menunggu) |
+| **Manual Attendance** | ✅ **100%** | Backend CRUD + approval workflow + Frontend + API Client |
+| **Resign & Exit Management** | ✅ **100%** | Backend CRUD + approval workflow + exit clearance + Frontend |
+| **Approval Workflow Integration** | ✅ **100%** | Terintegrasi ke Leave, Loan, Overtime, Reimbursement, Shift Change |
+| **SMTP Email Notification** | ✅ **100%** | SMTP config, EmailService, notifikasi email via ApprovalWorkflow |
+| **PWA & Mobile Optimization** | ✅ **~85%** | Service Worker, Manifest, BottomTabBar, SwipeActions, Mobile Layout |
+| **Security Hardening** | ✅ **~90%** | CSP, Security Headers, JWT rotation, RBAC, Encryption, Rate Limiter |
+| **Total Proyek** | ✅ **~99%** (Fase 1-3 ✅, Fase 4 ~90%) |
 
 ---
 

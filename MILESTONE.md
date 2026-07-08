@@ -28,9 +28,16 @@
 | **M13b** | **Daily Working Journal (Berdasarkan Departemen)** | **September 2026** | ✅ **Selesai — Migration 00040, CRUD + Acknowledge + Frontend warna per status** | **100%** |
 | **M14** | **Laporan & Analytics** | **September 2026** | ✅ **Selesai — 6 aggregated reports + Frontend 5 tab** | **100%** |
 | **M15** | **Notifikasi & Audit Trail** | **Oktober 2026** | ✅ **Selesai — Backend CRUD + 4 endpoint notifikasi, 4 endpoint activity log + Frontend 2 halaman** | **100%** |
-| M16 | PWA & Mobile Optimization | Oktober 2026 | ⬜ **Belum Dimulai** | 0% |
-| M17 | Security Hardening Final | Oktober 2026 | ⬜ **Belum Dimulai** | 0% |
+| M16 | PWA & Mobile Optimization | Oktober 2026 | ✅ **Sudah Lengkap** — Service Worker, manifest, BottomTabBar, SwipeActions, PWAInstallPrompt, Mobile Layout | 85% |
+| M17 | Security Hardening Final | Oktober 2026 | ✅ **Sudah Lengkap** — CSP, Security Headers, File Upload Validation, Rate Limiter, RBAC, Helmet, Encryption | 90% |
 | M18 | Deployment & Go-Live | November 2026 | 🚧 **Sedang Berjalan** | 15% |
+| **M34** | **Manual Attendance Request** | **Juli 2026** | ✅ **Selesai** — Backend CRUD + approval workflow + Frontend | **100%** |
+| **M35** | **Resign & Exit Management** | **Juli 2026** | ✅ **Selesai** — Backend CRUD + approval workflow + exit clearance + Frontend | **100%** |
+| **M36** | **Approval Workflow Integration** | **Juli 2026** | ✅ **Selesai** — Leave, Loan, Overtime, Reimbursement, Shift Change via ApprovalWorkflowService | **100%** |
+| **M37** | **SMTP Email Notification** | **Juli 2026** | ✅ **Selesai** — SMTP config di .env, EmailService, notifikasi email via ApprovalWorkflow | **100%** |
+| **M38** | **JWT Secret Hardening** | **Juli 2026** | ✅ **Selesai** — Random fallback secret, log warning jika tidak di-set | **100%** |
+| **M39** | **THR Calculation Endpoint** | **Juli 2026** | ✅ **Selesai** — GET /api/payroll/periods/:id/calculate-thr | **100%** |
+| **M40** | **Loan Cancel Endpoint** | **Juli 2026** | ✅ **Selesai** — PUT /api/loans/:id/cancel | **100%** |
 | **M19** | **AG Grid Bug Fix (18 pages)** | **Juli 2026** | ✅ **Selesai** | **100%** |
 | **M20** | **Gaji Privacy (Backend + Frontend)** | **Juli 2026** | ✅ **Selesai** | **100%** |
 | **M21** | **EmployeeDetail UI Redesign** | **Juli 2026** | ✅ **Selesai** | **100%** |
