@@ -109,6 +109,10 @@ func main() {
 	resignHandler := handlers.NewResignHandler(resignService)
 	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(webPushService)
 
+	// Initialize Mutation service
+	mutationService := service.NewMutationService()
+	mutationHandler := handlers.NewMutationHandler(mutationService)
+
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:       "HRMS API",
@@ -145,6 +149,7 @@ func main() {
 		resignHandler,
 		approvalWorkflowHandler,
 		pushSubscriptionHandler,
+		mutationHandler,
 		authService)
 
 	// Start server

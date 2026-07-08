@@ -68,7 +68,13 @@
 	let errorMessage = $state('');
 	let activeTab = $state<'overview' | 'departments' | 'analytics'>('overview');
 	
-	let isEmployee = $derived((auth.getUser() as any)?.role_name === 'Employee' || (auth.getUser() as any)?.role_id === 3);
+	let isEmployee = $derived.by(() => {
+		const user = auth.getUser() as any;
+		if (!user) return true;
+		const slug = (user.role_slug || '').toLowerCase();
+		const name = (user.role_name || '').toLowerCase();
+		return !['admin', 'hr', 'owner', 'superadmin'].includes(slug) && !['admin', 'hr', 'owner'].includes(name);
+	});
 	let employeeAnnouncements = $state<any[]>([]);
 	let todayStatus = $state<any>(null);
 	let leaveBalance = $state<any>(null);
@@ -320,12 +326,12 @@
 				// Fetch data for employee dashboard
 				try {
 					const [annRes, attRes, leaveRes] = await Promise.all([
-						announcementsApi.get({ limit: 5, is_active: true }).catch(() => ({ data: { announcements: [] } })),
-						attendance.today().catch(() => ({ data: null })),
+						announcementsApi.list(1, 5, 'true').catch(() => ({ data: [] })),
+						attendance.getTodayStatus().catch(() => ({ data: null })),
 						leaveRequests.getMyBalances().catch(() => ({ data: [] }))
 					]);
 					
-					employeeAnnouncements = annRes.data?.announcements || [];
+					employeeAnnouncements = annRes.data || [];
 					todayStatus = attRes.data;
 					
 					if (leaveRes.data && Array.isArray(leaveRes.data)) {
@@ -454,7 +460,7 @@
 <div class="max-w-full mx-auto">
 	{#if isEmployee && !isLoading}
 		<!-- Employee Dashboard (Talenta Style) -->
-		<div class="max-w-4xl mx-auto py-2">
+		<div class="max-w-6xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
 			<!-- Header -->
 			<div class="flex items-center justify-between mb-6">
 				<div>

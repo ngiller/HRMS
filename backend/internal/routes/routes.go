@@ -46,6 +46,7 @@ func Setup(
 	resignHandler *handlers.ResignHandler,
 	approvalWorkflowHandler *handlers.ApprovalWorkflowHandler,
 	pushSubscriptionHandler *handlers.PushSubscriptionHandler,
+	mutationHandler *handlers.MutationHandler,
 	authService *service.AuthService,
 ) {
 	// Health check
@@ -389,4 +390,13 @@ func Setup(
 	push.Post("/subscribe", pushSubscriptionHandler.Subscribe)
 	push.Delete("/subscribe/:id", pushSubscriptionHandler.Unsubscribe)
 	push.Get("/subscriptions", pushSubscriptionHandler.ListSubscriptions)
+
+	// ==================== Employee Mutation Routes ====================
+	mutations := protected.Group("/mutations")
+	mutations.Get("/", middleware.RBAC("employee", "read"), mutationHandler.ListMutations)
+	mutations.Get("/:id", middleware.RBAC("employee", "read"), mutationHandler.GetMutation)
+	mutations.Post("/", middleware.RBAC("employee", "create"), mutationHandler.CreateMutation)
+	mutations.Put("/:id/approve", middleware.RBAC("employee", "update"), mutationHandler.ApproveMutation)
+	mutations.Put("/:id/reject", middleware.RBAC("employee", "update"), mutationHandler.RejectMutation)
+	mutations.Put("/:id/cancel", middleware.RBAC("employee", "create"), mutationHandler.CancelMutation)
 }

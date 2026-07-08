@@ -1882,5 +1882,32 @@ function arrayBufferToBase64(buffer) {
 	return btoa(binary);
 }
 
+export const mutations = {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [status] @param {string} [employeeId] */
+	list(page = 1, perPage = 25, status = '', employeeId = '') {
+		const params = new URLSearchParams();
+		params.set('page', String(page));
+		params.set('per_page', String(perPage));
+		if (status) params.set('status', status);
+		if (employeeId) params.set('employee_id', employeeId);
+		return request(`/api/mutations?${params}`);
+	},
+
+	/** @param {string} id */
+	get(id) { return request(`/api/mutations/${id}`); },
+
+	/** @param {Object} data */
+	create(data) { return request('/api/mutations', { method: 'POST', body: data }); },
+
+	/** @param {string} id */
+	approve(id) { return request(`/api/mutations/${id}/approve`, { method: 'PUT' }); },
+
+	/** @param {string} id @param {Object} [data] */
+	reject(id, data = {}) { return request(`/api/mutations/${id}/reject`, { method: 'PUT', body: data }); },
+
+	/** @param {string} id */
+	cancel(id) { return request(`/api/mutations/${id}/cancel`, { method: 'PUT' }); },
+};
+
 export { ApiError };
-export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, ApiError };
+export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, mutations, ApiError };

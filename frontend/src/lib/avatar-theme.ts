@@ -294,6 +294,19 @@ const themeMap: Record<string, AvatarTheme> = {
 		gradientClasses: 'from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/30 text-indigo-600 dark:text-indigo-400 ring-indigo-200 dark:ring-indigo-800',
 		solidClasses: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 ring-indigo-200 dark:ring-indigo-800',
 	},
+	// Mutasi & Promosi
+	mutation: {
+		gradient: 'from-fuchsia-50 to-fuchsia-100',
+		bg: 'bg-fuchsia-50',
+		text: 'text-fuchsia-600',
+		ring: 'ring-fuchsia-200',
+		darkGradient: 'dark:from-fuchsia-900/30 dark:to-fuchsia-800/30',
+		darkBg: 'dark:bg-fuchsia-900/20',
+		darkText: 'dark:text-fuchsia-400',
+		darkRing: 'dark:ring-fuchsia-800',
+		gradientClasses: 'from-fuchsia-50 to-fuchsia-100 dark:from-fuchsia-900/30 dark:to-fuchsia-800/30 text-fuchsia-600 dark:text-fuchsia-400 ring-fuchsia-200 dark:ring-fuchsia-800',
+		solidClasses: 'bg-fuchsia-50 dark:bg-fuchsia-900/20 text-fuchsia-600 dark:text-fuchsia-400 ring-fuchsia-200 dark:ring-fuchsia-800',
+	},
 	// Resign / Exit
 	resign: {
 		gradient: 'from-rose-50 to-rose-100',
