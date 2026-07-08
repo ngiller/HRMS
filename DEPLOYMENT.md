@@ -199,8 +199,11 @@ services:
     depends_on:
       api:
         condition: service_started
+    # PUBLIC_API_BASE_URL: Kosongkan karena Nginx sudah proxy /api/ ke backend
+    # Jika API di domain terpisah, set ke https://api.hrms.example.com
+    # dan pastikan FRONTEND_URL di .env backend mencantumkan domain frontend
     environment:
-      - PUBLIC_API_BASE_URL=https://api.hrms.example.com
+      - PUBLIC_API_BASE_URL=
     volumes:
       - ./nginx/ssl:/etc/nginx/ssl:ro
 
