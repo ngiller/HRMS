@@ -422,12 +422,20 @@ func TestGetEntityRequestorID(t *testing.T) {
 	ctx := context.Background()
 
 	// Cari employee test
-	var empID, scID, ovtID, loanID string
+	var empID, leaveTypeID, scID, ovtID, loanID, reimbID, resignID, manualAttID, leaveID string
 	err := database.Pool.QueryRow(ctx,
 		`SELECT id::text FROM employees WHERE employee_id = 'EMP-001' LIMIT 1`,
 	).Scan(&empID)
 	if err != nil {
 		t.Skipf("Skip — seed employee not found: %v", err)
+	}
+
+	// Cari leave type
+	err = database.Pool.QueryRow(ctx,
+		`SELECT id::text FROM leave_types WHERE code = 'tahunan' LIMIT 1`,
+	).Scan(&leaveTypeID)
+	if err != nil {
+		t.Skipf("Skip — leave type not found: %v", err)
 	}
 
 	var wsID string
@@ -439,6 +447,19 @@ func TestGetEntityRequestorID(t *testing.T) {
 	}
 
 	// Buat test data untuk berbagai entity types
+	// Leave
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO leave_requests (employee_id, leave_type_id, start_date, end_date,
+			total_days, is_half_day, reason, status)
+		VALUES ($1::uuid, $2::uuid, CURRENT_DATE, (CURRENT_DATE + 1)::date,
+			1, false, '[TEST] GetEntityRequestorID', 'pending'::leave_status)
+		RETURNING id::text
+	`, empID, leaveTypeID).Scan(&leaveID)
+	if err != nil {
+		t.Fatalf("create leave: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM leave_requests WHERE id::text = $1`, leaveID)
+
 	// Shift change
 	err = database.Pool.QueryRow(ctx, `
 		INSERT INTO shift_change_requests (request_type, employee_id, target_date,
@@ -465,6 +486,17 @@ func TestGetEntityRequestorID(t *testing.T) {
 	}
 	defer database.Pool.Exec(ctx, `DELETE FROM overtime_requests WHERE id::text = $1`, ovtID)
 
+	// Reimbursement
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO reimbursements (employee_id, type, amount, description, status)
+		VALUES ($1::uuid, 'medical', 500000, '[TEST] GetEntityRequestorID', 'pending')
+		RETURNING id::text
+	`, empID).Scan(&reimbID)
+	if err != nil {
+		t.Fatalf("create reimbursement: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM reimbursements WHERE id::text = $1`, reimbID)
+
 	// Loan
 	err = database.Pool.QueryRow(ctx, `
 		INSERT INTO loans (employee_id, loan_type, amount, interest_rate, installment_count,
@@ -478,7 +510,40 @@ func TestGetEntityRequestorID(t *testing.T) {
 	}
 	defer database.Pool.Exec(ctx, `DELETE FROM loans WHERE id::text = $1`, loanID)
 
-	// Test GetEntityRequestorID untuk shift_change
+	// Resign request (varchar status)
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO resign_requests (employee_id, resign_type, reason, status, last_working_date)
+		VALUES ($1::uuid, 'resign', '[TEST] GetEntityRequestorID', 'pending', (CURRENT_DATE + 30)::date)
+		RETURNING id::text
+	`, empID).Scan(&resignID)
+	if err != nil {
+		t.Fatalf("create resign: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM resign_requests WHERE id::text = $1`, resignID)
+
+	// Manual attendance
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO manual_attendance_requests (employee_id, date, check_in_time, reason, status)
+		VALUES ($1::uuid, CURRENT_DATE, (CURRENT_DATE + TIME '08:00')::timestamptz, '[TEST] GetEntityRequestorID', 'pending')
+		RETURNING id::text
+	`, empID).Scan(&manualAttID)
+	if err != nil {
+		t.Fatalf("create manual attendance: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM manual_attendance_requests WHERE id::text = $1`, manualAttID)
+
+	// Test GetEntityRequestorID untuk leave
+	t.Run("leave", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "leave", leaveID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(leave) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
+	// Test untuk shift_change
 	t.Run("shift_change", func(t *testing.T) {
 		got, err := GetEntityRequestorID(ctx, "shift_change", scID)
 		if err != nil {
@@ -500,11 +565,44 @@ func TestGetEntityRequestorID(t *testing.T) {
 		}
 	})
 
+	// Test untuk reimbursement
+	t.Run("reimbursement", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "reimbursement", reimbID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(reimbursement) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
 	// Test untuk loan
 	t.Run("loan", func(t *testing.T) {
 		got, err := GetEntityRequestorID(ctx, "loan", loanID)
 		if err != nil {
 			t.Fatalf("GetEntityRequestorID(loan) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
+	// Test untuk resign
+	t.Run("resign", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "resign", resignID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(resign) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
+	// Test untuk manual_attendance
+	t.Run("manual_attendance", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "manual_attendance", manualAttID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(manual_attendance) failed: %v", err)
 		}
 		if got != empID {
 			t.Errorf("Expected employee_id %s, got %s", empID, got)

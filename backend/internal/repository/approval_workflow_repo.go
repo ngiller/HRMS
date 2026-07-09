@@ -638,28 +638,28 @@ func GetEntityRequestorID(ctx context.Context, entityType, entityID string) (str
 	switch entityType {
 	case "leave":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM leave_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM leave_requests WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "overtime":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM overtime_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM overtime_requests WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "reimbursement":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM reimbursements WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM reimbursements WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "shift_change":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM shift_change_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM shift_change_requests WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "loan":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM loans WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM loans WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "manual_attendance":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM manual_attendance_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM manual_attendance_requests WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "resign":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM resign_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM resign_requests WHERE id::text = $1`, entityID).Scan(&employeeID)
 	case "mutation":
 		err = database.Pool.QueryRow(ctx,
-			`SELECT employee_id::text FROM employee_mutations WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+			`SELECT employee_id::text FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&employeeID)
 	default:
 		return "", fmt.Errorf("unknown entity type: %s", entityType)
 	}
