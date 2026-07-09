@@ -1,6 +1,23 @@
 # ============================================================
 # Docker Compose — HRMS Application
-# Stack: PostgreSQL 16 + Go/Fiber (Air) + SvelteKit
+# Stack: PostgreSQL 16 + Go/Fiber + SvelteKit
+# ============================================================
+#
+# ── Usage ────────────────────────────────────────────────────
+#
+# Development (with SvelteKit HMR on port 5177):
+#   docker compose --profile dev up
+#
+# Production (backend serves built frontend on port 8080):
+#   make frontend-build   # build frontend + copy to backend/public/
+#   docker compose up     # no --profile needed, web service excluded
+#
+# ─────────────────────────────────────────────────────────────
+#
+# NOTE: The 'web' service runs SvelteKit dev server (HMR).
+#       In production, the Go backend serves the built frontend
+#       directly from ./public/ (via 'make frontend-build').
+#       Use --profile dev to enable the web service.
 # ============================================================
 
 services:
@@ -91,8 +108,9 @@ services:
       retries: 3
       start_period: 15s
 
-  # ---------- SvelteKit Frontend (HMR) ----------
+  # ---------- SvelteKit Frontend (HMR) — dev only ----------
   web:
+    profiles: ["dev"]
     build:
       context: .
       target: dev

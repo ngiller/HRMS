@@ -54,8 +54,9 @@ frontend-install: ## Install frontend dependencies
 frontend-check: ## Run Svelte type-check
 	cd frontend && npm run check
 
-frontend-build: ## Build frontend for production
-	cd frontend && npm run build
+frontend-build: ## Build frontend & copy to backend/public/ for Go static serving
+	cd frontend && npm run build && rm -rf ../backend/public && cp -r build ../backend/public
+	@echo "✅ Frontend built & copied to backend/public/"
 
 frontend-test: ## Run Playwright E2E tests
 	cd frontend && npm run test:e2e 2>/dev/null || echo "Playwright not configured, skipping"

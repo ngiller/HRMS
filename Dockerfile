@@ -38,6 +38,19 @@ COPY backend/ .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /hrms-server .
 
+# ---- Stage 3b: Build frontend ----
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
+RUN npm ci
+
+# Copy source & build
+COPY frontend/ .
+RUN npm run build
+
 # ---- Stage 4: Production (minimal image) ----
 FROM alpine:3.20 AS prod
 
@@ -46,6 +59,9 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /hrms-server .
+
+# Copy built frontend into public/ directory
+COPY --from=frontend-builder /app/build ./public
 
 # Create uploads directory
 RUN mkdir -p /app/uploads

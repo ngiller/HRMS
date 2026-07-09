@@ -4,7 +4,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	"hrms-backend/internal/config"
 	"hrms-backend/internal/database"
@@ -151,6 +154,39 @@ func main() {
 		pushSubscriptionHandler,
 		mutationHandler,
 		authService)
+
+	// ─── Serve built frontend (SPA) from ./public/ ─────────────
+	if _, err := os.Stat("./public"); err == nil {
+		log.Println("📦 Serving frontend from ./public/")
+
+		// Immutable hashed assets (_app/ directory) — long cache
+		app.Static("/_app", "./public/_app", fiber.Static{
+			CacheDuration: 365 * 24 * time.Hour,
+		})
+
+		// All other non-API routes: serve file if exists, otherwise index.html (SPA)
+		app.Get("/*", func(c *fiber.Ctx) error {
+			path := c.Path()
+
+			// Skip API and uploads routes
+			if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/uploads/") {
+				return c.Next()
+			}
+
+			// Serve exact file if it exists
+			if path != "/" {
+				fullPath := filepath.Join(".", "public", path)
+				if _, err := os.Stat(fullPath); err == nil {
+					return c.SendFile(fullPath)
+				}
+			}
+
+			// SPA fallback — serve index.html for client-side routing
+			return c.SendFile("./public/index.html")
+		})
+	} else {
+		log.Println("ℹ️  ./public/ not found — frontend not served (use 'make dev-frontend' for development)")
+	}
 
 	// Start server
 	go func() {
