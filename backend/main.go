@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -31,6 +32,31 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer database.Close()
+
+	// Connect to Redis (optional — rate limiting falls back to in-memory)
+	redisCfg := database.RedisConfig{
+		Host:     cfg.RedisHost,
+		Port:     cfg.RedisPort,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	}
+	if err := database.ConnectRedis(redisCfg); err != nil {
+		log.Printf("⚠️  Redis not available, rate limiting will use in-memory storage: %v", err)
+	} else {
+		defer database.CloseRedis()
+		// Wire Redis storage into rate limiter middleware
+		redisPort, _ := strconv.Atoi(cfg.RedisPort)
+		if redisPort == 0 {
+			redisPort = 6379
+		}
+		redisStore := middleware.NewRedisStorage(cfg.RedisHost, cfg.RedisPassword, redisPort, cfg.RedisDB)
+		if redisStore != nil {
+			middleware.SetRedisStorage(redisStore)
+			log.Println("✅ Redis-backed rate limiting enabled")
+		} else {
+			log.Println("⚠️  Redis storage initialization failed, using in-memory")
+		}
+	}
 
 	// Initialize services
 	authService := service.NewAuthService(cfg)

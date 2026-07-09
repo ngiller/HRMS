@@ -81,6 +81,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       DB_HOST: db
       DB_PORT: "5432"
@@ -96,6 +98,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       UPLOAD_DIR: /app/uploads
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     volumes:
       # Bind mount for hot reload — source code changes trigger rebuild
       - ./backend:/app
@@ -130,5 +134,22 @@ services:
       # Exclude node_modules (use container's own)
       - /app/node_modules
 
+  # ---------- Redis 7 (Cache & Rate Limiting) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: hrms-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
 volumes:
   pgdata:
+  redisdata:

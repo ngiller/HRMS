@@ -62,6 +62,14 @@
 	let stream = $state<MediaStream | null>(null);
 	let showCamera = $state(false);
 
+	// Face Detection (face-api.js)
+	let faceDetector = $state<any>(null);
+	let faceDetected = $state(false);
+	let faceDetectionLoading = $state(false);
+	let faceDetectionCanvas = $state<HTMLCanvasElement | undefined>();
+	let faceDetectionInterval: number | null = null;
+	let isFaceApiLoaded = $state(false);
+
 	// Mobile-specific state
 	let currentTime = $state(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
 	
@@ -147,20 +155,113 @@
 		});
 	}
 
+	async function loadFaceDetectionScript() {
+		if ((window as any).faceapi) {
+			isFaceApiLoaded = true;
+			return;
+		}
+		return new Promise<void>((resolve, reject) => {
+			const script = document.createElement('script');
+			script.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+			script.onload = () => {
+				isFaceApiLoaded = true;
+				resolve();
+			};
+			script.onerror = () => reject(new Error('Gagal memuat face-api.js'));
+			document.head.appendChild(script);
+		});
+	}
+
+	async function startFaceDetection() {
+		if (!videoElement || !(window as any).faceapi) return;
+		const faceapi = (window as any).faceapi;
+
+		try {
+			faceDetectionLoading = true;
+			await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+			await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+			faceDetectionLoading = false;
+
+			const canvas = faceDetectionCanvas;
+			if (!canvas) return;
+
+			const displaySize = { width: videoElement.videoWidth || 320, height: videoElement.videoHeight || 400 };
+			faceapi.matchDimensions(canvas, displaySize);
+
+			faceDetectionInterval = window.setInterval(async () => {
+				if (!videoElement || !videoElement.videoWidth) return;
+				
+				try {
+					const detections = await faceapi
+						.detectAllFaces(videoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+						.withFaceLandmarks();
+
+					const ctx = canvas.getContext('2d');
+					if (ctx) {
+						ctx.clearRect(0, 0, canvas.width, canvas.height);
+					}
+
+					if (detections && detections.length > 0) {
+						faceDetected = true;
+						const resized = faceapi.resizeResults(detections, displaySize);
+						if (ctx) {
+							// Draw face bounding box
+							faceapi.draw.drawDetections(canvas, resized);
+							// Draw face landmarks
+							faceapi.draw.drawFaceLandmarks(canvas, resized);
+						}
+					} else {
+						faceDetected = false;
+					}
+				} catch {
+					// Silently continue if detection fails on this frame
+				}
+			}, 200);
+		} catch (err) {
+			console.error('Face detection init error:', err);
+			faceDetectionLoading = false;
+		}
+	}
+
+	function stopFaceDetection() {
+		if (faceDetectionInterval) {
+			clearInterval(faceDetectionInterval);
+			faceDetectionInterval = null;
+		}
+		faceDetected = false;
+		// Clear canvas
+		const canvas = faceDetectionCanvas;
+		if (canvas) {
+			const ctx = canvas.getContext('2d');
+			if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+		}
+	}
+
 	async function startCamera() {
 		try {
-			stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+			stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 400 } } });
 			showCamera = true;
 			await tick();
 			if (videoElement) {
 				videoElement.srcObject = stream;
 			}
+			// Load face-api.js and start face detection
+			if (!isFaceApiLoaded) {
+				await loadFaceDetectionScript();
+			}
+			// Wait a bit for video to be ready
+			setTimeout(async () => {
+				if (videoElement && videoElement.videoWidth > 0) {
+					await startFaceDetection();
+				}
+			}, 500);
 		} catch (err) {
 			error = 'Gagal mengakses kamera. Pastikan izin kamera diberikan.';
 		}
 	}
 
 	function stopCamera() {
+		stopFaceDetection();
 		if (stream) {
 			stream.getTracks().forEach(track => track.stop());
 			stream = null;
@@ -414,49 +515,30 @@
 							class="w-full h-full object-cover transform scale-x-[-1]"
 						></video>
 						
-						<!-- Face outline guide: Face + Ears + Neck + Shoulders Silhouette -->
-						<div class="absolute inset-0 pointer-events-none">
-							<svg class="w-full h-full" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice">
-								<defs>
-									<mask id="faceMask">
-										<rect width="100%" height="100%" fill="white" />
-										<path d="
-											M 40 600
-											L 40 480
-											C 40 400, 160 420, 160 350
-											L 160 314.5
-											A 100 125 0 0 1 100.3 210
-											A 12 20 0 0 0 102.9 170
-											A 100 125 0 0 1 297.1 170
-											A 12 20 0 0 0 299.7 210
-											A 100 125 0 0 1 240 314.5
-											L 240 350
-											C 240 420, 360 400, 360 480
-											L 360 600 Z" 
-											fill="black" 
-										/>
-									</mask>
-								</defs>
-								<rect width="100%" height="100%" fill="rgba(0,0,0,0.6)" mask="url(#faceMask)" />
-								<path d="
-									M 40 600
-									L 40 480
-									C 40 400, 160 420, 160 350
-									L 160 314.5
-									A 100 125 0 0 1 100.3 210
-									A 12 20 0 0 0 102.9 170
-									A 100 125 0 0 1 297.1 170
-									A 12 20 0 0 0 299.7 210
-									A 100 125 0 0 1 240 314.5
-									L 240 350
-									C 240 420, 360 400, 360 480
-									L 360 600 Z" 
-									fill="none" 
-									stroke="rgba(255,255,255,0.7)" 
-									stroke-width="3" 
-									stroke-linecap="round"
-								/>
-							</svg>
+						<!-- Face Detection Overlay Canvas (mirrored to match video) -->
+						<canvas
+							bind:this={faceDetectionCanvas}
+							class="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]"
+						></canvas>
+						
+						<!-- Face Detection Status -->
+						<div class="absolute top-4 left-4">
+							{#if faceDetectionLoading}
+								<div class="flex items-center gap-2 bg-black/50 backdrop-blur-sm text-white/80 text-xs px-3 py-1.5 rounded-full">
+									<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+									Memuat detektor wajah...
+								</div>
+							{:else if faceDetected}
+								<div class="flex items-center gap-1.5 bg-green-500/80 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full">
+									<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+									Wajah terdeteksi
+								</div>
+							{:else}
+								<div class="flex items-center gap-1.5 bg-red-500/80 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full">
+									<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+									Wajah tidak terdeteksi
+								</div>
+							{/if}
 						</div>
 						
 						<!-- Cancel button -->
@@ -468,7 +550,7 @@
 						</button>
 						
 						<div class="absolute bottom-4 left-0 w-full text-center text-white text-xs font-medium drop-shadow-md tracking-wide uppercase">
-							POSISIKAN WAJAH ANDA
+							{faceDetected ? 'WAJAH TERDETEKSI ✓' : 'POSISIKAN WAJAH ANDA'}
 						</div>
 					</div>
 				{/if}

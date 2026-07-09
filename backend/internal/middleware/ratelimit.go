@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"context"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/storage/redis/v3"
 )
 
 // Rate limit tiers (based on Technical Spec section 15.2)
@@ -18,6 +20,14 @@ const (
 	// TierLow: All other endpoints — 100 req/min per IP
 	TierLow
 )
+
+// SetRedisStorage sets the Redis storage for all rate limiters.
+// If nil, the limiter will use in-memory storage (fallback).
+var redisStorage fiber.Storage
+
+func SetRedisStorage(storage fiber.Storage) {
+	redisStorage = storage
+}
 
 // RateLimitConfig returns a rate limiter middleware based on the specified tier.
 //
@@ -72,6 +82,11 @@ func RateLimitConfig(tier int) fiber.Handler {
 		}
 	}
 
+	// Use Redis storage if available, otherwise fallback to in-memory
+	if redisStorage != nil {
+		cfg.Storage = redisStorage
+	}
+
 	return limiter.New(cfg)
 }
 
@@ -86,7 +101,7 @@ func limitReachedHandler(c *fiber.Ctx) error {
 // ForgotPasswordRateLimit returns a rate limiter with per-email key.
 // 3 requests per hour per email address.
 func ForgotPasswordRateLimit() fiber.Handler {
-	return limiter.New(limiter.Config{
+	cfg := limiter.Config{
 		Max:        3,
 		Expiration: 1 * time.Hour,
 		KeyGenerator: func(c *fiber.Ctx) string {
@@ -100,5 +115,38 @@ func ForgotPasswordRateLimit() fiber.Handler {
 			return "rl:forgot-pw:" + c.IP()
 		},
 		LimitReached: limitReachedHandler,
+	}
+
+	// Use Redis storage if available
+	if redisStorage != nil {
+		cfg.Storage = redisStorage
+	}
+
+	return limiter.New(cfg)
+}
+
+// NewRedisStorage creates a new Redis-backed fiber.Storage for rate limiting.
+// Returns nil if connection fails (falls back to in-memory).
+func NewRedisStorage(host, password string, port, db int) fiber.Storage {
+	if host == "" {
+		return nil
+	}
+
+	store := redis.New(redis.Config{
+		Host:     host,
+		Port:     port,
+		Password: password,
+		Database: db,
+		PoolSize: 10,
 	})
+
+	// Verify connection works (Ping needs context in go-redis v9)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := store.Conn().Ping(ctx).Err(); err != nil {
+		// Redis tidak tersedia — fallback ke in-memory storage
+		return nil
+	}
+
+	return store
 }

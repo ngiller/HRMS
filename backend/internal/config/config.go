@@ -44,6 +44,11 @@ type Config struct {
 
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
+
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+	RedisDB       int
 }
 
 func Load() *Config {
@@ -87,6 +92,11 @@ func Load() *Config {
 
 		VAPIDPublicKey:  getEnv("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey: getEnv("VAPID_PRIVATE_KEY", ""),
+
+		RedisHost:     getEnv("REDIS_HOST", "localhost"),
+		RedisPort:     getEnv("REDIS_PORT", "6379"),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
+		RedisDB:       getInt("REDIS_DB", 0),
 	}
 
 	// Warn if sensitive defaults are used (development only)
