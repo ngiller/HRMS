@@ -145,9 +145,9 @@ func TestOptimisticLocking_Leave_UpdateStatus_DoubleApprove(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
-		go func(approverSuffix string) {
+		go func() {
 			defer wg.Done()
-			_, err := UpdateLeaveStatus(ctx, leaveID, "approved", "", "00000000-0000-0000-0000-00000000000"+approverSuffix)
+			_, err := UpdateLeaveStatus(ctx, leaveID, "approved", "", empID)
 			mu.Lock()
 			if err != nil {
 				t.Logf("Approve attempt failed (expected): %v", err)
@@ -156,7 +156,7 @@ func TestOptimisticLocking_Leave_UpdateStatus_DoubleApprove(t *testing.T) {
 				successCount++
 			}
 			mu.Unlock()
-		}(string(rune('1' + i))) // "1" atau "2"
+		}()
 	}
 	wg.Wait()
 
@@ -216,13 +216,13 @@ func TestOptimisticLocking_Leave_UpdateStatus_AlreadyProcessed(t *testing.T) {
 	t.Logf("Created test leave request: %s", leaveID)
 
 	// Step 1: Approve pertama — harus sukses
-	_, err = UpdateLeaveStatus(ctx, leaveID, "approved", "", "00000000-0000-0000-0000-000000000001")
+	_, err = UpdateLeaveStatus(ctx, leaveID, "approved", "", empID)
 	if err != nil {
 		t.Fatalf("First approve should succeed: %v", err)
 	}
 
 	// Step 2: Approve kedua — harus gagal karena status sudah 'approved'
-	_, err = UpdateLeaveStatus(ctx, leaveID, "approved", "", "00000000-0000-0000-0000-000000000002")
+	_, err = UpdateLeaveStatus(ctx, leaveID, "approved", "", empID)
 	if err == nil {
 		t.Error("Second approve should fail with 'sudah diproses' error")
 	} else {
@@ -230,7 +230,7 @@ func TestOptimisticLocking_Leave_UpdateStatus_AlreadyProcessed(t *testing.T) {
 	}
 
 	// Step 3: Reject setelah approve — harus gagal juga
-	_, err = UpdateLeaveStatus(ctx, leaveID, "rejected", "Alasan reject", "00000000-0000-0000-0000-000000000003")
+	_, err = UpdateLeaveStatus(ctx, leaveID, "rejected", "Alasan reject", empID)
 	if err == nil {
 		t.Error("Reject after approve should fail")
 	} else {
@@ -292,9 +292,9 @@ func TestOptimisticLocking_ShiftChange_UpdateStatus(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
-		go func(suffix string) {
+		go func() {
 			defer wg.Done()
-			_, err := UpdateShiftChangeStatus(ctx, scID, "approved", "", "00000000-0000-0000-0000-00000000000"+suffix)
+			_, err := UpdateShiftChangeStatus(ctx, scID, "approved", "", empID)
 			mu.Lock()
 			if err == nil {
 				successCount++
@@ -302,7 +302,7 @@ func TestOptimisticLocking_ShiftChange_UpdateStatus(t *testing.T) {
 				t.Logf("Shift change approve attempt failed: %v", err)
 			}
 			mu.Unlock()
-		}(string(rune('1' + i)))
+		}()
 	}
 	wg.Wait()
 
@@ -334,7 +334,7 @@ func TestOptimisticLocking_Reimbursement(t *testing.T) {
 	var reimbID string
 	err = database.Pool.QueryRow(ctx, `
 		INSERT INTO reimbursements (employee_id, type, amount, description, status)
-		VALUES ($1::uuid, 'medical'::reimbursement_type, 500000, '[TEST] Reimbursement locking', 'pending'::reimbursement_status)
+		VALUES ($1::uuid, 'medical'::reimbursement_type, 500000, '[TEST] Reimbursement locking', 'pending'::leave_status)
 		RETURNING id::text
 	`, empID).Scan(&reimbID)
 	if err != nil {
@@ -343,13 +343,13 @@ func TestOptimisticLocking_Reimbursement(t *testing.T) {
 	t.Logf("Created reimbursement: %s", reimbID)
 
 	// Approve — harus sukses
-	_, err = UpdateReimbursementStatus(ctx, reimbID, "approved", "", "00000000-0000-0000-0000-000000000001")
+	_, err = UpdateReimbursementStatus(ctx, reimbID, "approved", "", empID)
 	if err != nil {
 		t.Fatalf("Approve reimbursement should succeed: %v", err)
 	}
 
 	// Double approve — harus gagal
-	_, err = UpdateReimbursementStatus(ctx, reimbID, "approved", "", "00000000-0000-0000-0000-000000000002")
+	_, err = UpdateReimbursementStatus(ctx, reimbID, "approved", "", empID)
 	if err == nil {
 		t.Error("Second approve should fail")
 	} else {
@@ -395,13 +395,13 @@ func TestOptimisticLocking_Loan(t *testing.T) {
 	t.Logf("Created loan: %s", loanID)
 
 	// Approve
-	_, err = UpdateLoanStatus(ctx, loanID, "approved", "", "00000000-0000-0000-0000-000000000001")
+	_, err = UpdateLoanStatus(ctx, loanID, "approved", "", empID)
 	if err != nil {
 		t.Fatalf("Approve loan should succeed: %v", err)
 	}
 
 	// Double approve
-	_, err = UpdateLoanStatus(ctx, loanID, "approved", "", "00000000-0000-0000-0000-000000000002")
+	_, err = UpdateLoanStatus(ctx, loanID, "approved", "", empID)
 	if err == nil {
 		t.Error("Second loan approve should fail")
 	} else {
@@ -640,10 +640,10 @@ func TestOptimisticLocking_Overtime(t *testing.T) {
 	// Buat overtime request
 	var ovtID string
 	err = database.Pool.QueryRow(ctx, `
-		INSERT INTO overtime_requests (employee_id, overtime_date, start_time, end_time,
+		INSERT INTO overtime_requests (employee_id, date, start_time, end_time,
 			overtime_type, reason, total_hours, status)
-		VALUES ($1::uuid, CURRENT_DATE, '08:00', '10:00',
-			'weekday'::overtime_type, '[TEST] Overtime locking', 2, 'pending'::overtime_status)
+		VALUES ($1::uuid, CURRENT_DATE, (CURRENT_DATE + TIME '08:00')::timestamptz, (CURRENT_DATE + TIME '10:00')::timestamptz,
+			'weekday'::overtime_type, '[TEST] Overtime locking', 2, 'pending'::leave_status)
 		RETURNING id::text
 	`, empID).Scan(&ovtID)
 	if err != nil {
@@ -658,9 +658,9 @@ func TestOptimisticLocking_Overtime(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
-		go func(suffix string) {
+		go func() {
 			defer wg.Done()
-			_, err := UpdateOvertimeStatus(ctx, ovtID, "approved", "", "00000000-0000-0000-0000-00000000000"+suffix)
+			_, err := UpdateOvertimeStatus(ctx, ovtID, "approved", "", empID)
 			mu.Lock()
 			if err == nil {
 				successCount++
@@ -668,7 +668,7 @@ func TestOptimisticLocking_Overtime(t *testing.T) {
 				t.Logf("Overtime approve attempt failed: %v", err)
 			}
 			mu.Unlock()
-		}(string(rune('1' + i)))
+		}()
 	}
 	wg.Wait()
 
