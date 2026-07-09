@@ -5,6 +5,7 @@
   import { goto } from "$app/navigation";
   import { auth, notifications, approvals } from "$lib/api.js";
   import { onMount } from "svelte";
+  import { connectSSE, disconnectSSE } from "$lib/sse.js";
 	import { slide, fade } from "svelte/transition";
 	import { fly } from "svelte/transition";
   import { getAccessibleMenus } from "$lib/permissions.js";
@@ -121,12 +122,40 @@
     } catch (e) { console.error('Failed to fetch pending count:', e); }
   }
 
+  let sseConnected = $state(false);
+
+  function handleSSEApprovalEvent() {
+    // Refresh pending count in real-time when SSE event arrives
+    fetchPendingCount();
+    fetchNotifs();
+  }
+
   onMount(() => {
     fetchNotifs();
     fetchPendingCount();
-    // Poll pending approvals every 30s
+
+    // Connect SSE for real-time updates
+    if (auth.isAuthenticated()) {
+      const token = auth.getAccessToken();
+      if (token) {
+        connectSSE(token, {
+          onEvent: (data) => {
+            if (data && data.type === 'approval_update') {
+              handleSSEApprovalEvent();
+            }
+          },
+          onConnected: () => { sseConnected = true; },
+          onDisconnected: () => { sseConnected = false; },
+        });
+      }
+    }
+
+    // Fallback: poll pending approvals every 30s
     const interval = setInterval(fetchPendingCount, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      disconnectSSE();
+    };
   });
 
   async function markNotifAsRead(id: string) {
@@ -227,10 +256,15 @@
       >
         HR
       </div>
-      <div>
-        <div class="font-bold text-gray-900 dark:text-gray-100 text-sm">HRMS</div>
-        <div class="text-xs text-gray-400 dark:text-gray-500">PT Maju Jaya</div>
-      </div>
+      <div>				<div class="font-bold text-gray-900 dark:text-gray-100 text-sm">HRMS</div>
+				<div class="text-xs text-gray-400 dark:text-gray-500">PT Maju Jaya</div>
+			</div>
+			{#if sseConnected}
+				<div class="ml-auto" title="Terhubung real-time">
+					<div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+				</div>
+			{/if}
+					
     </div>
       
     <!-- Menu Search Desktop -->

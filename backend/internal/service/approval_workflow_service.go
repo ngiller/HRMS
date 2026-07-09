@@ -157,7 +157,17 @@ func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context,
 			"totalSteps": len(applicableSteps),
 		},
 	}
-	_, _ = notifRepo.CreateNotification(ctx, notifReq)
+	n, _ := notifRepo.CreateNotification(ctx, notifReq)
+	// Broadcast SSE event to approver for real-time badge update
+	if n != nil && GetSSEHub() != nil {
+		GetSSEHub().BroadcastToUser(approverID, SSEEvent{
+			Type: "approval_update",
+			Data: map[string]any{
+				"action": "new_pending",
+				"userId": approverID,
+			},
+		})
+	}
 	// Send email to approver (if email service is configured)
 	SendEmailForUser(ctx, approverID, "Pengajuan Baru: "+entityLabel,
 		fmt.Sprintf("Ada pengajuan %s baru yang perlu Anda setujui.", entityLabel))
@@ -325,6 +335,17 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 					"note":      note,
 				},
 			})
+			// Broadcast SSE event to requestor for real-time update
+			if GetSSEHub() != nil {
+				GetSSEHub().BroadcastToUser(requestorID, SSEEvent{
+					Type: "approval_update",
+					Data: map[string]any{
+						"action": "rejected",
+						"userId": requestorID,
+						"type":   entityType,
+					},
+				})
+			}
 			// Send email to requestor
 			SendEmailForUser(ctx, requestorID, entityLabel+" Ditolak",
 				fmt.Sprintf("Pengajuan %s Anda ditolak oleh %s.", entityLabel, actualApproverName))
@@ -373,6 +394,17 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 					"status":    "approved",
 				},
 			})
+			// Broadcast SSE event to requestor for real-time update
+			if GetSSEHub() != nil {
+				GetSSEHub().BroadcastToUser(requestorID, SSEEvent{
+					Type: "approval_update",
+					Data: map[string]any{
+						"action": "approved",
+						"userId": requestorID,
+						"type":   entityType,
+					},
+				})
+			}
 			// Send email to requestor about final approval
 			SendEmailForUser(ctx, requestorID, entityLabel+" Disetujui",
 				fmt.Sprintf("Pengajuan %s Anda telah disetujui sepenuhnya oleh %s.", entityLabel, actualApproverName))
@@ -400,6 +432,17 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 				"level":     currentStepIdx + 1,
 			},
 		})
+		// Broadcast SSE event to requestor for real-time update
+		if GetSSEHub() != nil {
+			GetSSEHub().BroadcastToUser(requestorID, SSEEvent{
+				Type: "approval_update",
+				Data: map[string]any{
+					"action": "level_approved",
+					"userId": requestorID,
+					"type":   entityType,
+				},
+			})
+		}
 		// Send email to requestor about level approval
 		SendEmailForUser(ctx, requestorID, entityLabel+" Disetujui Level "+fmt.Sprintf("%d", currentStepIdx+1),
 			fmt.Sprintf("Pengajuan %s Anda telah disetujui di level %d oleh %s.", entityLabel, currentStepIdx+1, actualApproverName))
@@ -441,6 +484,17 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			},
 		}
 		_, _ = notifRepo.CreateNotification(ctx, nextNotifReq)
+		// Broadcast SSE event to next approver for real-time badge update
+		if GetSSEHub() != nil {
+			GetSSEHub().BroadcastToUser(nextApproverID, SSEEvent{
+				Type: "approval_update",
+				Data: map[string]any{
+					"action": "new_pending",
+					"userId": nextApproverID,
+					"type":   entityType,
+				},
+			})
+		}
 		// Send email to next approver
 		SendEmailForUser(ctx, nextApproverID, "Pengajuan Baru Perlu Disetujui",
 			fmt.Sprintf("Ada pengajuan %s yang menunggu persetujuan Anda. Step %d dari %d.", entityLabel, currentStepIdx+2, len(applicableSteps)))

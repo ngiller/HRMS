@@ -47,6 +47,7 @@ func Setup(
 	approvalWorkflowHandler *handlers.ApprovalWorkflowHandler,
 	pushSubscriptionHandler *handlers.PushSubscriptionHandler,
 	mutationHandler *handlers.MutationHandler,
+	sseHandler *handlers.SSEHandler,
 	authService *service.AuthService,
 ) {
 	// Health check
@@ -62,6 +63,10 @@ func Setup(
 
 	// Public routes (no auth required)
 	api := app.Group("/api")
+
+	// ==================== SSE (Server-Sent Events) ====================
+	// Public endpoint with JWT auth via query param (no auth middleware)
+	api.Get("/sse/subscribe", sseHandler.HandleSSE)
 
 	// ==================== Auth Routes (public) ====================
 	auth := api.Group("/auth")

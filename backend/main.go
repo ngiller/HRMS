@@ -90,6 +90,9 @@ func main() {
 	// Initialize global email service for use by ApprovalWorkflowService and others
 	service.InitGlobalEmailService(emailService)
 
+	// Initialize SSE hub for real-time events
+	sseHub := service.InitGlobalSSEHub()
+
 	notificationService := service.NewNotificationService(emailService)
 	activityLogService := service.NewActivityLogService()
 	approvalWorkflowService := service.NewApprovalWorkflowService()
@@ -136,6 +139,7 @@ func main() {
 	manualAttendanceHandler := handlers.NewManualAttendanceHandler(manualAttendanceService)
 	resignHandler := handlers.NewResignHandler(resignService)
 	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(webPushService)
+	sseHandler := handlers.NewSSEHandler(sseHub, authService)
 
 	// Initialize Mutation service
 	mutationService := service.NewMutationService()
@@ -185,6 +189,7 @@ func main() {
 		approvalWorkflowHandler,
 		pushSubscriptionHandler,
 		mutationHandler,
+		sseHandler,
 		authService)
 
 	// ─── Serve built frontend (SPA) from ./public/ ─────────────
