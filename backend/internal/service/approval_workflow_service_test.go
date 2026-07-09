@@ -19,6 +19,9 @@ func TestGetEntityLabel(t *testing.T) {
 		{"reimbursement", "Reimbursement"},
 		{"shift_change", "Perubahan Shift"},
 		{"loan", "Pinjaman"},
+		{"manual_attendance", "Absensi Manual"},
+		{"resign", "Resign"},
+		{"mutation", "Mutasi"},
 		{"unknown", "unknown"},
 		{"", ""},
 	}
@@ -30,6 +33,13 @@ func TestGetEntityLabel(t *testing.T) {
 				t.Errorf("getEntityLabel(%q) = %q, want %q", tt.entityType, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewApprovalWorkflowService(t *testing.T) {
+	svc := NewApprovalWorkflowService()
+	if svc == nil {
+		t.Error("NewApprovalWorkflowService() returned nil")
 	}
 }
 

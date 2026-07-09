@@ -238,7 +238,7 @@ func (s *ApprovalWorkflowService) ProcessApproval(ctx context.Context, entityTyp
 	currentStep := applicableSteps[currentStepIdx]
 
 	// Resolve the actual approver and their name
-	var expectedApproverID, expectedApproverName string
+	var expectedApproverID, expectedApproverName, requestorID string
 
 	if isSuperAdmin {
 		// Super admin bypasses the approver verification entirely
@@ -247,16 +247,22 @@ func (s *ApprovalWorkflowService) ProcessApproval(ctx context.Context, entityTyp
 		if expectedApproverName == "" {
 			expectedApproverName = approverID
 		}
+		// Get requestorID for notification purposes
+		requestorID, _ = repository.GetEntityRequestorID(ctx, entityType, entityID)
+		if requestorID == "" {
+			requestorID = entityID
+		}
 	} else {
 		// Get the requestor's employee ID to resolve approval_line correctly
-		requestorID, err := repository.GetEntityRequestorID(ctx, entityType, entityID)
-		if err != nil {
-			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err)
+		var err2 error
+		requestorID, err2 = repository.GetEntityRequestorID(ctx, entityType, entityID)
+		if err2 != nil {
+			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err2)
 		}
 
-		expectedApproverID, expectedApproverName, err = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
-		if err != nil {
-			return nil, fmt.Errorf("gagal verifikasi approver: %w", err)
+		expectedApproverID, expectedApproverName, err2 = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
+		if err2 != nil {
+			return nil, fmt.Errorf("gagal verifikasi approver: %w", err2)
 		}
 		if expectedApproverID != approverID {
 			return nil, errors.New("anda tidak berwenang untuk melakukan approval ini")
@@ -267,7 +273,7 @@ func (s *ApprovalWorkflowService) ProcessApproval(ctx context.Context, entityTyp
 
 	// Execute approval in transaction
 	return s.processApprovalTx(ctx, entityType, entityID, approverID, action, note,
-		tracking, currentStep, currentStepIdx, applicableSteps, actualApproverName)
+		tracking, currentStep, currentStepIdx, applicableSteps, actualApproverName, requestorID)
 }
 
 func (s *ApprovalWorkflowService) processApprovalTx(
@@ -277,16 +283,9 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 	currentStep models.ApprovalWorkflowStep,
 	currentStepIdx int,
 	applicableSteps []models.ApprovalWorkflowStep,
-	actualApproverName string,
+	actualApproverName, requestorID string,
 ) (*models.ApprovalResult, error) {
 	var result *models.ApprovalResult
-
-	// Get the actual requestor (employee) ID from the entity table
-	// tracking.EntityID is the request UUID, NOT the employee UUID
-	requestorID, _ := repository.GetEntityRequestorID(ctx, entityType, entityID)
-	if requestorID == "" {
-		requestorID = tracking.EntityID.String()
-	}
 
 	err := database.WithUserContext(ctx, approverID, func(tx pgx.Tx) error {
 		if action == "reject" {
