@@ -458,7 +458,7 @@ LEFT JOIN overtime_requests otr ON otr.id = art.entity_id AND art.entity_type = 
 LEFT JOIN reimbursements rmb ON rmb.id = art.entity_id AND art.entity_type = 'reimbursement' AND rmb.deleted_at IS NULL
 LEFT JOIN shift_change_requests scr ON scr.id = art.entity_id AND art.entity_type = 'shift_change' AND scr.deleted_at IS NULL
 LEFT JOIN loans ln ON ln.id = art.entity_id AND art.entity_type = 'loan' AND ln.deleted_at IS NULL
-LEFT JOIN manual_attendance_requests mar ON mar.id = art.entity_id AND art.entity_type = 'manual_attendance' AND mar.deleted_at IS NULL
+LEFT JOIN manual_attendance_requests mar ON mar.id = art.entity_id AND art.entity_type = 'manual_attendance'
 LEFT JOIN resign_requests rr ON rr.id = art.entity_id AND art.entity_type = 'resign' AND rr.deleted_at IS NULL
 LEFT JOIN employee_mutations em ON em.id = art.entity_id AND art.entity_type = 'mutation' AND em.deleted_at IS NULL
 JOIN employees e ON e.id = COALESCE(lr.employee_id, otr.employee_id, rmb.employee_id, scr.employee_id, ln.employee_id, mar.employee_id, rr.employee_id, em.employee_id)`

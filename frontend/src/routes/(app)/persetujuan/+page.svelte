@@ -5,22 +5,16 @@
 	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 
 	type PendingApproval = {
-		id: string;
+		tracking_id: string;
 		entity_type: string;
 		entity_id: string;
-		current_step_order: number;
+		current_step: number;
 		total_steps: number;
-		status: string;
-		employee_name: string;
+		requestor_name: string;
 		title: string;
 		description: string;
 		amount: number;
 		created_at: string;
-	};
-
-	type PendingApprovalResponse = {
-		pending_approvals: PendingApproval[];
-		total: number;
 	};
 
 	let pendingApprovals = $state<PendingApproval[]>([]);
@@ -65,17 +59,20 @@
 	};
 
 	onMount(() => {
-		loadPendingApprovals();
+		loadPendingApprovals(false);
+		// Auto-refresh setiap 30 detik (tanpa loading skeleton)
+		const interval = setInterval(() => loadPendingApprovals(true), 30000);
+		return () => clearInterval(interval);
 	});
 
-	async function loadPendingApprovals() {
-		isLoading = true;
+	async function loadPendingApprovals(isBackgroundRefresh = false) {
+		if (!isBackgroundRefresh) isLoading = true;
 		errorMessage = '';
 		try {
 			const res: any = await approvalsApi.getPending();
 			if (res.success && res.data) {
-				const d = res.data as PendingApprovalResponse;
-				pendingApprovals = d.pending_approvals || [];
+				const d = res.data as { items: PendingApproval[]; total: number };
+				pendingApprovals = d.items || [];
 				total = d.total || 0;
 			} else {
 				pendingApprovals = [];
@@ -138,7 +135,7 @@
 	}
 </script>
 
-<div class="max-w-4xl mx-auto">
+<div class="w-full">
 	<div class="flex items-center gap-4 mb-8">
 		<div class="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0">
 			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -207,7 +204,7 @@
 											{ENTITY_LABELS[item.entity_type] || item.entity_type}
 										</span>
 										<span class="mx-1.5">•</span>
-										{item.employee_name}
+										{item.requestor_name}
 										{#if item.amount > 0}
 											<span class="mx-1.5">•</span>
 											{formatCurrency(item.amount)}
@@ -216,7 +213,7 @@
 									<p class="text-xs text-gray-400 mt-1.5 flex items-center gap-2">
 										{formatDate(item.created_at)}
 										<span class="w-1 h-1 rounded-full bg-gray-300"></span>
-										{item.current_step_order > 0 ? `Level ${item.current_step_order}/${item.total_steps}` : `${item.total_steps} level`}
+										{item.current_step > 0 ? `Level ${item.current_step}/${item.total_steps}` : `${item.total_steps} level`}
 									</p>
 								</div>
 								<div class="flex items-center gap-2 shrink-0">
