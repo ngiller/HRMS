@@ -32,7 +32,7 @@ func DefaultSecurityConfig() *SecurityConfig {
 		CSPScriptSrc:   "'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com",
 		CSPStyleSrc:    "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com",
 		CSPImgSrc:      "'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com",
-		CSPConnectSrc:  "'self' https://api.emailjs.com ws: wss:",
+		CSPConnectSrc:  "'self' http://localhost:8590 http://localhost:8900 https://api.emailjs.com ws: wss:",
 		CSPFontSrc:     "'self' data: https://fonts.gstatic.com",
 		MaxUploadSize:  5 * 1024 * 1024, // 5MB
 		AllowedMimeTypes: []string{
