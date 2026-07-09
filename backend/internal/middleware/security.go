@@ -69,6 +69,12 @@ func SecurityHeadersMiddleware(cfg *SecurityConfig) fiber.Handler {
 		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Set("Permissions-Policy", "geolocation=(self), camera=(self), microphone=(), payment=()")
 
+		// Additional security headers (previously from helmet.New())
+		c.Set("X-DNS-Prefetch-Control", "off")
+		c.Set("X-Download-Options", "noopen")
+		c.Set("X-Permitted-Cross-Domain-Policies", "none")
+		c.Set("Origin-Agent-Cluster", "?1")
+
 		// Content Security Policy
 		if cfg != nil {
 			csp := fmt.Sprintf(

@@ -17,7 +17,6 @@ import (
 	"hrms-backend/internal/service"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/helmet"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
@@ -126,9 +125,12 @@ func main() {
 	app.Use(recover.New())
 	app.Use(requestid.New())
 	app.Use(logger.New(logger.Config{
-		Format: "[${time}] ${status} - ${latency} ${method} ${path}\\n",
+		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
-	app.Use(helmet.New())
+	// Helmet tidak digunakan karena:
+	// - SecurityHeadersMiddleware sudah mencakup XSS, CSP, X-Frame, dll.
+	// - helmet.New() default menambahkan CORP/COEP yang memblokir upload gambar
+	// app.Use(helmet.New())
 	app.Use(middleware.CORSConfig(cfg))
 
 	// Security middleware
