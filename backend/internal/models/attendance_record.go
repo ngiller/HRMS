@@ -61,19 +61,26 @@ type AttendanceRecordSummary struct {
 }
 
 type CheckInRequest struct {
-	Lat          *float64 `json:"lat"`
-	Lng          *float64 `json:"lng"`
-	LocationID   *string  `json:"location_id"`
-	LocationName *string  `json:"location_name"`
-	Photo        *string  `json:"photo"`
+	Lat            *float64 `json:"lat"`
+	Lng            *float64 `json:"lng"`
+	LocationID     *string  `json:"location_id"`
+	LocationName   *string  `json:"location_name"`
+	Photo          *string  `json:"photo"`
+	FaceDescriptor *string  `json:"face_descriptor"`
 }
 
 type CheckOutRequest struct {
-	Lat          *float64 `json:"lat"`
-	Lng          *float64 `json:"lng"`
-	LocationID   *string  `json:"location_id"`
-	LocationName *string  `json:"location_name"`
-	Photo        *string  `json:"photo"`
+	Lat            *float64 `json:"lat"`
+	Lng            *float64 `json:"lng"`
+	LocationID     *string  `json:"location_id"`
+	LocationName   *string  `json:"location_name"`
+	Photo          *string  `json:"photo"`
+	FaceDescriptor *string  `json:"face_descriptor"`
+}
+
+// FaceDescriptorRequest is used to register/update face descriptor for an employee
+type FaceDescriptorRequest struct {
+	Descriptor string `json:"descriptor"`
 }
 
 type TodayAttendanceStatus struct {

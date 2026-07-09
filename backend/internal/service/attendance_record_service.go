@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -95,6 +96,53 @@ func (s *AttendanceRecordService) GetTodayStatus(ctx context.Context, employeeID
 	return status, nil
 }
 
+func (s *AttendanceRecordService) verifyFaceDescriptor(ctx context.Context, employeeID string, descriptor *string) error {
+	if descriptor == nil || *descriptor == "" {
+		return nil // Face verification not required
+	}
+
+	storedJSON, err := repository.GetFaceDescriptor(ctx, employeeID)
+	if err != nil {
+		return fmt.Errorf("gagal memuat data wajah: %w", err)
+	}
+	if storedJSON == nil || *storedJSON == "" {
+		// Employee has no registered face descriptor, skip verification
+		return nil
+	}
+
+	// Parse both descriptors as float64 arrays
+	var storedDesc, capturedDesc []float64
+	if err := json.Unmarshal([]byte(*storedJSON), &storedDesc); err != nil {
+		return fmt.Errorf("deskriptor wajah tidak valid: %w", err)
+	}
+	if err := json.Unmarshal([]byte(*descriptor), &capturedDesc); err != nil {
+		return fmt.Errorf("deskriptor wajah tidak valid: %w", err)
+	}
+
+	if len(storedDesc) == 0 || len(capturedDesc) == 0 {
+		return errors.New("deskriptor wajah kosong")
+	}
+
+	if len(storedDesc) != len(capturedDesc) {
+		return errors.New("dimensi deskriptor wajah tidak cocok")
+	}
+
+	// Compute Euclidean distance
+	var sumSquares float64
+	for i := 0; i < len(storedDesc); i++ {
+		diff := storedDesc[i] - capturedDesc[i]
+		sumSquares += diff * diff
+	}
+	distance := math.Sqrt(sumSquares)
+
+	const faceMatchThreshold = 0.6
+	if distance > faceMatchThreshold {
+		return errors.New("wajah tidak cocok dengan data karyawan")
+	}
+
+	return nil
+}
+
 func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string, req *models.CheckInRequest) (*models.AttendanceRecord, error) {
 	existing, err := repository.GetTodayAttendanceByEmployee(ctx, employeeID)
 	if err != nil {
@@ -110,6 +158,11 @@ func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string
 	}
 	if scheduleID == nil {
 		return nil, errors.New("tidak memiliki jadwal kerja, hubungi HR")
+	}
+
+	// Verify face if descriptor is provided
+	if err := s.verifyFaceDescriptor(ctx, employeeID, req.FaceDescriptor); err != nil {
+		return nil, err
 	}
 
 	locID, locName := s.validateGPS(ctx, req.Lat, req.Lng)
@@ -163,6 +216,11 @@ func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID strin
 	}
 	if record.CheckOutTime != nil {
 		return nil, errors.New("sudah melakukan check-out hari ini")
+	}
+
+	// Verify face if descriptor is provided
+	if err := s.verifyFaceDescriptor(ctx, employeeID, req.FaceDescriptor); err != nil {
+		return nil, err
 	}
 
 	locID, locName := s.validateGPS(ctx, req.Lat, req.Lng)

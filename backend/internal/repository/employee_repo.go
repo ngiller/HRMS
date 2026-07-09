@@ -1055,6 +1055,34 @@ func GetHRDashboardStats(ctx context.Context) (*models.HRDashboardResponse, erro
 	return resp, nil
 }
 
+// UpdateFaceDescriptor stores a face descriptor (JSON array of 128 floats) for an employee
+func UpdateFaceDescriptor(ctx context.Context, employeeID, descriptorJSON, userID string) error {
+	query := `UPDATE employees SET face_descriptor = NULLIF($1, '')::jsonb, face_descriptor_updated_at = NOW(), updated_at = NOW() WHERE id::text = $2 AND deleted_at IS NULL`
+	return database.WithUserContext(ctx, userID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, query, descriptorJSON, employeeID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return errors.New("karyawan tidak ditemukan")
+		}
+		return nil
+	})
+}
+
+// GetFaceDescriptor retrieves the face descriptor for an employee
+func GetFaceDescriptor(ctx context.Context, employeeID string) (*string, error) {
+	var descriptor *string
+	err := database.Pool.QueryRow(ctx, `SELECT face_descriptor::text FROM employees WHERE id::text = $1 AND deleted_at IS NULL`, employeeID).Scan(&descriptor)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return descriptor, nil
+}
+
 func ListEmployeesForExport(ctx context.Context) ([]models.EmployeeSummary, error) {
 	query := `
 		SELECT e.id, e.employee_id, e.full_name, e.email,

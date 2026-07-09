@@ -349,6 +349,19 @@ func (s *EmployeeService) UpdateWorkSchedule(ctx context.Context, id, workSchedu
 	return employee, nil
 }
 
+// RegisterFaceDescriptor stores a face descriptor for an employee
+func (s *EmployeeService) RegisterFaceDescriptor(ctx context.Context, id, descriptorJSON, userID string) error {
+	exists, err := repository.CheckEmployeeExists(ctx, id)
+	if err != nil {
+		return errors.New("gagal memvalidasi karyawan")
+	}
+	if !exists {
+		return errors.New("karyawan tidak ditemukan")
+	}
+
+	return repository.UpdateFaceDescriptor(ctx, id, descriptorJSON, userID)
+}
+
 func (s *EmployeeService) UploadPhoto(ctx context.Context, id string, file *multipart.FileHeader, userID string) (string, error) {
 	// Check employee exists
 	exists, err := repository.CheckEmployeeExists(ctx, id)

@@ -174,13 +174,13 @@
 
 	async function startFaceDetection() {
 		if (!videoElement || !(window as any).faceapi) return;
-		const faceapi = (window as any).faceapi;
-
-		try {
-			faceDetectionLoading = true;
-			await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-			await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-			faceDetectionLoading = false;
+		const faceapi = (window as any).faceapi;			try {
+				faceDetectionLoading = true;
+				await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+				await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+				// Pre-load face recognition model for descriptor computation during check-in
+				await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+				faceDetectionLoading = false;
 
 			const canvas = faceDetectionCanvas;
 			if (!canvas) return;
@@ -289,9 +289,48 @@
 		stopCamera();
 	});
 
+	function isBlockedByFaceDetection(): boolean {
+		return showCamera && !faceDetectionLoading && !faceDetected;
+	}
+
+	async function computeFaceDescriptor(photoDataUrl: string): Promise<number[] | null> {
+		const faceapi = (window as any).faceapi;
+		if (!faceapi) return null;
+
+		try {
+			// Load face recognition model if not loaded
+			if (!faceapi.nets.faceRecognitionNet) {
+				await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+			}
+
+			const img = new Image();
+			img.src = photoDataUrl;
+			await new Promise((resolve) => { img.onload = resolve; });
+
+			const result = await faceapi
+				.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+				.withFaceLandmarks()
+				.withFaceDescriptor();
+
+			if (result && result.descriptor) {
+				return Array.from(result.descriptor as Float32Array);
+			}
+			return null;
+		} catch (err) {
+			console.error('Face descriptor error:', err);
+			return null;
+		}
+	}
+
 	async function handleCheckIn() {
 		if (!showCamera) {
 			await startCamera();
+			return;
+		}
+
+		// Block if face not detected
+		if (isBlockedByFaceDetection()) {
+			error = 'Wajah tidak terdeteksi. Silakan posisikan wajah Anda di depan kamera.';
 			return;
 		}
 
@@ -299,11 +338,16 @@
 		error = '';
 		try {
 			const photo = capturePhoto();
+			
+			// Compute face descriptor for verification
+			const descriptor = await computeFaceDescriptor(photo);
+			
 			const coords = await getGPS();
 			const res = await attendance.checkIn({
 				lat: coords.lat,
 				lng: coords.lng,
-				photo: photo
+				photo: photo,
+				face_descriptor: descriptor ? JSON.stringify(descriptor) : undefined
 			});
 			if (res.success) {
 				await loadTodayStatus();
@@ -322,15 +366,26 @@
 			return;
 		}
 
+		// Block if face not detected
+		if (isBlockedByFaceDetection()) {
+			error = 'Wajah tidak terdeteksi. Silakan posisikan wajah Anda di depan kamera.';
+			return;
+		}
+
 		checkingOut = true;
 		error = '';
 		try {
 			const photo = capturePhoto();
+			
+			// Compute face descriptor for verification
+			const descriptor = await computeFaceDescriptor(photo);
+			
 			const coords = await getGPS();
 			const res = await attendance.checkOut({
 				lat: coords.lat,
 				lng: coords.lng,
-				photo: photo
+				photo: photo,
+				face_descriptor: descriptor ? JSON.stringify(descriptor) : undefined
 			});
 			if (res.success) {
 				await loadTodayStatus();
@@ -560,20 +615,20 @@
 					{#if !status.has_checked_in}
 						<button
 							onclick={handleCheckIn}
-							disabled={checkingIn}
+							disabled={checkingIn || isBlockedByFaceDetection()}
 							class="flex-1 bg-gradient-to-r from-[#1A56DB] to-[#1e40af] hover:from-[#1e40af] hover:to-[#1e3a8a] disabled:opacity-60 text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-200/50 dark:shadow-blue-900/30 active:scale-[0.97] cursor-pointer"
 						>
 							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-							{showCamera ? (checkingIn ? 'Memproses...' : 'Ambil Foto & Check In') : 'Check In'}
+							{showCamera ? (checkingIn ? 'Memproses...' : (isBlockedByFaceDetection() ? 'Arahkan Wajah ke Kamera' : 'Ambil Foto & Check In')) : 'Check In'}
 						</button>
 					{:else if !status.has_checked_out}
 						<button
 							onclick={handleCheckOut}
-							disabled={checkingOut}
+							disabled={checkingOut || isBlockedByFaceDetection()}
 							class="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-60 text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30 active:scale-[0.97] cursor-pointer"
 						>
 							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4.553 2.276A1 1 0 013 15.382V8.618a1 1 0 011.447-.894L9 10m0 0V7a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2h-6a2 2 0 01-2-2v-3z"/></svg>
-							{showCamera ? (checkingOut ? 'Memproses...' : 'Ambil Foto & Check Out') : 'Check Out'}
+							{showCamera ? (checkingOut ? 'Memproses...' : (isBlockedByFaceDetection() ? 'Arahkan Wajah ke Kamera' : 'Ambil Foto & Check Out')) : 'Check Out'}
 						</button>
 					{:else}
 						<div class="flex-1 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 font-bold py-3.5 px-6 rounded-xl text-center flex items-center justify-center gap-2">

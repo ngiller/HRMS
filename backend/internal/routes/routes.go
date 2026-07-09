@@ -108,6 +108,7 @@ func Setup(
 	employees.Post("/import", middleware.RBAC("employee", "create"), employeeHandler.ImportEmployees)
 	employees.Get("/:id", middleware.RBAC("employee", "read"), employeeHandler.GetEmployee)
 	employees.Post("/:id/photo", middleware.RBAC("employee", "update"), employeeHandler.UploadPhoto)
+	employees.Post("/:id/face-descriptor", middleware.RBAC("employee", "update"), employeeHandler.RegisterFaceDescriptor)
 	employees.Put("/:id/work-schedule", middleware.RBAC("employee", "update"), employeeHandler.UpdateWorkSchedule)
 	employees.Put("/:id/restore", middleware.RBAC("employee", "update"), employeeHandler.RestoreEmployee)
 	employees.Post("/", middleware.RBAC("employee", "create"), employeeHandler.CreateEmployee)

@@ -341,6 +341,35 @@ func (h *EmployeeHandler) ImportEmployees(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(SuccessResponse(result, "Import selesai"))
 }
 
+// RegisterFaceDescriptor stores face descriptor for an employee
+// POST /api/employees/:id/face-descriptor
+func (h *EmployeeHandler) RegisterFaceDescriptor(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	var req models.FaceDescriptorRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse("Format data tidak valid"))
+	}
+
+	if req.Descriptor == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse("Deskriptor wajah harus diisi"))
+	}
+
+	userID := database.UserIDFromContext(c.Locals("user_id"))
+
+	err := h.employeeService.RegisterFaceDescriptor(c.Context(), id, req.Descriptor, userID)
+	if err != nil {
+		code := fiber.StatusInternalServerError
+		msg := err.Error()
+		if contains(msg, "tidak ditemukan") {
+			code = fiber.StatusNotFound
+		}
+		return c.Status(code).JSON(ErrorResponse(msg))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(fiber.Map{}, "Deskriptor wajah berhasil disimpan"))
+}
+
 // UploadPhoto uploads employee photo
 // POST /api/employees/:id/photo
 func (h *EmployeeHandler) UploadPhoto(c *fiber.Ctx) error {
