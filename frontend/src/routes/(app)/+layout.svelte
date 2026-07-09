@@ -299,10 +299,13 @@
                 </svg>
                 <span>{item.label}</span>
                 {#if item.path === '/persetujuan' && pendingApprovalCount > 0}
-                  <span
-                    class="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full"
-                    >{pendingApprovalCount}</span
-                  >
+                  {#key pendingApprovalCount}
+                    <span
+                      transition:fly={{ y: -6, duration: 300 }}
+                      class="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full"
+                      >{pendingApprovalCount}</span
+                    >
+                  {/key}
                 {:else if item.badge}
                   <span
                     class="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full"
