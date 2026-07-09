@@ -135,7 +135,7 @@
 	}
 </script>
 
-<div class="w-full">
+<div class="max-w-3xl mx-auto">
 	<div class="flex items-center gap-4 mb-8">
 		<div class="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0">
 			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

@@ -3,7 +3,7 @@
 	import 'ag-grid-community/styles/ag-theme-quartz.css';
 	import 'leaflet/dist/leaflet.css';
   import { goto } from "$app/navigation";
-  import { auth, notifications } from "$lib/api.js";
+  import { auth, notifications, approvals } from "$lib/api.js";
   import { onMount } from "svelte";
 	import { slide, fade } from "svelte/transition";
 	import { fly } from "svelte/transition";
@@ -76,17 +76,14 @@
     const query = menuSearchQuery.toLowerCase();
     
     return baseNavItems.map(group => {
-      // Filter items matching the query
       const filteredItems = group.items.filter(item => 
         item.label.toLowerCase().includes(query)
       );
-      
-      // Return new group with filtered items
       return {
         ...group,
         items: filteredItems
       };
-    }).filter(group => group.items.length > 0); // Remove empty groups
+    }).filter(group => group.items.length > 0);
   });
 
   function isActive(path: string): boolean {
@@ -99,6 +96,7 @@
   let menuSearchQuery = $state("");
   let unreadCount = $state(0);
   let recentNotifs = $state<any[]>([]);
+  let pendingApprovalCount = $state(0);
 
   async function fetchNotifs() {
     try {
@@ -113,8 +111,22 @@
     }
   }
 
+  async function fetchPendingCount() {
+    try {
+      if (!auth.isAuthenticated()) return;
+      const res = await approvals.getPending();
+      if (res.success && res.data) {
+        pendingApprovalCount = res.data.total || 0;
+      }
+    } catch (e) { console.error('Failed to fetch pending count:', e); }
+  }
+
   onMount(() => {
     fetchNotifs();
+    fetchPendingCount();
+    // Poll pending approvals every 30s
+    const interval = setInterval(fetchPendingCount, 30000);
+    return () => clearInterval(interval);
   });
 
   async function markNotifAsRead(id: string) {
@@ -286,7 +298,12 @@
                   />
                 </svg>
                 <span>{item.label}</span>
-                {#if item.badge}
+                {#if item.path === '/persetujuan' && pendingApprovalCount > 0}
+                  <span
+                    class="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full"
+                    >{pendingApprovalCount}</span
+                  >
+                {:else if item.badge}
                   <span
                     class="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full"
                     >{item.badge}</span
