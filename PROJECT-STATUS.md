@@ -843,7 +843,7 @@ Plus `UpdateOvertimeStatus` di overtime_repo.go: tambah `rejected_at`/`rejected_
 
 ---
 
-## ✅ Sesi Ini — 9 Juli 2026 (Backend Serve Frontend + Single Image CI/CD + Security Fix + CSP Dynamic ✅)
+## ✅ Sesi Ini — 9 Juli 2026 (Final: Push to Remote, Go Mod Tidy, Dev Mode Restored ✅)
 
 ### 📦 Backend Serves Built Frontend from `./public/`
 
@@ -916,6 +916,13 @@ Chrome memblokir gambar upload meskipun dari origin yang sama.
 | Browser test (production mode) | ✅ **API health 200, homepage 200** |
 | Header verifikasi | ✅ **CORP/COEP removed, CSP updated with ports** |
 | E2E tests | ✅ **17 passed** (10 pre-existing failures) |
+
+### 🚀 Final Ops: Push + Cleanup
+- Pushed 7 commits to `origin/main` — all synced
+- `go mod tidy` — no dependency changes needed ✅
+- Dev mode restored: `docker compose --profile dev up -d` — web + api + db running
+- Stale `hrms-serv` process killed (port conflict resolved)
+- `.env.example` updated with `FRONTEND_URL` CSP documentation
 
 ---
 
