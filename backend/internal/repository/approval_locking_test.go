@@ -414,6 +414,114 @@ func TestOptimisticLocking_Loan(t *testing.T) {
 	)
 }
 
+// TestGetEntityRequestorID menguji fungsi GetEntityRequestorID untuk
+// semua entity type yang didukung.
+func TestGetEntityRequestorID(t *testing.T) {
+	skipIfNotIntegration(t)
+
+	ctx := context.Background()
+
+	// Cari employee test
+	var empID, scID, ovtID, loanID string
+	err := database.Pool.QueryRow(ctx,
+		`SELECT id::text FROM employees WHERE employee_id = 'EMP-001' LIMIT 1`,
+	).Scan(&empID)
+	if err != nil {
+		t.Skipf("Skip — seed employee not found: %v", err)
+	}
+
+	var wsID string
+	err = database.Pool.QueryRow(ctx,
+		`SELECT id::text FROM work_schedules LIMIT 1`,
+	).Scan(&wsID)
+	if err != nil {
+		t.Skipf("Skip — work schedule not found: %v", err)
+	}
+
+	// Buat test data untuk berbagai entity types
+	// Shift change
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO shift_change_requests (request_type, employee_id, target_date,
+			requested_schedule_id, reason, status)
+		VALUES ('individual'::shift_change_type, $1::uuid, CURRENT_DATE,
+			$2::uuid, '[TEST] GetEntityRequestorID', 'pending'::shift_change_status)
+		RETURNING id::text
+	`, empID, wsID).Scan(&scID)
+	if err != nil {
+		t.Fatalf("create shift change: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM shift_change_requests WHERE id::text = $1`, scID)
+
+	// Overtime
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO overtime_requests (employee_id, overtime_date, start_time, end_time,
+			overtime_type, reason, total_hours, status)
+		VALUES ($1::uuid, CURRENT_DATE, '08:00', '10:00',
+			'weekday'::overtime_type, '[TEST] GetEntityRequestorID', 2, 'pending'::overtime_status)
+		RETURNING id::text
+	`, empID).Scan(&ovtID)
+	if err != nil {
+		t.Fatalf("create overtime: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM overtime_requests WHERE id::text = $1`, ovtID)
+
+	// Loan
+	err = database.Pool.QueryRow(ctx, `
+		INSERT INTO loans (employee_id, loan_type, amount, interest_rate, installment_count,
+			installment_amount, total_amount, remaining_balance, purpose, status)
+		VALUES ($1::uuid, 'regular'::loan_type, 1000000, 0, 12, 83333, 1000000, 1000000,
+			'[TEST] GetEntityRequestorID', 'pending'::loan_status)
+		RETURNING id::text
+	`, empID).Scan(&loanID)
+	if err != nil {
+		t.Fatalf("create loan: %v", err)
+	}
+	defer database.Pool.Exec(ctx, `DELETE FROM loans WHERE id::text = $1`, loanID)
+
+	// Test GetEntityRequestorID untuk shift_change
+	t.Run("shift_change", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "shift_change", scID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(shift_change) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
+	// Test untuk overtime
+	t.Run("overtime", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "overtime", ovtID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(overtime) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
+	// Test untuk loan
+	t.Run("loan", func(t *testing.T) {
+		got, err := GetEntityRequestorID(ctx, "loan", loanID)
+		if err != nil {
+			t.Fatalf("GetEntityRequestorID(loan) failed: %v", err)
+		}
+		if got != empID {
+			t.Errorf("Expected employee_id %s, got %s", empID, got)
+		}
+	})
+
+	// Test untuk employee_mutations (harusnya return error karena data belum dibuat)
+	t.Run("mutation_not_found", func(t *testing.T) {
+		_, err := GetEntityRequestorID(ctx, "mutation", "00000000-0000-0000-0000-000000000000")
+		if err == nil {
+			t.Error("Expected error for non-existent mutation, got nil")
+		}
+	})
+
+	t.Log("All GetEntityRequestorID tests passed")
+}
+
 // TestOptimisticLocking_Overtime menguji flow overtime approval locking.
 func TestOptimisticLocking_Overtime(t *testing.T) {
 	skipIfNotIntegration(t)

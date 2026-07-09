@@ -254,15 +254,15 @@ func (s *ApprovalWorkflowService) ProcessApproval(ctx context.Context, entityTyp
 		}
 	} else {
 		// Get the requestor's employee ID to resolve approval_line correctly
-		var err2 error
-		requestorID, err2 = repository.GetEntityRequestorID(ctx, entityType, entityID)
-		if err2 != nil {
-			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err2)
+		var err error
+		requestorID, err = repository.GetEntityRequestorID(ctx, entityType, entityID)
+		if err != nil {
+			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err)
 		}
 
-		expectedApproverID, expectedApproverName, err2 = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
-		if err2 != nil {
-			return nil, fmt.Errorf("gagal verifikasi approver: %w", err2)
+		expectedApproverID, expectedApproverName, err = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
+		if err != nil {
+			return nil, fmt.Errorf("gagal verifikasi approver: %w", err)
 		}
 		if expectedApproverID != approverID {
 			return nil, errors.New("anda tidak berwenang untuk melakukan approval ini")
@@ -406,7 +406,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 
 		// Move to next step
 		nextStep := applicableSteps[currentStepIdx+1]
-		nextApproverID, nextApproverName, err := repository.GetApproverByType(ctx, nextStep.ApproverType, "", entityType)
+		nextApproverID, nextApproverName, err := repository.GetApproverByType(ctx, nextStep.ApproverType, requestorID, entityType)
 		if err != nil {
 			return fmt.Errorf("gagal menentukan approver berikutnya: %w", err)
 		}
