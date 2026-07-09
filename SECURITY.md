@@ -36,7 +36,7 @@ base-uri 'self'
 ### Catatan CSP
 
 - `connect-src` secara eksplisit mencantumkan port localhost (`:8590`, `:8900`) karena Chrome tidak me-matching `http://localhost` (tanpa port) ke URL yang menggunakan non-default port.
-- Untuk production, ganti `http://localhost:8590 http://localhost:8900` dengan domain aktual (contoh: `https://api.hrms.company.com`).
+- Untuk production, set `FRONTEND_URL` di `.env` ke domain aktual (contoh: `FRONTEND_URL=https://api.hrms.company.com`). Nilai ini otomatis ditambahkan ke CSP `connect-src` oleh `SecurityHeadersMiddleware` melalui `CSPAllowedOrigins`.
 - `'unsafe-inline'` dan `'unsafe-eval'` di `script-src` diperlukan oleh SvelteKit. Untuk production yang lebih ketat, terapkan nonce/hash.
 
 ## Helmet Middleware

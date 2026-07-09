@@ -19,6 +19,9 @@ type SecurityConfig struct {
 	CSPFontSrc     string
 	CSPStyleSrcUnsafe string
 
+	// Additional origins to allow in CSP connect-src (e.g. production API domain)
+	CSPAllowedOrigins []string
+
 	// Upload validation
 	MaxUploadSize    int64
 	AllowedMimeTypes []string
@@ -77,10 +80,18 @@ func SecurityHeadersMiddleware(cfg *SecurityConfig) fiber.Handler {
 
 		// Content Security Policy
 		if cfg != nil {
+			connectSrc := cfg.CSPConnectSrc
+			// Append dynamically configured origins (e.g. production API domain)
+			for _, origin := range cfg.CSPAllowedOrigins {
+				if origin != "" && !strings.Contains(connectSrc, origin) {
+					connectSrc += " " + origin
+				}
+			}
+
 			csp := fmt.Sprintf(
 				"default-src %s; script-src %s; style-src %s; img-src %s; connect-src %s; font-src %s; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
 				cfg.CSPDefaultSrc, cfg.CSPScriptSrc, cfg.CSPStyleSrc,
-				cfg.CSPImgSrc, cfg.CSPConnectSrc, cfg.CSPFontSrc,
+				cfg.CSPImgSrc, connectSrc, cfg.CSPFontSrc,
 			)
 			c.Set("Content-Security-Policy", csp)
 		}

@@ -135,6 +135,10 @@ func main() {
 
 	// Security middleware
 	secConfig := middleware.DefaultSecurityConfig()
+	// Tambahkan FRONTEND_URL ke CSP allowed origins (untuk production domain)
+	if cfg.FrontendURL != "" {
+		secConfig.CSPAllowedOrigins = append(secConfig.CSPAllowedOrigins, cfg.FrontendURL)
+	}
 	app.Use(middleware.SecurityHeadersMiddleware(secConfig))
 	app.Use(middleware.FileUploadValidator(secConfig))
 

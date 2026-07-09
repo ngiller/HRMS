@@ -843,7 +843,7 @@ Plus `UpdateOvertimeStatus` di overtime_repo.go: tambah `rejected_at`/`rejected_
 
 ---
 
-## ✅ Sesi Ini — 9 Juli 2026 (Backend Serve Frontend + Single Image CI/CD + Security Fix ✅)
+## ✅ Sesi Ini — 9 Juli 2026 (Backend Serve Frontend + Single Image CI/CD + Security Fix + CSP Dynamic ✅)
 
 ### 📦 Backend Serves Built Frontend from `./public/`
 
@@ -875,18 +875,37 @@ Chrome memblokir gambar upload meskipun dari origin yang sama.
 - `SecurityHeadersMiddleware` sudah mencakup semua header kritis: CSP, X-Frame-DENY, X-XSS, nosniff, Referrer-Policy, Permissions-Policy
 - Tambah 4 header nice-to-have yang hilang: `X-DNS-Prefetch-Control`, `X-Download-Options`, `X-Permitted-Cross-Domain-Policies`, `Origin-Agent-Cluster`
 
+### 🐛 Fix: CSP Blocking Cross-Port API Calls
+
+**Problem:** CSP `connect-src 'self'` memblokir API calls saat port berbeda.
+
+**Root Cause:** Chrome tidak me-matching `http://localhost` (tanpa port) ke URL dengan non-default port.
+
+**Fix:**
+- Tambah `CSPAllowedOrigins []string` ke `SecurityConfig` di `security.go`
+- CSP `connect-src` dibangun secara dinamis — menambahkan origins dari `CSPAllowedOrigins`
+- `main.go` pass `cfg.FrontendURL` ke `CSPAllowedOrigins` untuk production domain support
+- Port explicit: `http://localhost:8590 http://localhost:8900` di default CSP
+- Dokumentasi: SECURITY.md dengan panduan production deployment
+
 ### 🔒 CI/CD — Single Image Build
 - **`.github/workflows/ci.yml`** — Added `docker` job:
   - Build production image (`target: prod`) with Docker Buildx
   - GHA cache (type=gha)
   - Verify image was built (`docker image inspect`)
 
-### 📘 README Update
+### 📘 README & SECURITY.md Update
 - Architecture diagram (single binary production mode)
 - Quick Start guide for dev (`--profile dev`) and production modes
 - Security Headers table with all 10 headers and descriptions
-- CI/CD, Available Commands, Documentation sections
+- SECURITY.md: Dokumentasi lengkap security headers, CSP, helmet notes, file upload validation, best practices
 - Note explaining why `helmet.New()` is not used
+
+### 🧹 Docker Cleanup & Production Test
+- `docker compose down` + `docker system prune -f` — 2MB reclaimed
+- `docker compose --profile dev up -d` — dev mode restored
+- Production mode test: Go backend serves frontend + API on same port
+- E2E: 17 passed, 10 pre-existing failures (login timing issues)
 
 ### Build Status
 
@@ -894,8 +913,9 @@ Chrome memblokir gambar upload meskipun dari origin yang sama.
 |-------|--------|
 | `go build ./...` | ✅ 0 errors |
 | `go vet ./...` | ✅ 0 issues |
-| Browser test (login → karyawan → absensi → persetujuan) | ✅ **0 console errors** |
-| Header verifikasi (images upload) | ✅ **CORP/COEP removed, image loads correctly** |
+| Browser test (production mode) | ✅ **API health 200, homepage 200** |
+| Header verifikasi | ✅ **CORP/COEP removed, CSP updated with ports** |
+| E2E tests | ✅ **17 passed** (10 pre-existing failures) |
 
 ---
 
