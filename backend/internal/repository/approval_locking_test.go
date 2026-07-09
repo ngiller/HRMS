@@ -454,10 +454,10 @@ func TestGetEntityRequestorID(t *testing.T) {
 
 	// Overtime
 	err = database.Pool.QueryRow(ctx, `
-		INSERT INTO overtime_requests (employee_id, overtime_date, start_time, end_time,
+		INSERT INTO overtime_requests (employee_id, date, start_time, end_time,
 			overtime_type, reason, total_hours, status)
-		VALUES ($1::uuid, CURRENT_DATE, '08:00', '10:00',
-			'weekday'::overtime_type, '[TEST] GetEntityRequestorID', 2, 'pending'::overtime_status)
+		VALUES ($1::uuid, CURRENT_DATE, (CURRENT_DATE + TIME '08:00')::timestamptz, (CURRENT_DATE + TIME '10:00')::timestamptz,
+			'weekday'::overtime_type, '[TEST] GetEntityRequestorID', 2, 'pending'::leave_status)
 		RETURNING id::text
 	`, empID).Scan(&ovtID)
 	if err != nil {
