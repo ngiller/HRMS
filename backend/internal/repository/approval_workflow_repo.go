@@ -9,6 +9,7 @@ import (
 	"hrms-backend/internal/models"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ==================== Workflows ====================
@@ -423,13 +424,44 @@ func UpdateApprovalTrackingStatus(ctx context.Context, trackingID string, status
 }
 
 func UpdateApprovalTrackingStep(ctx context.Context, trackingID string, newStep int, status string) error {
-	_, err := database.Pool.Exec(ctx, `
-		UPDATE approval_request_tracking
-		SET current_step = $2, status = $3, updated_at = NOW()
-		WHERE id::text = $1
-	`, trackingID, newStep, status)
+	return updateApprovalTrackingStep(ctx, nil, trackingID, newStep, status)
+}
+
+func UpdateApprovalTrackingStepTx(ctx context.Context, tx pgx.Tx, trackingID string, newStep int, status string) error {
+	return updateApprovalTrackingStep(ctx, tx, trackingID, newStep, status)
+}
+
+func updateApprovalTrackingStep(ctx context.Context, tx pgx.Tx, trackingID string, newStep int, status string) error {
+	var err error
+	if tx != nil {
+		_, err = tx.Exec(ctx, `
+			UPDATE approval_request_tracking
+			SET current_step = $2, status = $3, updated_at = NOW()
+			WHERE id::text = $1
+		`, trackingID, newStep, status)
+	} else {
+		_, err = database.Pool.Exec(ctx, `
+			UPDATE approval_request_tracking
+			SET current_step = $2, status = $3, updated_at = NOW()
+			WHERE id::text = $1
+		`, trackingID, newStep, status)
+	}
 	return err
 }
+
+// entityJoinSQL returns the LEFT JOINs to entity tables and the employee join
+// needed to resolve the actual requestor (employee_id) from any entity type.
+// This is shared across all pending approval queries.
+const entityJoinSQL = `
+LEFT JOIN leave_requests lr ON lr.id = art.entity_id AND art.entity_type = 'leave' AND lr.deleted_at IS NULL
+LEFT JOIN overtime_requests otr ON otr.id = art.entity_id AND art.entity_type = 'overtime' AND otr.deleted_at IS NULL
+LEFT JOIN reimbursements rmb ON rmb.id = art.entity_id AND art.entity_type = 'reimbursement' AND rmb.deleted_at IS NULL
+LEFT JOIN shift_change_requests scr ON scr.id = art.entity_id AND art.entity_type = 'shift_change' AND scr.deleted_at IS NULL
+LEFT JOIN loans ln ON ln.id = art.entity_id AND art.entity_type = 'loan' AND ln.deleted_at IS NULL
+LEFT JOIN manual_attendance_requests mar ON mar.id = art.entity_id AND art.entity_type = 'manual_attendance' AND mar.deleted_at IS NULL
+LEFT JOIN resign_requests rr ON rr.id = art.entity_id AND art.entity_type = 'resign' AND rr.deleted_at IS NULL
+LEFT JOIN employee_mutations em ON em.id = art.entity_id AND art.entity_type = 'mutation' AND em.deleted_at IS NULL
+JOIN employees e ON e.id = COALESCE(lr.employee_id, otr.employee_id, rmb.employee_id, scr.employee_id, ln.employee_id, mar.employee_id, rr.employee_id, em.employee_id)`
 
 // GetPendingApprovalsByUser returns all pending approval requests for a user
 // based on their role and approval_line relationships
@@ -446,23 +478,27 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 	}
 
 	var items []models.PendingApprovalItem
+	isSuperAdmin := roleSlug == "super_admin"
+
+	// Common SELECT columns
+	selectCols := `
+		art.id, art.entity_type, art.entity_id,
+		e.full_name AS requestor_name, e.id AS requestor_id,
+		art.current_step, art.total_steps,
+		art.created_at,
+		EXTRACT(EPOCH FROM (NOW() - art.created_at))/3600 AS elapsed_hours`
 
 	// 1. Pending as approval_line (direct reports)
-	rows, err := database.Pool.Query(ctx, `
-		SELECT
-			art.id, art.entity_type, art.entity_id,
-			e.full_name AS requestor_name, e.id AS requestor_id,
-			art.current_step, art.total_steps,
-			art.created_at,
-			EXTRACT(EPOCH FROM (NOW() - art.created_at))/3600 AS elapsed_hours
-		FROM approval_request_tracking art
-		JOIN employees e ON e.id = art.entity_id
+	query1 := fmt.Sprintf(`
+		SELECT%s
+		FROM approval_request_tracking art%s
 		WHERE art.status = 'pending'
 			AND art.current_step > 0
 			AND e.approval_line_id::text = $1
 			AND e.deleted_at IS NULL
 		ORDER BY art.created_at ASC
-	`, userID)
+	`, selectCols, entityJoinSQL)
+	rows, err := database.Pool.Query(ctx, query1, userID)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -479,15 +515,10 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 	}
 
 	// 2. Pending as role-based approver (hr_manager, finance, director)
-	if roleSlug == "hr_manager" || roleSlug == "super_admin" {
-		hrRows, err := database.Pool.Query(ctx, `
-			SELECT art.id, art.entity_type, art.entity_id,
-				e.full_name AS requestor_name, e.id AS requestor_id,
-				art.current_step, art.total_steps,
-				art.created_at,
-				EXTRACT(EPOCH FROM (NOW() - art.created_at))/3600 AS elapsed_hours
-			FROM approval_request_tracking art
-			JOIN employees e ON e.id = art.entity_id
+	if roleSlug == "hr_manager" || isSuperAdmin {
+		hrQuery := fmt.Sprintf(`
+			SELECT%s
+			FROM approval_request_tracking art%s
 			WHERE art.status = 'pending'
 				AND art.current_step > 0
 				AND e.deleted_at IS NULL
@@ -498,10 +529,11 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 						WHERE aws.step_order = art.current_step
 						AND aws.approver_type IN ('hr_manager', 'director')
 					)
-					OR $1 = 'super_admin'
+					OR $1 = TRUE
 				)
 			ORDER BY art.created_at ASC
-		`, userID)
+		`, selectCols, entityJoinSQL)
+		hrRows, err := database.Pool.Query(ctx, hrQuery, isSuperAdmin)
 		if err == nil {
 			defer hrRows.Close()
 			for hrRows.Next() {
@@ -512,7 +544,6 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 					&item.CreatedAt, &item.ElapsedHours); err != nil {
 					continue
 				}
-				// Check for duplicate
 				dup := false
 				for i := range items {
 					if items[i].TrackingID == item.TrackingID {
@@ -528,15 +559,10 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 		}
 	}
 
-	if roleSlug == "finance" || roleSlug == "super_admin" {
-		finRows, err := database.Pool.Query(ctx, `
-			SELECT art.id, art.entity_type, art.entity_id,
-				e.full_name AS requestor_name, e.id AS requestor_id,
-				art.current_step, art.total_steps,
-				art.created_at,
-				EXTRACT(EPOCH FROM (NOW() - art.created_at))/3600 AS elapsed_hours
-			FROM approval_request_tracking art
-			JOIN employees e ON e.id = art.entity_id
+	if roleSlug == "finance" || isSuperAdmin {
+		finQuery := fmt.Sprintf(`
+			SELECT%s
+			FROM approval_request_tracking art%s
 			WHERE art.status = 'pending'
 				AND art.current_step > 0
 				AND e.deleted_at IS NULL
@@ -547,10 +573,11 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 						WHERE aws.step_order = art.current_step
 						AND aws.approver_type = 'finance'
 					)
-					OR $1 = 'super_admin'
+					OR $1 = TRUE
 				)
 			ORDER BY art.created_at ASC
-		`, userID)
+		`, selectCols, entityJoinSQL)
+		finRows, err := database.Pool.Query(ctx, finQuery, isSuperAdmin)
 		if err == nil {
 			defer finRows.Close()
 			for finRows.Next() {
@@ -603,8 +630,55 @@ func EvaluateCondition(step models.ApprovalWorkflowStep, value float64) bool {
 	}
 }
 
+// GetEntityRequestorID returns the employee_id (as text) who created the entity request
+func GetEntityRequestorID(ctx context.Context, entityType, entityID string) (string, error) {
+	var employeeID string
+	var err error
+
+	switch entityType {
+	case "leave":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM leave_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "overtime":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM overtime_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "reimbursement":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM reimbursements WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "shift_change":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM shift_change_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "loan":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM loans WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "manual_attendance":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM manual_attendance_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "resign":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM resign_requests WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	case "mutation":
+		err = database.Pool.QueryRow(ctx,
+			`SELECT employee_id::text FROM employee_mutations WHERE id::text = $1 AND deleted_at IS NULL`, entityID).Scan(&employeeID)
+	default:
+		return "", fmt.Errorf("unknown entity type: %s", entityType)
+	}
+	if err != nil {
+		return "", err
+	}
+	return employeeID, nil
+}
+
 // UpdateApprovalTrail updates the approval_trail JSONB field on an entity
 func UpdateApprovalTrail(ctx context.Context, entityType, entityID, trailJSON string) error {
+	return updateApprovalTrail(ctx, nil, entityType, entityID, trailJSON)
+}
+
+func UpdateApprovalTrailTx(ctx context.Context, tx pgx.Tx, entityType, entityID, trailJSON string) error {
+	return updateApprovalTrail(ctx, tx, entityType, entityID, trailJSON)
+}
+
+func updateApprovalTrail(ctx context.Context, tx pgx.Tx, entityType, entityID, trailJSON string) error {
 	var tableName, idColumn string
 	switch entityType {
 	case "leave":
@@ -636,12 +710,27 @@ func UpdateApprovalTrail(ctx context.Context, entityType, entityID, trailJSON st
 	}
 
 	query := fmt.Sprintf(`UPDATE %s SET approval_trail = $1::jsonb, updated_at = NOW() WHERE %s::text = $2`, tableName, idColumn)
-	_, err := database.Pool.Exec(ctx, query, trailJSON, entityID)
+	var err error
+	if tx != nil {
+		_, err = tx.Exec(ctx, query, trailJSON, entityID)
+	} else {
+		_, err = database.Pool.Exec(ctx, query, trailJSON, entityID)
+	}
 	return err
 }
 
 // UpdateEntityStatus updates the status field on an entity
+// If tx is non-nil, the update is executed within that transaction.
 func UpdateEntityStatus(ctx context.Context, entityType, entityID, status string) error {
+	return updateEntityStatus(ctx, nil, entityType, entityID, status)
+}
+
+// UpdateEntityStatusTx is like UpdateEntityStatus but uses the given transaction.
+func UpdateEntityStatusTx(ctx context.Context, tx pgx.Tx, entityType, entityID, status string) error {
+	return updateEntityStatus(ctx, tx, entityType, entityID, status)
+}
+
+func updateEntityStatus(ctx context.Context, tx pgx.Tx, entityType, entityID, status string) error {
 	var tableName, idColumn string
 
 	switch entityType {
@@ -673,15 +762,16 @@ func UpdateEntityStatus(ctx context.Context, entityType, entityID, status string
 		return fmt.Errorf("unknown entity type: %s", entityType)
 	}
 
-	query := fmt.Sprintf(`UPDATE %s SET status = $1::text, updated_at = NOW() WHERE %s::text = $2`, tableName, idColumn)
-	tag, err := database.Pool.Exec(ctx, query, status, entityID)
-	if err != nil {
-		// Try with status text without cast
-		query = fmt.Sprintf(`UPDATE %s SET status = $1, updated_at = NOW() WHERE %s::text = $2`, tableName, idColumn)
+	query := fmt.Sprintf(`UPDATE %s SET status = $1, updated_at = NOW() WHERE %s::text = $2`, tableName, idColumn)
+	var tag pgconn.CommandTag
+	var err error
+	if tx != nil {
+		tag, err = tx.Exec(ctx, query, status, entityID)
+	} else {
 		tag, err = database.Pool.Exec(ctx, query, status, entityID)
-		if err != nil {
-			return err
-		}
+	}
+	if err != nil {
+		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return errors.New("entity tidak ditemukan")

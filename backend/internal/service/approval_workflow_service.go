@@ -237,23 +237,33 @@ func (s *ApprovalWorkflowService) ProcessApproval(ctx context.Context, entityTyp
 
 	currentStep := applicableSteps[currentStepIdx]
 
-	// Verify approver is authorized (super_admin bypasses this check)
-	expectedApproverID, expectedApproverName, err := repository.GetApproverByType(ctx, currentStep.ApproverType, "", entityType)
-	if err != nil {
-		return nil, fmt.Errorf("gagal verifikasi approver: %w", err)
-	}
-	if !isSuperAdmin && expectedApproverID != approverID {
-		return nil, errors.New("anda tidak berwenang untuk melakukan approval ini")
-	}
-	// If super_admin overrides, use their name
-	actualApproverName := expectedApproverName
-	if isSuperAdmin && expectedApproverID != approverID {
-		var superAdminName string
-		_ = database.Pool.QueryRow(ctx, `SELECT full_name FROM employees WHERE id::text = $1`, approverID).Scan(&superAdminName)
-		if superAdminName != "" {
-			actualApproverName = superAdminName
+	// Resolve the actual approver and their name
+	var expectedApproverID, expectedApproverName string
+
+	if isSuperAdmin {
+		// Super admin bypasses the approver verification entirely
+		// Use their own name for the trail
+		_ = database.Pool.QueryRow(ctx, `SELECT full_name FROM employees WHERE id::text = $1`, approverID).Scan(&expectedApproverName)
+		if expectedApproverName == "" {
+			expectedApproverName = approverID
+		}
+	} else {
+		// Get the requestor's employee ID to resolve approval_line correctly
+		requestorID, err := repository.GetEntityRequestorID(ctx, entityType, entityID)
+		if err != nil {
+			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err)
+		}
+
+		expectedApproverID, expectedApproverName, err = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
+		if err != nil {
+			return nil, fmt.Errorf("gagal verifikasi approver: %w", err)
+		}
+		if expectedApproverID != approverID {
+			return nil, errors.New("anda tidak berwenang untuk melakukan approval ini")
 		}
 	}
+
+	actualApproverName := expectedApproverName
 
 	// Execute approval in transaction
 	return s.processApprovalTx(ctx, entityType, entityID, approverID, action, note,
@@ -271,18 +281,25 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 ) (*models.ApprovalResult, error) {
 	var result *models.ApprovalResult
 
+	// Get the actual requestor (employee) ID from the entity table
+	// tracking.EntityID is the request UUID, NOT the employee UUID
+	requestorID, _ := repository.GetEntityRequestorID(ctx, entityType, entityID)
+	if requestorID == "" {
+		requestorID = tracking.EntityID.String()
+	}
+
 	err := database.WithUserContext(ctx, approverID, func(tx pgx.Tx) error {
 		if action == "reject" {
-			// Update tracking
-			if err := repository.UpdateApprovalTrackingStep(ctx, tracking.ID.String(), -1, "rejected"); err != nil {
+			// Update tracking (within transaction)
+			if err := repository.UpdateApprovalTrackingStepTx(ctx, tx, tracking.ID.String(), -1, "rejected"); err != nil {
 				return fmt.Errorf("gagal update tracking: %w", err)
 			}
-			// Update entity status
-			if err := repository.UpdateEntityStatus(ctx, entityType, entityID, "rejected"); err != nil {
+			// Update entity status (within transaction)
+			if err := repository.UpdateEntityStatusTx(ctx, tx, entityType, entityID, "rejected"); err != nil {
 				return fmt.Errorf("gagal update status: %w", err)
 			}
 
-			// Update approval trail
+			// Update approval trail (within transaction)
 			trailEntry := map[string]interface{}{
 				"step":          currentStep.StepOrder,
 				"level":         currentStepIdx + 1,
@@ -292,13 +309,13 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 				"note":          note,
 				"date":          time.Now().UTC().Format(time.RFC3339),
 			}
-			s.appendToApprovalTrail(ctx, entityType, entityID, trailEntry)
+			s.appendToApprovalTrailTx(ctx, tx, entityType, entityID, trailEntry)
 
-			// Notify requestor about rejection
+			// Notify requestor about rejection (notifications don't need to be transactional)
 			notifRepo := repository.NewNotificationRepo()
 			entityLabel := s.getEntityLabel(entityType)
 			_, _ = notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
-				UserID:           tracking.EntityID.String(),
+				UserID:           requestorID,
 				NotificationType: entityType + "_rejected",
 				Title:            entityLabel + " Ditolak",
 				Body:             fmt.Sprintf("Pengajuan %s Anda ditolak oleh %s.", entityLabel, actualApproverName),
@@ -310,7 +327,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 				},
 			})
 			// Send email to requestor
-			SendEmailForUser(ctx, tracking.EntityID.String(), entityLabel+" Ditolak",
+			SendEmailForUser(ctx, requestorID, entityLabel+" Ditolak",
 				fmt.Sprintf("Pengajuan %s Anda ditolak oleh %s.", entityLabel, actualApproverName))
 
 			result = &models.ApprovalResult{
@@ -331,15 +348,15 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			"note":          note,
 			"date":          time.Now().UTC().Format(time.RFC3339),
 		}
-		s.appendToApprovalTrail(ctx, entityType, entityID, trailEntry)
+		s.appendToApprovalTrailTx(ctx, tx, entityType, entityID, trailEntry)
 
 		// Check if there are more steps
 		if currentStepIdx+1 >= len(applicableSteps) {
-			// Final approval
-			if err := repository.UpdateApprovalTrackingStep(ctx, tracking.ID.String(), 0, "approved"); err != nil {
+			// Final approval (within transaction)
+			if err := repository.UpdateApprovalTrackingStepTx(ctx, tx, tracking.ID.String(), 0, "approved"); err != nil {
 				return fmt.Errorf("gagal update tracking: %w", err)
 			}
-			if err := repository.UpdateEntityStatus(ctx, entityType, entityID, "approved"); err != nil {
+			if err := repository.UpdateEntityStatusTx(ctx, tx, entityType, entityID, "approved"); err != nil {
 				return fmt.Errorf("gagal update status: %w", err)
 			}
 
@@ -347,7 +364,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			notifRepo := repository.NewNotificationRepo()
 			entityLabel := s.getEntityLabel(entityType)
 			_, _ = notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
-				UserID:           tracking.EntityID.String(),
+				UserID:           requestorID,
 				NotificationType: entityType + "_approved",
 				Title:            entityLabel + " Disetujui",
 				Body:             fmt.Sprintf("Pengajuan %s Anda telah disetujui sepenuhnya oleh %s.", entityLabel, actualApproverName),
@@ -358,7 +375,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 				},
 			})
 			// Send email to requestor about final approval
-			SendEmailForUser(ctx, tracking.EntityID.String(), entityLabel+" Disetujui",
+			SendEmailForUser(ctx, requestorID, entityLabel+" Disetujui",
 				fmt.Sprintf("Pengajuan %s Anda telah disetujui sepenuhnya oleh %s.", entityLabel, actualApproverName))
 
 			result = &models.ApprovalResult{
@@ -373,7 +390,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 		notifRepo := repository.NewNotificationRepo()
 		entityLabel := s.getEntityLabel(entityType)
 		_, _ = notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
-			UserID:           tracking.EntityID.String(),
+			UserID:           requestorID,
 			NotificationType: entityType + "_level_approved",
 			Title:            entityLabel + " Disetujui Level " + fmt.Sprintf("%d", currentStepIdx+1),
 			Body:             fmt.Sprintf("Pengajuan %s Anda telah disetujui di level %d oleh %s.", entityLabel, currentStepIdx+1, actualApproverName),
@@ -385,7 +402,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			},
 		})
 		// Send email to requestor about level approval
-		SendEmailForUser(ctx, tracking.EntityID.String(), entityLabel+" Disetujui Level "+fmt.Sprintf("%d", currentStepIdx+1),
+		SendEmailForUser(ctx, requestorID, entityLabel+" Disetujui Level "+fmt.Sprintf("%d", currentStepIdx+1),
 			fmt.Sprintf("Pengajuan %s Anda telah disetujui di level %d oleh %s.", entityLabel, currentStepIdx+1, actualApproverName))
 
 		// Move to next step
@@ -395,11 +412,11 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			return fmt.Errorf("gagal menentukan approver berikutnya: %w", err)
 		}
 
-		if err := repository.UpdateApprovalTrackingStep(ctx, tracking.ID.String(), nextStep.StepOrder, "pending"); err != nil {
+		if err := repository.UpdateApprovalTrackingStepTx(ctx, tx, tracking.ID.String(), nextStep.StepOrder, "pending"); err != nil {
 			return fmt.Errorf("gagal update tracking: %w", err)
 		}
 
-		// Add next step to trail
+		// Add next step to trail (within transaction)
 		nextTrailEntry := map[string]interface{}{
 			"step":          nextStep.StepOrder,
 			"level":         currentStepIdx + 2,
@@ -409,7 +426,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			"note":          "",
 			"date":          nil,
 		}
-		s.appendToApprovalTrail(ctx, entityType, entityID, nextTrailEntry)
+		s.appendToApprovalTrailTx(ctx, tx, entityType, entityID, nextTrailEntry)
 
 		// Notify next approver
 		nextNotifReq := &models.CreateNotificationRequest{
@@ -596,31 +613,70 @@ func (s *ApprovalWorkflowService) getEntityLabel(entityType string) string {
 }
 
 func (s *ApprovalWorkflowService) appendToApprovalTrail(ctx context.Context, entityType, entityID string, entry map[string]interface{}) {
+	s.appendToApprovalTrailTx(ctx, nil, entityType, entityID, entry)
+}
+
+func (s *ApprovalWorkflowService) appendToApprovalTrailTx(ctx context.Context, tx pgx.Tx, entityType, entityID string, entry map[string]interface{}) {
 	var currentTrail string
 	var err error
 
 	switch entityType {
 	case "leave":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM leave_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM leave_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM leave_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	case "overtime":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM overtime_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM overtime_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM overtime_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	case "reimbursement":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM reimbursements WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM reimbursements WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM reimbursements WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	case "shift_change":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM shift_change_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM shift_change_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM shift_change_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	case "manual_attendance":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM manual_attendance_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM manual_attendance_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM manual_attendance_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	case "resign":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM resign_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM resign_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM resign_requests WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	case "mutation":
-		err = database.Pool.QueryRow(ctx,
-			`SELECT COALESCE(approval_trail, '[]') FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		if tx != nil {
+			err = tx.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		} else {
+			err = database.Pool.QueryRow(ctx,
+				`SELECT COALESCE(approval_trail, '[]') FROM employee_mutations WHERE id::text = $1`, entityID).Scan(&currentTrail)
+		}
 	default:
 		return
 	}
@@ -650,7 +706,11 @@ func (s *ApprovalWorkflowService) appendToApprovalTrail(ctx context.Context, ent
 	}
 
 	updatedTrail, _ := json.Marshal(trail)
-	repository.UpdateApprovalTrail(ctx, entityType, entityID, string(updatedTrail))
+	if tx != nil {
+		repository.UpdateApprovalTrailTx(ctx, tx, entityType, entityID, string(updatedTrail))
+	} else {
+		repository.UpdateApprovalTrail(ctx, entityType, entityID, string(updatedTrail))
+	}
 }
 
 func (s *ApprovalWorkflowService) getEntityInfo(ctx context.Context, entityType, entityID string) (title, description string, amount float64) {
