@@ -843,6 +843,62 @@ Plus `UpdateOvertimeStatus` di overtime_repo.go: tambah `rejected_at`/`rejected_
 
 ---
 
+## ✅ Sesi Ini — 9 Juli 2026 (Backend Serve Frontend + Single Image CI/CD + Security Fix ✅)
+
+### 📦 Backend Serves Built Frontend from `./public/`
+
+- **`backend/main.go`** — Added SPA static file server:
+  - `app.Static("/_app", "./public/_app", {CacheDuration: 365d})` untuk immutable hashed assets
+  - `app.Get("/*")` handler: skip `/api/` & `/uploads/`, serve file if exists, otherwise `index.html` fallback
+  - Otomatis aktif jika folder `./public` ada, fallback log jika tidak ada
+
+- **`Dockerfile`** — Added `frontend-builder` stage (Node 22 alpine):
+  - `npm ci` + `npm run build` inside container
+  - `COPY --from=frontend-builder /app/build ./public` di `prod` stage
+
+- **`docker-compose.yml`** — `web` service moved to `profiles: ["dev"]`:
+  - `docker compose --profile dev up` = dev mode with HMR
+  - `docker compose up` = production mode (backend serves frontend)
+
+- **`Makefile`** — `frontend-build` now copies output to `backend/public/`
+
+### 🐛 Fix: Upload Gambar di-Block `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`
+
+**Root Cause:** Fiber `helmet.New()` default mengirim:
+- `Cross-Origin-Embedder-Policy: require-corp`
+- `Cross-Origin-Resource-Policy: same-origin`
+
+Chrome memblokir gambar upload meskipun dari origin yang sama.
+
+**Fix:**
+- Hapus `helmet.New()` dari `backend/main.go`
+- `SecurityHeadersMiddleware` sudah mencakup semua header kritis: CSP, X-Frame-DENY, X-XSS, nosniff, Referrer-Policy, Permissions-Policy
+- Tambah 4 header nice-to-have yang hilang: `X-DNS-Prefetch-Control`, `X-Download-Options`, `X-Permitted-Cross-Domain-Policies`, `Origin-Agent-Cluster`
+
+### 🔒 CI/CD — Single Image Build
+- **`.github/workflows/ci.yml`** — Added `docker` job:
+  - Build production image (`target: prod`) with Docker Buildx
+  - GHA cache (type=gha)
+  - Verify image was built (`docker image inspect`)
+
+### 📘 README Update
+- Architecture diagram (single binary production mode)
+- Quick Start guide for dev (`--profile dev`) and production modes
+- Security Headers table with all 10 headers and descriptions
+- CI/CD, Available Commands, Documentation sections
+- Note explaining why `helmet.New()` is not used
+
+### Build Status
+
+| Check | Result |
+|-------|--------|
+| `go build ./...` | ✅ 0 errors |
+| `go vet ./...` | ✅ 0 issues |
+| Browser test (login → karyawan → absensi → persetujuan) | ✅ **0 console errors** |
+| Header verifikasi (images upload) | ✅ **CORP/COEP removed, image loads correctly** |
+
+---
+
 ## ✅ Sesi Ini — 8 Juli 2026 (Mutasi & Promosi — Full Feature Complete ✅)
 
 ### 🔄 Mutasi & Promosi — Complete Feature
@@ -888,4 +944,6 @@ Plus `UpdateOvertimeStatus` di overtime_repo.go: tambah `rejected_at`/`rejected_
 
 ---
 *Update file ini saat ada progress baru dengan menambahkan entry di atas.*
+
+
 
