@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,11 +22,18 @@ import (
 
 type AttendanceRecordService struct {
 	companyService *CompanyService
+
+	// Cached face match threshold — avoids DB query on every check-in/out
+	cachedThreshold   float64
+	thresholdCachedAt time.Time
+	thresholdMu       sync.RWMutex
 }
 
 func NewAttendanceRecordService(companyService *CompanyService) *AttendanceRecordService {
 	return &AttendanceRecordService{
-		companyService: companyService,
+		companyService:    companyService,
+		cachedThreshold:   0.6, // Default until first DB load
+		thresholdCachedAt: time.Time{}, // Zero time forces first load
 	}
 }
 
@@ -147,20 +155,43 @@ func (s *AttendanceRecordService) verifyFaceDescriptor(ctx context.Context, empl
 	return nil
 }
 
+const thresholdCacheTTL = 60 * time.Second
+
 func (s *AttendanceRecordService) getFaceMatchThreshold(ctx context.Context) float64 {
-	// Default threshold
 	const defaultThreshold = 0.6
+
+	// Fast path: read cached value without locking DB
+	s.thresholdMu.RLock()
+	if !s.thresholdCachedAt.IsZero() && time.Since(s.thresholdCachedAt) < thresholdCacheTTL {
+		val := s.cachedThreshold
+		s.thresholdMu.RUnlock()
+		return val
+	}
+	s.thresholdMu.RUnlock()
+
+	// Slow path: acquire write lock and refresh from DB
+	s.thresholdMu.Lock()
+	defer s.thresholdMu.Unlock()
+
+	// Double-check after acquiring lock (another goroutine may have refreshed)
+	if !s.thresholdCachedAt.IsZero() && time.Since(s.thresholdCachedAt) < thresholdCacheTTL {
+		return s.cachedThreshold
+	}
 
 	company, err := s.companyService.GetSettings(ctx)
 	if err != nil || company == nil {
+		s.cachedThreshold = defaultThreshold
+		s.thresholdCachedAt = time.Now()
 		return defaultThreshold
 	}
 
 	if company.HRSettings.FaceMatchThreshold != nil && *company.HRSettings.FaceMatchThreshold > 0 {
-		return *company.HRSettings.FaceMatchThreshold
+		s.cachedThreshold = *company.HRSettings.FaceMatchThreshold
+	} else {
+		s.cachedThreshold = defaultThreshold
 	}
-
-	return defaultThreshold
+	s.thresholdCachedAt = time.Now()
+	return s.cachedThreshold
 }
 
 func (s *AttendanceRecordService) autoSaveFaceDescriptor(ctx context.Context, employeeID string, descriptor *string) {
