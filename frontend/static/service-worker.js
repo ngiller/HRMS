@@ -59,6 +59,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Only handle requests to the same origin
+  // This avoids errors when trying to cache cross-origin resources
+  // (e.g. upload photos served from localhost:8900)
+  if (url.origin !== self.location.origin) return;
+
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
@@ -211,8 +216,9 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => {
       const fetchPromise = fetch(request).then((response) => {
         if (response.ok) {
+          const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, response.clone());
+            cache.put(request, responseToCache);
           });
         }
         return response;
