@@ -27,12 +27,12 @@ type WebPushService struct {
 func NewWebPushService(vapidPK, vapidSK, contact string) *WebPushService {
 	// Auto-generate VAPID keys if not set
 	if vapidPK == "" || vapidSK == "" {
-		pk, sk, err := webpush.GenerateVAPIDKeys()
+		privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
 		if err != nil {
 			log.Printf("⚠️ Failed to generate VAPID keys: %v", err)
 		} else {
-			vapidPK = pk
-			vapidSK = sk
+			vapidPK = publicKey
+			vapidSK = privateKey
 			log.Println("🔑 INFO: VAPID keys auto-generated. Set VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY di .env untuk persistensi.")
 		}
 	}
