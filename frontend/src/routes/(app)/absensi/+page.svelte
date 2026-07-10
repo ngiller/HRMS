@@ -361,14 +361,14 @@
 
 <div class="w-full">
 	<!-- Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4 sm:mb-6">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Absensi</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Check-in / Check-out kehadiran hari ini</p>
+			<h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Absensi</h1>
+			<p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Check-in / Check-out kehadiran hari ini</p>
 		</div>
 		<div class="flex items-center gap-2">
 			<button onclick={handleStartFaceRegistration}
-				class="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition cursor-pointer dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 flex items-center gap-1.5">
+				class="hidden sm:inline-flex px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition cursor-pointer dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 flex items-center gap-1.5">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
 				Registrasi Wajah
 			</button>
@@ -504,68 +504,73 @@
 
 	<canvas bind:this={photoCanvasEl} class="hidden"></canvas>
 
+	<!-- Mobile: Registrasi Wajah quick action (only on mobile) -->
+	<button onclick={handleStartFaceRegistration}
+		class="sm:hidden w-full mb-3 px-4 py-3 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-xl text-sm font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition cursor-pointer flex items-center justify-center gap-2 active:scale-[0.98]">
+		<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+		Registrasi Wajah
+	</button>
+
 	<!-- Status & Action Cards -->
-	<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+	<div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
 		<!-- Check-in Card -->
-		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm transition-all hover:shadow-md {todayStatus?.has_checked_in ? 'border-l-4 border-l-emerald-500' : ''}">
-			<div class="flex items-center justify-between mb-3">
-				<div class="flex items-center gap-2.5">
-					<div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center {todayStatus?.has_checked_in ? 'text-emerald-600' : 'text-blue-600'}">
-						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md active:scale-[0.99] {todayStatus?.has_checked_in ? 'border-l-[3px] sm:border-l-4 border-l-emerald-500' : ''}">
+			<div class="flex items-center justify-between mb-2 sm:mb-3">
+				<div class="flex items-center gap-2.5 sm:gap-3">
+					<div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0 {todayStatus?.has_checked_in ? 'text-emerald-600' : 'text-blue-600'}">
+						<svg class="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
 					</div>
 					<div>
-						<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Check In</h3>
-						<p class="text-xs text-gray-500 dark:text-gray-400">Absensi Masuk</p>
+						<h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Check In</h3>
+						<p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">Absensi Masuk</p>
 					</div>
 				</div>
-				<div class="text-right">
-					<div class="text-lg font-bold {todayStatus?.has_checked_in ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}">
+				<div class="text-right shrink-0">
+					<div class="text-base sm:text-lg font-bold {todayStatus?.has_checked_in ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}">
 						{todayStatus?.has_checked_in ? formatTime(todayStatus?.record?.check_in_time) : '--:--'}
 					</div>
 				</div>
 			</div>
 			<button onclick={handleCheckIn}
 				disabled={todayStatus?.has_checked_in || loadingStatus}
-				class="w-full py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer {todayStatus?.has_checked_in ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}">
+				class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_in ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}">
 				{todayStatus?.has_checked_in ? 'Sudah Check In' : 'Check In'}
 			</button>
 		</div>
 
 		<!-- Check-out Card -->
-		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm transition-all hover:shadow-md {todayStatus?.has_checked_out ? 'border-l-4 border-l-amber-500' : ''}">
-			<div class="flex items-center justify-between mb-3">
-				<div class="flex items-center gap-2.5">
-					<div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center {todayStatus?.has_checked_out ? 'text-amber-600' : 'text-amber-600'}">
-						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" /></svg>
+		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md active:scale-[0.99] {todayStatus?.has_checked_out ? 'border-l-[3px] sm:border-l-4 border-l-amber-500' : ''}">
+			<div class="flex items-center justify-between mb-2 sm:mb-3">
+				<div class="flex items-center gap-2.5 sm:gap-3">
+					<div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-amber-600">
+						<svg class="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" /></svg>
 					</div>
 					<div>
-						<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Check Out</h3>
-						<p class="text-xs text-gray-500 dark:text-gray-400">Absensi Pulang</p>
+						<h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Check Out</h3>
+						<p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">Absensi Pulang</p>
 					</div>
 				</div>
-				<div class="text-right">
-					<div class="text-lg font-bold {todayStatus?.has_checked_out ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}">
+				<div class="text-right shrink-0">
+					<div class="text-base sm:text-lg font-bold {todayStatus?.has_checked_out ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}">
 						{todayStatus?.has_checked_out ? formatTime(todayStatus?.record?.check_out_time) : '--:--'}
 					</div>
 				</div>
 			</div>
 			<button onclick={handleCheckOut}
 				disabled={todayStatus?.has_checked_out || !todayStatus?.has_checked_in || loadingStatus || todayStatus?.has_checked_in === false}
-				class="w-full py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer {todayStatus?.has_checked_out ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-amber-600 text-white hover:bg-amber-700'}">
+				class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_out ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-amber-600 text-white hover:bg-amber-700'}">
 				{todayStatus?.has_checked_out ? 'Sudah Check Out' : 'Check Out'}
 			</button>
 		</div>
-	</div>
-
-	<!-- Schedule Info -->
+	</div>	<!-- Schedule Info -->
 	{#if todayStatus?.schedule_name}
-		<div class="mb-6 px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl">
-			<div class="flex items-center justify-between text-sm">
+		<div class="mb-4 sm:mb-6 px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl">
+			<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 text-xs sm:text-sm">
 				<div class="flex items-center gap-2">
-					<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+					<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 					<span class="text-gray-500 dark:text-gray-400">Jadwal: <strong class="font-semibold text-gray-700 dark:text-gray-300">{todayStatus.schedule_name}</strong></span>
 				</div>
-				<span class="text-gray-500 dark:text-gray-400">
+				<span class="text-gray-500 dark:text-gray-400 ml-5 sm:ml-0">
 					{todayStatus.schedule_start || '-'} - {todayStatus.schedule_end || '-'}
 				</span>
 			</div>
@@ -574,40 +579,40 @@
 
 	<!-- Attendance History -->
 	<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-		<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center justify-between">
-			<h2 class="text-sm font-semibold text-gray-900 dark:text-white">Riwayat Absensi</h2>
-			<span class="text-xs text-gray-400">Total {total} record</span>
+		<div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center justify-between">
+			<h2 class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Riwayat Absensi</h2>
+			<span class="text-[10px] sm:text-xs text-gray-400">Total {total} record</span>
 		</div>
 
 		{#if loadingHistory}
-			<div class="flex items-center justify-center py-10">
-				<div class="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+			<div class="flex items-center justify-center py-8 sm:py-10">
+				<div class="animate-spin h-5 w-5 sm:h-6 sm:w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
 			</div>
 		{:else if items.length === 0}
-			<div class="p-6 text-center">
-				<svg class="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-					<p class="text-sm text-gray-400">Belum ada riwayat absensi</p>
-				</div>
+			<div class="p-5 sm:p-6 text-center">
+				<svg class="w-8 h-8 sm:w-10 sm:h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+				<p class="text-xs sm:text-sm text-gray-400">Belum ada riwayat absensi</p>
+			</div>
 		{:else}
 			<div class="divide-y divide-gray-100 dark:divide-gray-700/50">
 				{#each items as item}
-					<div class="px-6 py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-						<div class="flex items-center gap-3 min-w-0">
-							<div class="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0">
-								<svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+					<div class="px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors active:bg-gray-100 dark:active:bg-gray-700/50">
+						<div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+							<div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0">
+								<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
 							</div>
 							<div class="min-w-0">
-								<div class="text-sm font-medium text-gray-900 dark:text-white truncate">{formatDate(item.date)}</div>
-								<div class="text-xs text-gray-500 dark:text-gray-400">
+								<div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">{formatDate(item.date)}</div>
+								<div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
 									{formatTime(item.check_in_time)} → {formatTime(item.check_out_time)}
 								</div>
 							</div>
 						</div>
-						<div class="flex items-center gap-2 shrink-0">
+						<div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
 							{#if item.is_late && item.late_minutes && item.late_minutes > 0}
-								<span class="text-xs text-amber-600 dark:text-amber-400 font-medium">{item.late_minutes} menit</span>
+								<span class="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">{item.late_minutes} mnt</span>
 							{/if}
-							<span class="px-2.5 py-1 rounded-full text-xs font-medium {getStatusBadge(item.status)}">
+							<span class="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium {getStatusBadge(item.status)}">
 								{getStatusText(item.status)}
 							</span>
 						</div>
