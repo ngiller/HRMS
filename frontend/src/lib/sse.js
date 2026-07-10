@@ -5,18 +5,21 @@
 
 import config from '$lib/config';
 
+/** @type {EventSource | null} */
 let eventSource = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
 let reconnectTimer = null;
 let isConnected = false;
 
 /**
  * Connect to the SSE endpoint.
  * @param {string} token - JWT access token
- * @param {object} options
- * @param {number} options.reconnectDelay - Delay before reconnecting (ms), default 5000
- * @param {function} options.onEvent - Callback for all events
- * @param {function} options.onConnected - Callback when connected
- * @param {function} options.onDisconnected - Callback when disconnected
+ * @param {{
+ *   reconnectDelay?: number,
+ *   onEvent?: (data: any) => void,
+ *   onConnected?: () => void,
+ *   onDisconnected?: () => void
+ * }} [options]
  * @returns {EventSource|null}
  */
 export function connectSSE(token, options = {}) {

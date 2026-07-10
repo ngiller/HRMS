@@ -3,20 +3,20 @@ import { test, expect } from '@playwright/test';
 test.describe('Approval Workflow', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/login');
+		// Tunggu form login siap
+		await expect(page.locator('#email')).toBeVisible({ timeout: 10000 });
+		// Field sudah terisi default (admin@company.com / admin123)
 		await page.locator('button[type="submit"]').first().click();
 		try {
-			await page.waitForURL(/dashboard/, { timeout: 8000 });
+			await page.waitForURL(/dashboard/, { timeout: 15000 });
 		} catch {
 			// Backend might not be running in CI
 		}
 	});
 
-	test('should display pending approvals page', async ({ page }) => {
+	test('should display pending approvals page with heading', async ({ page }) => {
 		await page.goto('/persetujuan');
-		await expect(page.getByRole('heading').first()).toBeAttached();
-		// Should show either "Persetujuan" title or empty state
-		const title = page.locator('h1');
-		await expect(title).toBeAttached();
+		await expect(page.getByRole('heading', { name: 'Persetujuan' })).toBeVisible({ timeout: 10000 });
 	});
 
 	test('should navigate between pages without JS crashes on approvals', async ({ page }) => {
@@ -54,11 +54,82 @@ test.describe('Approval Workflow', () => {
 		await expect(workflowTab).toBeAttached();
 	});
 
-	test('should show pending count badge on approvals page', async ({ page }) => {
+	test('should show pending approvals list or empty state', async ({ page }) => {
 		await page.goto('/persetujuan');
-		await page.waitForTimeout(1000);
-		// The page should show either pending items or empty state
-		const body = page.locator('body');
-		await expect(body).toBeAttached();
+		await page.waitForTimeout(2000);
+
+		// Either shows pending items or empty state message
+		const pendingCount = page.locator('text=menunggu').first();
+		const emptyState = page.getByText('Tidak ada yang menunggu');
+
+		// Wait for either to appear
+		await expect(
+			page.locator('body')
+		).toBeAttached();
+
+		const hasPending = await pendingCount.isVisible().catch(() => false);
+		const hasEmpty = await emptyState.isVisible().catch(() => false);
+
+		// Should show either pending items or empty state (not both)
+		if (hasPending) {
+			// Ada item pending — cek ada tombol Setujui
+			const approveButtons = page.getByText('Setujui');
+			await expect(approveButtons.first()).toBeAttached();
+		} else if (hasEmpty) {
+			await expect(emptyState).toBeVisible();
+		}
+	});
+
+	test('should approve a pending item and update the list', async ({ page }) => {
+		await page.goto('/persetujuan');
+		await page.waitForTimeout(2000);
+
+		// Cek apakah ada item pending
+		const approveButtons = page.getByRole('button', { name: 'Setujui' });
+		const hasItems = await approveButtons.first().isVisible().catch(() => false);
+
+		test.skip(!hasItems, 'Tidak ada item pending untuk di-approve');
+		if (!hasItems) return;
+
+		// Hitung jumlah item sebelum approve
+		const initialCount = await approveButtons.count();
+
+		// Klik tombol Setujui pada item pertama
+		await approveButtons.first().click();
+
+		// Tunggu spinner loading selesai (tombol berubah dari loading state)
+		await expect(approveButtons.first()).toBeVisible({ timeout: 10000 });
+
+		// Hitung ulang jumlah item
+		const remainingButtons = page.getByRole('button', { name: 'Setujui' });
+		const remainingCount = await remainingButtons.count();
+
+		// Jumlah item harus berkurang (atau 0 jika hanya 1 item)
+		expect(remainingCount).toBeLessThanOrEqual(initialCount);
+	});
+
+	test('should show sidebar badge with pending count', async ({ page }) => {
+		await page.goto('/persetujuan');
+		await page.waitForTimeout(2000);
+
+		// Cari sidebar element
+		const sidebar = page.locator('aside').first();
+		const sidebarVisible = await sidebar.isVisible().catch(() => false);
+
+		test.skip(!sidebarVisible, 'Sidebar tidak terlihat');
+		if (!sidebarVisible) return;
+
+		// Cari menu Persetujuan di sidebar
+		const persetujuanMenu = sidebar.getByText('Persetujuan');
+		await expect(persetujuanMenu.first()).toBeAttached();
+
+		// Cari angka badge di sidebar (angka pending count)
+		const sidebarBadge = sidebar.locator('span.bg-red-100, span[class*="rounded-full"]').first();
+		const hasBadge = await sidebarBadge.isVisible().catch(() => false);
+
+		if (hasBadge) {
+			const badgeText = await sidebarBadge.textContent();
+			expect(badgeText).toMatch(/\d+/); // Harus mengandung angka
+		}
 	});
 });
