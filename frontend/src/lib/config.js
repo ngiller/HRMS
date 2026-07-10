@@ -7,8 +7,12 @@
  */
 
 const config = {
-	// Backend API URL
-	API_BASE_URL: 'http://localhost:8590',
+	// Backend API URL (dynamic via VITE_API_BASE_URL env var)
+	// - Local dev (make dev-backend): http://localhost:8900 (default)
+	// - Docker dev (docker compose): http://localhost:8080 — set VITE_API_BASE_URL=http://localhost:8080
+	API_BASE_URL: import.meta.env.DEV 
+		? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8900') 
+		: '',
 
 	// JWT Token keys (localStorage)
 	ACCESS_TOKEN_KEY: 'hrms_access_token',

@@ -183,7 +183,12 @@
     </div>
 
     <div class="px-4 py-3 space-y-4">
-      {#each getAccessibleMenus().filter(g => ['Kepegawaian', 'Waktu & Kehadiran', 'Kompensasi & Benefit', 'Informasi'].includes(g.group)) as group}
+      {#each getAccessibleMenus()
+        .filter(g => ['Kepegawaian', 'Waktu & Kehadiran', 'Kompensasi & Benefit', 'Informasi'].includes(g.group))
+        .sort((a, b) => {
+          const order = ['Waktu & Kehadiran', 'Kepegawaian', 'Kompensasi & Benefit', 'Informasi'];
+          return order.indexOf(a.group) - order.indexOf(b.group);
+        }) as group}
         {#if group.group}
           <div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-2 pt-2 pb-0.5">{group.group}</div>
         {/if}

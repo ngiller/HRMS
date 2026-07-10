@@ -237,7 +237,7 @@ import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 	});
 
 	$effect(() => {
-		if (items.length > 0 && gridContainer && !showForm && !showDetail) {
+		if (gridContainer && !showForm && !showDetail) {
 			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
 			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}

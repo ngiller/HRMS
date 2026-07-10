@@ -182,7 +182,10 @@
 	};
 
 	$effect(() => {
-		if (activeTab !== 'list' && gridApi) { gridApi.destroy(); gridApi = null; }
+		if (!gridContainer && gridApi) {
+			gridApi.destroy();
+			gridApi = null;
+		}
 	});
 
 	$effect(() => {

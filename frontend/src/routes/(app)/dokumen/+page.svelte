@@ -182,14 +182,14 @@ let deleteId: string | null = null;
 	};
 
 	$effect(() => {
-		if (showForm && gridApi) {
+		if (!gridContainer && gridApi) {
 			gridApi.destroy();
 			gridApi = null;
 		}
 	});
 
 	$effect(() => {
-		if (items.length > 0 && gridContainer && !showForm) {
+		if (gridContainer && !showForm) {
 			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
 			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}

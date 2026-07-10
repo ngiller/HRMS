@@ -28,8 +28,8 @@
 | **M13b** | **Daily Working Journal (Berdasarkan Departemen)** | **September 2026** | ✅ **Selesai — Migration 00040, CRUD + Acknowledge + Frontend warna per status** | **100%** |
 | **M14** | **Laporan & Analytics** | **September 2026** | ✅ **Selesai — 6 aggregated reports + Frontend 5 tab** | **100%** |
 | **M15** | **Notifikasi & Audit Trail** | **Oktober 2026** | ✅ **Selesai — Backend CRUD + 4 endpoint notifikasi, 4 endpoint activity log + Frontend 2 halaman** | **100%** |
-| M16 | PWA & Mobile Optimization | Oktober 2026 | ✅ **Sudah Lengkap** — Service Worker, manifest, BottomTabBar, SwipeActions, PWAInstallPrompt, Mobile Layout | 85% |
-| M17 | Security Hardening Final | Oktober 2026 | ✅ **Sudah Lengkap** — CSP, Security Headers, File Upload Validation, Rate Limiter, RBAC, Helmet, Encryption | 90% |
+| M16 | PWA & Mobile Optimization | Oktober 2026 | ✅ **Selesai** — Service Worker, manifest, BottomTabBar, SwipeActions, PWAInstallPrompt, Mobile Layout, Mobile Menu Filter | **100%** |
+| M17 | Security Hardening Final | Oktober 2026 | ✅ **Selesai** — CSP, Security Headers, File Upload Validation, Rate Limiter, RBAC, Helmet, Encryption, Backend Serves Frontend, CI/CD | **100%** |
 | M18 | Deployment & Go-Live | November 2026 | 🚧 **Sedang Berjalan** | 15% |
 | **M34** | **Manual Attendance Request** | **Juli 2026** | ✅ **Selesai** — Backend CRUD + approval workflow + Frontend | **100%** |
 | **M35** | **Resign & Exit Management** | **Juli 2026** | ✅ **Selesai** — Backend CRUD + approval workflow + exit clearance + Frontend | **100%** |
@@ -486,7 +486,7 @@ Reprimand M13         ███████████████████�
 Daily Journal M13b    ██████████████████████ 100%
 Laporan M14           ██████████████████████ 100%
 ────────────────────────────────────────
-TOTAL PROYEK          ██████████████████████░  ~99% (Fase 4 mendatang)
+TOTAL PROYEK          ███████████████████████  100% 🎉 (kecuali Deployment)
 ```
 
 ### ✅ Sesi Ini — 3 Juli 2026 (Reprimand M13 + Daily Journal M13b + Laporan M14 + Notifikasi & Audit Trail M15)

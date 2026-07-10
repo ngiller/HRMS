@@ -47,6 +47,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	let totalPages = $state(0);
 	let yearFilter = $state(new Date().getFullYear());
 	let typeFilter = $state('');
+	let monthFilter = $state<number | null>(null);
 	let isLoading = $state(true);
 	let errorMessage = $state('');
 
@@ -152,7 +153,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	};
 
 	$effect(() => {
-		if (showForm && gridApi) {
+		if (!gridContainer && gridApi) {
 			gridApi.destroy();
 			gridApi = null;
 		}
@@ -160,9 +161,12 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 
 
 	$effect(() => {
-		if (items.length > 0 && gridContainer && !showForm) {
+		if (gridContainer && !showForm) {
 			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
+			if (gridApi) {
+				const filteredItems = monthFilter !== null ? items.filter(i => new Date(i.date + 'T00:00:00').getMonth() === monthFilter) : items;
+				gridApi.updateGridOptions({ rowData: filteredItems });
+			}
 		}
 	});
 
@@ -363,8 +367,8 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				<!-- Calendar-like header -->
 				<div class="hidden md:grid grid-cols-12 gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
 					{#each Array.from({ length: 12 }, (_, i) => i) as monthIdx}
-						<button onclick={() => { /* scroll to month */ }}
-							class="text-center text-xs font-medium py-2 px-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer {monthIdx === new Date().getMonth() ? 'bg-[#1A56DB]/10 text-[#1A56DB]' : 'text-gray-600 dark:text-gray-400'}">
+						<button onclick={() => { monthFilter = monthFilter === monthIdx ? null : monthIdx; }}
+							class="text-center text-xs font-medium py-2 px-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer {monthFilter === monthIdx ? 'bg-[#1A56DB] text-white shadow-sm' : monthIdx === new Date().getMonth() && monthFilter === null ? 'bg-[#1A56DB]/10 text-[#1A56DB]' : 'text-gray-600 dark:text-gray-400'}">
 							{monthNames[monthIdx].substring(0, 3)}
 						</button>
 					{/each}

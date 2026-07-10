@@ -275,7 +275,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	});
 
 	$effect(() => {
-		if (items.length > 0 && gridContainer && !showForm) {
+		if (gridContainer && !showForm) {
 			if (!gridApi && agGridModule) {
 				gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi;
 			}

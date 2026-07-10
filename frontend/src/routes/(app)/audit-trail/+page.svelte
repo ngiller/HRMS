@@ -10,11 +10,9 @@
 	let items = $state<any[]>([]);
 	let total = $state(0);
 	let pageNum = $state(1);
-	const perPage = 25;
+	const perPage = 10;
 	let error = $state('');
-	let hasMore = $state(true);
-	let sentinelEl = $state<HTMLDivElement>();
-	let observer: IntersectionObserver | null = null;
+	let totalPages = $derived(Math.max(1, Math.ceil(total / perPage)));
 
 	// Filters
 	let filterAction = $state('');
@@ -31,7 +29,7 @@
 	async function loadEmployees() {
 		try {
 			const res = await employees.list(1, 200);
-			if (res.success) employeeList = res.data.employees || [];
+			if (res.success) employeeList = res.data || [];
 		} catch {}
 	}
 
@@ -46,14 +44,20 @@
 		} catch {}
 	}
 
-	async function load() {
+	onMount(() => {
+		loadEmployees();
+		loadFilterOptions();
+		load();
+	});
+
+	async function load(resetPage = false) {
 		loading = true;
 		error = '';
-		pageNum = 1;
-		hasMore = true;
+		if (resetPage) pageNum = 1;
+
 		try {
 			const res = await activityLogs.list({
-				page: 1,
+				page: pageNum,
 				perPage,
 				action: filterAction,
 				entityType: filterEntityType,
@@ -64,7 +68,7 @@
 			if (res.success) {
 				items = res.data.logs || [];
 				total = res.data.total || 0;
-				hasMore = items.length < total;
+
 			}
 		} catch (e) {
 			if (e instanceof ApiError) error = e.message;
@@ -74,56 +78,22 @@
 		}
 	}
 
-	async function loadMore() {
-		if (loadingMore || !hasMore) return;
-		loadingMore = true;
-		try {
-			const nextPage = pageNum + 1;
-			const res = await activityLogs.list({
-				page: nextPage,
-				perPage,
-				action: filterAction,
-				entityType: filterEntityType,
-				userId: filterEmployeeId,
-				startDate: filterStartDate || undefined,
-				endDate: filterEndDate || undefined,
-			});
-			if (res.success) {
-				const newItems = res.data.logs || [];
-				items = [...items, ...newItems];
-				pageNum = nextPage;
-				hasMore = items.length < total;
-			}
-		} catch {
-			// Silent fail on load more
-		} finally {
-			loadingMore = false;
-		}
+	async function goToPage(page: number) {
+		if (page < 1 || page > totalPages || page === pageNum) return;
+		pageNum = page;
+		load();
 	}
-
 	function resetFilters() {
 		filterAction = '';
 		filterEntityType = '';
 		filterEmployeeId = '';
 		filterStartDate = '';
 		filterEndDate = '';
-		load();
+		load(true);
 	}
 
-	function search() { load(); }
+	function search() { load(true); }
 
-	$effect(() => {
-		if (sentinelEl && !loading) {
-			observer?.disconnect();
-			observer = new IntersectionObserver((entries) => {
-				if (entries[0].isIntersecting && hasMore && !loadingMore) {
-					loadMore();
-				}
-			}, { rootMargin: '200px' });
-			observer.observe(sentinelEl);
-		}
-		return () => observer?.disconnect();
-	});
 
 	function formatDate(dateStr: string) {
 		const d = new Date(dateStr);
@@ -150,10 +120,12 @@
 
 </script>
 
-<div class="p-4 md:p-6">
-	<div class="mb-6">
-		<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Audit Trail</h1>
-		<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Log aktivitas sistem untuk audit dan pelacakan</p>
+<div class="w-full">
+	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+		<div>
+			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Audit Trail</h1>
+			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Log aktivitas sistem untuk audit dan pelacakan</p>
+		</div>
 	</div>
 
 	<!-- Filters -->
@@ -242,52 +214,54 @@
 			<p class="text-lg">Belum ada log aktivitas</p>
 		</div>
 	{:else}
-		<div class="space-y-2">
-			{#each items as item, i}
-				<AnimatedPresence show={true} delay={Math.min(i * 20, 300)}>
-					<div class="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow">
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-3">
-								<span class="px-2 py-0.5 rounded-full text-xs font-medium {getActionBadge(item.action)}">
+		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden overflow-x-auto">
+			<table class="w-full text-left border-collapse whitespace-nowrap">
+				<thead>
+					<tr class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+						<th class="p-4">Waktu</th>
+						<th class="p-4">Karyawan</th>
+						<th class="p-4">Aksi</th>
+						<th class="p-4">Entitas</th>
+						<th class="p-4">Nama Entitas</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50 text-sm">
+					{#each items as item}
+						<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+							<td class="p-4 text-gray-500 dark:text-gray-400">{formatDate(item.created_at)}</td>
+							<td class="p-4 font-medium text-gray-900 dark:text-white">{item.employee_name || '-'}</td>
+							<td class="p-4">
+								<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {getActionBadge(item.action)}">
 									{item.action}
 								</span>
-								<div>
-									<span class="text-sm font-medium text-gray-900 dark:text-white">{item.entity_name || item.entity_type}</span>
-									<span class="text-xs text-gray-400 dark:text-gray-500 ml-2">({item.entity_type})</span>
-								</div>
-							</div>
-							<div class="text-right text-xs text-gray-400 dark:text-gray-500">
-								<div>{formatDate(item.created_at)}</div>
-								{#if item.employee_name}
-									<div class="text-gray-500 dark:text-gray-400">{item.employee_name}</div>
-								{/if}
-							</div>
-						</div>
-					</div>
-				</AnimatedPresence>
-			{/each}
+							</td>
+							<td class="p-4 text-gray-500 dark:text-gray-300">{item.entity_type}</td>
+							<td class="p-4 text-gray-900 dark:text-white font-medium">{item.entity_name || '-'}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		</div>
 
-		<!-- Infinite scroll sentinel -->
-		{#if hasMore}
-			<div bind:this={sentinelEl} class="flex items-center justify-center py-4">
-				{#if loadingMore}
-					<div class="flex items-center gap-2 text-sm text-gray-400">
-						<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-						</svg>
-						<span>Memuat data lainnya...</span>
-					</div>
-				{:else}
-					<div class="w-6 h-6 rounded-full border-2 border-gray-200 dark:border-gray-700 border-dashed"></div>
-				{/if}
+		<!-- Pagination -->
+		<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-[-4px]">
+			<div class="text-xs text-gray-500 dark:text-gray-400">
+				Menampilkan {total === 0 ? 0 : (pageNum - 1) * perPage + 1}-{Math.min(pageNum * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span>
 			</div>
-		{:else if items.length > 0}
-			<div class="text-center py-4 text-xs text-gray-400 dark:text-gray-500">
-				<span>Menampilkan semua {total} log</span>
+			<div class="flex items-center gap-1.5">
+				<button onclick={() => goToPage(pageNum - 1)} disabled={pageNum <= 1}
+					class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
+				{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+					{@const pageIdx = Math.max(1, Math.min(pageNum - 2, totalPages - 4)) + i}
+					{#if pageIdx <= totalPages}
+						<button onclick={() => goToPage(pageIdx)}
+							class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageIdx === pageNum ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}">{pageIdx}</button>
+					{/if}
+				{/each}
+				<button onclick={() => goToPage(pageNum + 1)} disabled={pageNum >= totalPages}
+					class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Selanjutnya</button>
 			</div>
-		{/if}
+		</div>
 	{/if}
 	</PullToRefresh>
 </div>

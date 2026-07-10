@@ -257,6 +257,13 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<p class="text-sm text-gray-500 text-center py-8">Gagal memuat detail</p>
 				{/if}
 			</div>
+			{#if detailData && detailData.status === 'pending' && hasPermission('attendance', 'approve')}
+				{@const dataId = detailData.id}
+			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50 dark:border-gray-700 dark:bg-gray-800/50">
+				<button onclick={() => { openReject(dataId); closeDetail(); }} class="px-5 py-2.5 bg-red-50 text-red-700 rounded-lg text-sm font-semibold hover:bg-red-100 transition cursor-pointer dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50">Tolak</button>
+				<button onclick={() => { handleApprove(dataId); closeDetail(); }} class="px-5 py-2.5 bg-green-50 text-green-700 rounded-lg text-sm font-semibold hover:bg-green-100 transition cursor-pointer dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50">Setujui</button>
+			</div>
+			{/if}
 		</div>
 	{:else}
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm dark:bg-gray-800 dark:border-gray-700">

@@ -183,7 +183,7 @@
 	};
 
 	$effect(() => {
-		if (items.length > 0 && gridContainer && agGridModule) {
+		if (gridContainer && agGridModule) {
 			if (!gridApi) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
 			gridApi.updateGridOptions({ rowData: items });
 		}

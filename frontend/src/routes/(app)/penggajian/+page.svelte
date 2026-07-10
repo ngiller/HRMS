@@ -280,7 +280,7 @@
 	};
 
 	$effect(() => {
-		if (showForm && gridApi) {
+		if (!gridContainer && gridApi) {
 			gridApi.destroy();
 			gridApi = null;
 		}

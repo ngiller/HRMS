@@ -234,6 +234,11 @@ export const auth = {
 		});
 	},
 
+	/** @returns {string|null} */
+	getAccessToken() {
+		return getAccessToken();
+	},
+
 	/** @param {string} email */
 	forgotPassword(email) {
 		return request('/api/auth/forgot-password', {
@@ -1871,7 +1876,10 @@ export const push = {
 	},
 };
 
-/** Helper: Convert ArrayBuffer to Base64 string */
+/** 
+ * Helper: Convert ArrayBuffer to Base64 string 
+ * @param {ArrayBuffer | null} buffer
+ */
 function arrayBufferToBase64(buffer) {
 	if (!buffer) return '';
 	const bytes = new Uint8Array(buffer);
@@ -1880,7 +1888,22 @@ function arrayBufferToBase64(buffer) {
 		binary += String.fromCharCode(bytes[i]);
 	}
 	return btoa(binary);
-}	export const mutations = {
+}	export const employeesApi = {
+	/**
+	 * Register face descriptor for an employee
+	 * @param {string} id Employee UUID
+	 * @param {string} descriptor JSON string of face descriptor array
+	 * @returns {Promise<ApiResponse>}
+	 */
+	registerFaceDescriptor(id, descriptor) {
+		return request(`/api/employees/${id}/face-descriptor`, {
+			method: 'POST',
+			body: { descriptor },
+		});
+	},
+};
+
+	export const mutations = {
 	/** @param {number} [page] @param {number} [perPage] @param {string} [status] @param {string} [employeeId] */
 	list(page = 1, perPage = 25, status = '', employeeId = '') {
 		const params = new URLSearchParams();

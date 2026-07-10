@@ -216,7 +216,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	};
 
 	$effect(() => {
-		if (showForm && gridApi) {
+		if (!gridContainer && gridApi) {
 			gridApi.destroy();
 			gridApi = null;
 		}

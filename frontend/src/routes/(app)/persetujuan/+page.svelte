@@ -133,9 +133,16 @@
 		if (!name) return 'NA';
 		return name.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase() || name.substring(0, 2).toUpperCase();
 	}
+
+	function getColorBase(type: string): string {
+		const c = ENTITY_COLORS[type];
+		if (!c) return 'gray';
+		const match = c.match(/text-([a-z]+)-/);
+		return match ? match[1] : 'gray';
+	}
 </script>
 
-<div class="max-w-3xl mx-auto">
+<div class="w-full">
 	<div class="flex items-center gap-4 mb-8">
 		<div class="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0">
 			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -148,7 +155,7 @@
 		</div>
 		{#if total > 0}
 			<div class="ml-auto flex items-center gap-2">
-				<button onclick={loadPendingApprovals} disabled={isLoading}
+				<button onclick={() => loadPendingApprovals(false)} disabled={isLoading}
 					class="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer disabled:opacity-50"
 					aria-label="Refresh">
 					<svg class="w-4 h-4 {isLoading ? 'animate-spin' : ''}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" /></svg>
@@ -185,59 +192,85 @@
 			</div>
 		{/if}
 
-		<div class="space-y-3">
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
 			{#each pendingApprovals as item}
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-md transition-shadow">
-					<div class="flex items-start gap-4">
-						<div class="w-10 h-10 rounded-xl bg-gradient-to-br {ENTITY_COLORS[item.entity_type] || 'from-gray-50 to-gray-100 text-gray-600 ring-gray-200'} flex items-center justify-center shrink-0 ring-1">
-							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" d={ENTITY_ICONS[item.entity_type] || 'M12 6v12m6-6H6'} />
-							</svg>
-						</div>
-						<div class="flex-1 min-w-0">
-							<div class="flex items-start justify-between gap-3">
-								<div>
-									<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{item.title || item.description || 'Pengajuan'}</h3>
-									<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-										<span class="inline-flex items-center gap-1">
-											<span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-											{ENTITY_LABELS[item.entity_type] || item.entity_type}
-										</span>
-										<span class="mx-1.5">•</span>
-										{item.requestor_name}
-										{#if item.amount > 0}
-											<span class="mx-1.5">•</span>
-											{formatCurrency(item.amount)}
-										{/if}
-									</p>
-									<p class="text-xs text-gray-400 mt-1.5 flex items-center gap-2">
-										{formatDate(item.created_at)}
-										<span class="w-1 h-1 rounded-full bg-gray-300"></span>
-										{item.current_step > 0 ? `Level ${item.current_step}/${item.total_steps}` : `${item.total_steps} level`}
-									</p>
-								</div>
-								<div class="flex items-center gap-2 shrink-0">
-									<button
-										onclick={() => handleApprove(item.entity_type, item.entity_id)}
-										disabled={processingId === item.entity_id}
-										class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer">
-										{#if processingId === item.entity_id}
-											<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-										{:else}
-											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-										{/if}
-										Setujui
-									</button>
-									<button
-										onclick={() => openRejectModal(item.entity_type, item.entity_id)}
-										disabled={processingId === item.entity_id}
-										class="inline-flex items-center gap-1.5 px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50 cursor-pointer">
-										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-										Tolak
-									</button>
-								</div>
+				{@const color = getColorBase(item.entity_type)}
+				<div class="bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 flex flex-col relative overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+					<!-- Top decorative border -->
+					<div class="absolute top-0 left-0 right-0 h-1.5 bg-{color}-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+					
+					<div class="flex items-start justify-between gap-4 mb-4 mt-1">
+						<div class="flex items-center gap-3">
+							<div class="w-12 h-12 rounded-xl bg-gradient-to-br {ENTITY_COLORS[item.entity_type] || 'from-gray-50 to-gray-100 text-gray-600'} flex items-center justify-center shrink-0 shadow-inner">
+								<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d={ENTITY_ICONS[item.entity_type] || 'M12 6v12m6-6H6'} />
+								</svg>
+							</div>
+							<div>
+								<span class="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider mb-1 bg-{color}-100 text-{color}-700 dark:bg-{color}-900/40 dark:text-{color}-400">
+									{ENTITY_LABELS[item.entity_type] || item.entity_type}
+								</span>
+								<h3 class="text-base font-bold text-gray-900 dark:text-white line-clamp-1" title={item.title || item.description || 'Pengajuan'}>
+									{item.title || item.description || 'Pengajuan'}
+								</h3>
 							</div>
 						</div>
+					</div>
+
+					<div class="flex-1 space-y-3.5 mb-6">
+						<div class="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/80 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700/50">
+							<div class="w-7 h-7 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-[10px] font-bold text-gray-600 dark:text-gray-300 shadow-sm shrink-0">
+								{getInitials(item.requestor_name)}
+							</div>
+							<span class="font-semibold line-clamp-1">{item.requestor_name}</span>
+						</div>
+						
+						{#if item.amount > 0}
+							<div class="flex items-center gap-2 text-sm px-1">
+								<svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+								<span class="font-bold text-gray-900 dark:text-white truncate">{formatCurrency(item.amount)}</span>
+							</div>
+						{/if}
+
+						<div class="text-xs text-gray-500 flex items-center gap-2 px-1">
+							<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+							<span class="truncate">{formatDate(item.created_at)}</span>
+						</div>
+
+						<div class="pt-2 px-1">
+							<div class="flex justify-between text-[11px] font-medium mb-2">
+								<span class="text-gray-500 dark:text-gray-400">Progres Persetujuan</span>
+								<span class="text-blue-600 dark:text-blue-400 font-bold">{item.current_step} <span class="text-gray-400">/ {item.total_steps}</span></span>
+							</div>
+							<div class="h-1.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden flex gap-0.5">
+								{#each Array(item.total_steps) as _, i}
+									<div class="h-full flex-1 rounded-full {i < item.current_step ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-600'}"></div>
+								{/each}
+							</div>
+						</div>
+					</div>
+
+					<div class="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100 dark:border-gray-700/50">
+						<button
+							onclick={() => openRejectModal(item.entity_type, item.entity_id)}
+							disabled={processingId === item.entity_id}
+							class="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 dark:focus:ring-offset-gray-800"
+						>
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+							Tolak
+						</button>
+						<button
+							onclick={() => handleApprove(item.entity_type, item.entity_id)}
+							disabled={processingId === item.entity_id}
+							class="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1A56DB] hover:bg-[#1e40af] text-white rounded-xl text-sm font-bold transition-all hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:focus:ring-offset-gray-800 active:scale-[0.98]"
+						>
+							{#if processingId === item.entity_id}
+								<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+							{:else}
+								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+							{/if}
+							Setujui
+						</button>
 					</div>
 				</div>
 			{/each}

@@ -33,6 +33,7 @@ type Announcement struct {
 type AnnouncementSummary struct {
 	ID               uuid.UUID  `json:"id"`
 	Title            string     `json:"title"`
+	Content          string     `json:"content"`
 	AnnouncementType string     `json:"announcement_type"`
 	TargetAll        bool       `json:"target_all"`
 	IsPinned         bool       `json:"is_pinned"`

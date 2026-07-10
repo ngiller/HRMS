@@ -154,7 +154,7 @@ function getStatusBadge(status: string) {
 			cellClass: 'text-sm text-gray-500',
 		},
 		{
-			field: 'id', headerName: '', minWidth: 140, maxWidth: 140,
+			field: 'id', headerName: '', minWidth: 180, maxWidth: 180,
 			cellRenderer: (params: AgGridCellParams<LeaveRequest>) => {
 				const item = params.data;
 				if (!item) return '';
@@ -201,7 +201,7 @@ function getStatusBadge(status: string) {
 	};
 
 	$effect(() => {
-		if (items.length > 0 && gridContainer && !showForm && !showDetail) {
+		if (gridContainer && !showForm && !showDetail) {
 			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
 			if (gridApi) { gridApi.updateGridOptions({ rowData: items }); }
 		}

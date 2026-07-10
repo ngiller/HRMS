@@ -26,7 +26,7 @@ func ListAnnouncements(ctx context.Context, page, perPage int, announcementType 
 
 	offset := (page - 1) * perPage
 	query := `
-		SELECT a.id, a.title, a.announcement_type::text,
+		SELECT a.id, a.title, a.content, a.announcement_type::text,
 			a.target_all, a.is_pinned,
 			COALESCE(e.full_name, ''),
 			a.published_at, a.expired_at,
@@ -52,7 +52,7 @@ func ListAnnouncements(ctx context.Context, page, perPage int, announcementType 
 	var announcements []models.AnnouncementSummary
 	for rows.Next() {
 		var a models.AnnouncementSummary
-		if err := rows.Scan(&a.ID, &a.Title, &a.AnnouncementType,
+		if err := rows.Scan(&a.ID, &a.Title, &a.Content, &a.AnnouncementType,
 			&a.TargetAll, &a.IsPinned,
 			&a.CreatedByName,
 			&a.PublishedAt, &a.ExpiredAt,

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { attendance } from '$lib/api.js';
+	import { attendance, employeesApi, auth } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import config from '$lib/config.js';
@@ -69,6 +69,12 @@
 	let faceDetectionCanvas = $state<HTMLCanvasElement | undefined>();
 	let faceDetectionInterval: number | null = null;
 	let isFaceApiLoaded = $state(false);
+
+	// Face Registration
+	let isRegistering = $state(false);
+	let showFaceRegistration = $state(false);
+	let faceRegistrationSuccess = $state(false);
+	let faceRegistrationMessage = $state('');
 
 	// Mobile-specific state
 	let currentTime = $state(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
@@ -176,10 +182,10 @@
 		if (!videoElement || !(window as any).faceapi) return;
 		const faceapi = (window as any).faceapi;			try {
 				faceDetectionLoading = true;
-				await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-				await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-				// Pre-load face recognition model for descriptor computation during check-in
-				await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+				await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights');
+				await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights');
+				// Optional: untuk face recognition jika diperlukan di masa depan
+				await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights');
 				faceDetectionLoading = false;
 
 			const canvas = faceDetectionCanvas;
@@ -300,7 +306,7 @@
 		try {
 			// Load face recognition model if not loaded
 			if (!faceapi.nets.faceRecognitionNet) {
-				await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+				await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights');
 			}
 
 			const img = new Image();
@@ -319,6 +325,68 @@
 		} catch (err) {
 			console.error('Face descriptor error:', err);
 			return null;
+		}
+	}
+
+	async function handleStartFaceRegistration() {
+		faceRegistrationSuccess = false;
+		faceRegistrationMessage = '';
+		showFaceRegistration = true;
+		await startCamera();
+	}
+
+	function cancelFaceRegistration() {
+		stopCamera();
+		showFaceRegistration = false;
+		isRegistering = false;
+		faceRegistrationMessage = '';
+	}
+
+	async function handleRegisterFace() {
+		// Block if face not detected
+		if (isBlockedByFaceDetection()) {
+			error = 'Wajah tidak terdeteksi. Silakan posisikan wajah Anda di depan kamera.';
+			return;
+		}
+
+		isRegistering = true;
+		error = '';
+		faceRegistrationMessage = '';
+
+		try {
+			const photo = capturePhoto();
+			
+			// Compute face descriptor for verification
+			const descriptor = await computeFaceDescriptor(photo);
+			if (!descriptor) {
+				faceRegistrationMessage = 'Gagal mendeteksi wajah. Coba lagi dengan pencahayaan yang cukup.';
+				return;
+			}
+
+			// Get current user info
+			const currentUser = auth.getUser() as { id?: string } | null;
+			if (!currentUser || !currentUser.id) {
+				faceRegistrationMessage = 'Data pengguna tidak ditemukan. Silakan login ulang.';
+				return;
+			}
+
+			const res = await employeesApi.registerFaceDescriptor(
+				currentUser.id,
+				JSON.stringify(descriptor)
+			);
+
+			if (res.success) {
+				faceRegistrationSuccess = true;
+				faceRegistrationMessage = 'Registrasi wajah berhasil! Wajah Anda akan digunakan untuk verifikasi saat check-in/out.';
+				// Auto close after 2 seconds
+				setTimeout(() => {
+					cancelFaceRegistration();
+				}, 2000);
+			}
+		} catch (e: unknown) {
+			faceRegistrationMessage = (e as { message?: string }).message || 'Gagal mendaftarkan wajah';
+		} finally {
+			isRegistering = false;
 		}
 	}
 
@@ -449,23 +517,46 @@
 <div class="max-w-full space-y-6">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Absensi</h1>
-		{#if hasPermission('attendance', 'read')}
-			<button onclick={handleExportReport} disabled={isExporting}
-				class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition shadow-sm cursor-pointer disabled:opacity-50">
-				{#if isExporting}
-					<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-				{:else}
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-				{/if}
-				{isExporting ? 'Mengexport...' : 'Export Excel'}
+		<div class="flex items-center gap-2">
+			<button onclick={handleStartFaceRegistration}
+				class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition shadow-sm cursor-pointer">
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>
+				Registrasi Wajah
 			</button>
-		{/if}
+			{#if hasPermission('attendance', 'read')}
+				<button onclick={handleExportReport} disabled={isExporting}
+					class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition shadow-sm cursor-pointer disabled:opacity-50">
+					{#if isExporting}
+						<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+					{:else}
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+					{/if}
+					{isExporting ? 'Mengexport...' : 'Export Excel'}
+				</button>
+			{/if}
+		</div>
 	</div>
 
 	{#if loading}
 		<div class="text-center py-12 text-gray-500 dark:text-gray-400">Memuat...</div>
 	{:else if error}
 		<div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">{error}</div>
+	{/if}
+
+	<!-- Face Registration Message -->
+	{#if showFaceRegistration && faceRegistrationMessage}
+		<div class="rounded-xl px-5 py-4 {faceRegistrationSuccess ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'}">
+			<div class="flex items-center gap-2.5">
+				<svg class="w-5 h-5 shrink-0 {faceRegistrationSuccess ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+					{#if faceRegistrationSuccess}
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+					{:else}
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+					{/if}
+				</svg>
+				<p class="text-sm font-medium {faceRegistrationSuccess ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}">{faceRegistrationMessage}</p>
+			</div>
+		</div>
 	{/if}
 
 	<!-- Today's Status Card -- Talenta Style -->
@@ -598,7 +689,7 @@
 						
 						<!-- Cancel button -->
 						<button 
-							onclick={(e) => { e.stopPropagation(); stopCamera(); }}
+							onclick={(e) => { e.stopPropagation(); if (showFaceRegistration) { cancelFaceRegistration(); } else { stopCamera(); } }}
 							class="absolute top-4 right-4 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm hover:bg-black/70 transition-colors"
 						>
 							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -612,7 +703,20 @@
 
 				<!-- Action Buttons -- Premium -->
 				<div class="flex gap-3">
-					{#if !status.has_checked_in}
+					{#if showFaceRegistration}
+						<button
+							onclick={handleRegisterFace}
+							disabled={isRegistering || isBlockedByFaceDetection() || faceRegistrationSuccess}
+							class="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-60 text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/30 active:scale-[0.97] cursor-pointer"
+						>
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>
+							{isRegistering ? 'Menyimpan...' : (isBlockedByFaceDetection() ? 'Arahkan Wajah ke Kamera' : 'Simpan Wajah')}
+						</button>
+						<button
+							onclick={cancelFaceRegistration}
+							class="px-4 py-3.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition cursor-pointer"
+						>Batal</button>
+					{:else if !status.has_checked_in}
 						<button
 							onclick={handleCheckIn}
 							disabled={checkingIn || isBlockedByFaceDetection()}
@@ -705,7 +809,17 @@
 											<div class="text-gray-500 dark:text-gray-400 mb-0.5">Lokasi</div>
 											<div class="font-medium text-gray-900 dark:text-white">{r.check_in_location_name || "Tidak diketahui"}</div>
 											{#if r.check_in_lat && r.check_in_lng}
-												<a href={`https://www.google.com/maps?q=${r.check_in_lat},${r.check_in_lng}`} target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-flex items-center gap-1">
+												<div class="mt-2 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 aspect-video bg-gray-100">
+													<iframe
+														title="Lokasi Check In"
+														width="100%"
+														height="100%"
+														frameborder="0" style="border:0"
+														src={`https://maps.google.com/maps?q=${r.check_in_lat},${r.check_in_lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+														allowfullscreen
+													></iframe>
+												</div>
+												<a href={`https://www.google.com/maps?q=${r.check_in_lat},${r.check_in_lng}`} target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1">
 													<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
 													Buka di Maps
 												</a>
@@ -728,7 +842,17 @@
 												<div class="text-gray-500 dark:text-gray-400 mb-0.5">Lokasi</div>
 												<div class="font-medium text-gray-900 dark:text-white">{r.check_out_location_name || "Tidak diketahui"}</div>
 												{#if r.check_out_lat && r.check_out_lng}
-													<a href={`https://www.google.com/maps?q=${r.check_out_lat},${r.check_out_lng}`} target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-flex items-center gap-1">
+													<div class="mt-2 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 aspect-video bg-gray-100">
+														<iframe
+															title="Lokasi Check Out"
+															width="100%"
+															height="100%"
+															frameborder="0" style="border:0"
+															src={`https://maps.google.com/maps?q=${r.check_out_lat},${r.check_out_lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+															allowfullscreen
+														></iframe>
+													</div>
+													<a href={`https://www.google.com/maps?q=${r.check_out_lat},${r.check_out_lng}`} target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1">
 														<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
 														Buka di Maps
 													</a>

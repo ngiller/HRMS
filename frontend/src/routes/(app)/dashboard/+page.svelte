@@ -327,7 +327,7 @@
 				// Fetch data for employee dashboard
 				try {
 					const [annRes, attRes, leaveRes] = await Promise.all([
-						announcementsApi.list(1, 5, 'true').catch(() => ({ data: [] })),
+						announcementsApi.list(1, 5, '').catch(() => ({ data: [] })),
 						attendance.getTodayStatus().catch(() => ({ data: null })),
 						leaveRequests.getMyBalances().catch(() => ({ data: [] }))
 					]);
@@ -336,7 +336,7 @@
 					todayStatus = attRes.data;
 					
 					if (leaveRes.data && Array.isArray(leaveRes.data)) {
-						leaveBalance = leaveRes.data.find((b: any) => b.leave_type?.name === 'Tahunan' || b.leave_type?.name === 'Cuti Tahunan') || leaveRes.data[0];
+						leaveBalance = leaveRes.data.find((b: any) => b.leave_type_name === 'Tahunan' || b.leave_type_name === 'Cuti Tahunan') || leaveRes.data[0];
 					}
 				} catch (e) {
 					console.error("Error loading employee dashboard", e);
@@ -573,7 +573,7 @@
 						</div>
 						
 						<div class="flex items-end gap-2">
-							<span class="text-4xl font-bold">{leaveBalance?.remaining_balance ?? '-'}</span>
+							<span class="text-4xl font-bold">{leaveBalance?.remaining ?? '-'}</span>
 							<span class="text-blue-100 font-medium mb-1">Hari</span>
 						</div>
 						

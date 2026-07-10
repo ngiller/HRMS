@@ -17,13 +17,16 @@
 		loading = true;
 		error = '';
 		try {
+			console.log("Loading notifications...");
 			const res = await notifications.list(pageNum, perPage);
+			console.log("Notifications response:", res);
 			if (res.success) {
 				items = res.data.notifications || [];
 				total = res.data.total || 0;
 				unreadCount = res.data.unread_count || 0;
 			}
 		} catch (e) {
+			console.error("Notifications error:", e);
 			if (e instanceof ApiError) error = e.message;
 			else error = 'Gagal memuat notifikasi';
 		} finally {
@@ -94,17 +97,17 @@
 	onMount(() => { load(); });
 </script>
 
-<div class="p-4 md:p-8 w-full space-y-6">
+<div class="w-full space-y-6">
 	<!-- Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+			<h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
 				Notifikasi
 				{#if unreadCount > 0}
 					<span class="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-red-500 rounded-full">{unreadCount}</span>
 				{/if}
 			</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
 				Pembaruan terbaru terkait aktivitas Anda
 			</p>
 		</div>

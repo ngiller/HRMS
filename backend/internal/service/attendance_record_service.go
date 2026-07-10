@@ -143,6 +143,33 @@ func (s *AttendanceRecordService) verifyFaceDescriptor(ctx context.Context, empl
 	return nil
 }
 
+func (s *AttendanceRecordService) autoSaveFaceDescriptor(ctx context.Context, employeeID string, descriptor *string) {
+	if descriptor == nil || *descriptor == "" {
+		return
+	}
+
+	// Only auto-save if employee doesn't have a stored descriptor yet
+	storedJSON, err := repository.GetFaceDescriptor(ctx, employeeID)
+	if err != nil {
+		return // Silently skip on error
+	}
+	if storedJSON != nil && *storedJSON != "" {
+		return // Already has a descriptor registered
+	}
+
+	// Validate the descriptor is valid JSON array before saving
+	var testDesc []float64
+	if err := json.Unmarshal([]byte(*descriptor), &testDesc); err != nil {
+		return // Invalid descriptor, skip
+	}
+	if len(testDesc) == 0 {
+		return
+	}
+
+	// Auto-save the face descriptor (use employeeID as userID for audit trail)
+	_ = repository.UpdateFaceDescriptor(ctx, employeeID, *descriptor, employeeID)
+}
+
 func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string, req *models.CheckInRequest) (*models.AttendanceRecord, error) {
 	existing, err := repository.GetTodayAttendanceByEmployee(ctx, employeeID)
 	if err != nil {
@@ -203,6 +230,9 @@ func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string
 		return nil, fmt.Errorf("gagal melakukan check-in: %w", err)
 	}
 
+	// Auto-save face descriptor on first check-in if not yet registered
+	s.autoSaveFaceDescriptor(ctx, employeeID, req.FaceDescriptor)
+
 	return record, nil
 }
 
@@ -252,6 +282,9 @@ func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID strin
 	if err != nil {
 		return nil, fmt.Errorf("gagal melakukan check-out: %w", err)
 	}
+
+	// Auto-save face descriptor on first check-out if not yet registered
+	s.autoSaveFaceDescriptor(ctx, employeeID, req.FaceDescriptor)
 
 	return updated, nil
 }
