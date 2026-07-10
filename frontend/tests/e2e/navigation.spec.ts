@@ -1,14 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { loginWithToken } from './helpers';
 
 test.describe('Navigation & Dashboard', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/login');
-		await page.locator('button[type="submit"]').first().click();
-		try {
-			await page.waitForURL(/dashboard/, { timeout: 8000 });
-		} catch {
-			// Login might fail if backend is not running
-		}
+		await loginWithToken(page);
 	});
 
 	test('should navigate to Karyawan page', async ({ page }) => {

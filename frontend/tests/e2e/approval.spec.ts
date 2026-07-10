@@ -1,17 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { loginWithToken } from './helpers';
 
 test.describe('Approval Workflow', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/login');
-		// Tunggu form login siap
-		await expect(page.locator('#email')).toBeVisible({ timeout: 10000 });
-		// Field sudah terisi default (admin@company.com / admin123)
-		await page.locator('button[type="submit"]').first().click();
-		try {
-			await page.waitForURL(/dashboard/, { timeout: 15000 });
-		} catch {
-			// Backend might not be running in CI
-		}
+		await loginWithToken(page);
 	});
 
 	test('should display pending approvals page with heading', async ({ page }) => {
