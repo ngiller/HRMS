@@ -29,7 +29,12 @@
 	async function checkSubscription() {
 		loading = true;
 		try {
-			const reg = await navigator.serviceWorker.ready;
+			const reg = await navigator.serviceWorker.getRegistration();
+			if (!reg) {
+				subscribed = false;
+				loading = false;
+				return;
+			}
 			const existingSub = await reg.pushManager.getSubscription();
 			subscribed = !!existingSub;
 
@@ -69,7 +74,8 @@
 			const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
 
 			// Register push subscription
-			const reg = await navigator.serviceWorker.ready;
+			const reg = await navigator.serviceWorker.getRegistration();
+			if (!reg) throw new Error("Service Worker tidak ditemukan");
 			const existingSub = await reg.pushManager.getSubscription();
 			if (existingSub) {
 				await existingSub.unsubscribe();
@@ -77,7 +83,7 @@
 
 			const newSub = await reg.pushManager.subscribe({
 				userVisibleOnly: true,
-				applicationServerKey: convertedKey,
+				applicationServerKey: convertedKey as any,
 			});
 
 			// Send subscription to server
@@ -101,7 +107,8 @@
 			await push.unsubscribe(subId);
 
 			// If no more subscriptions, unsubscribe from push manager too
-			const reg = await navigator.serviceWorker.ready;
+			const reg = await navigator.serviceWorker.getRegistration();
+			if (!reg) throw new Error("Service Worker tidak ditemukan");
 			const existingSub = await reg.pushManager.getSubscription();
 			if (existingSub && subs.length <= 1) {
 				await existingSub.unsubscribe();
@@ -126,7 +133,8 @@
 			}
 
 			// Unsubscribe from push manager
-			const reg = await navigator.serviceWorker.ready;
+			const reg = await navigator.serviceWorker.getRegistration();
+			if (!reg) throw new Error("Service Worker tidak ditemukan");
 			const existingSub = await reg.pushManager.getSubscription();
 			if (existingSub) {
 				await existingSub.unsubscribe();
@@ -167,9 +175,7 @@
 </script>
 
 {#if !supported}
-	<div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-sm text-yellow-700 dark:text-yellow-400">
-		Browser Anda tidak mendukung notifikasi push. Gunakan browser modern seperti Chrome, Firefox, atau Edge.
-	</div>
+	<!-- Browser tidak support push notification — sembunyikan saja (sering false positive di Chrome mobile/incognito) -->
 {:else}
 	<div class="space-y-4">
 		{#if loading}
@@ -183,7 +189,7 @@
 		{:else if subscribed && subs.length > 0}
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2">
-					<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+					<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
 					<span class="text-sm font-medium text-green-700 dark:text-green-400">
 						Notifikasi aktif di {subs.length} perangkat
 					</span>
@@ -217,7 +223,7 @@
 			</div>
 		{:else if subscribed && subs.length === 0}
 			<div class="flex items-center gap-2">
-				<span class="w-2 h-2 bg-yellow-500 rounded-full" />
+				<span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
 				<span class="text-sm text-yellow-700 dark:text-yellow-400">
 					Terdaftar namun belum sinkron dengan server
 				</span>
