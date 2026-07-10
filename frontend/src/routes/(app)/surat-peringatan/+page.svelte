@@ -244,7 +244,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			</select>
 		</div>
 		{#if errorMessage}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg px-4 py-3 mb-4">{errorMessage}</div>{/if}
-		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+		<div class="hidden md:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
 			<div class="overflow-x-auto">
 				<table class="w-full text-sm">
 					<thead class="bg-gray-50 dark:bg-gray-800/50 text-left">
