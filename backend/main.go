@@ -74,7 +74,7 @@ func main() {
 	reimbursementService := service.NewReimbursementService()
 	payrollService := service.NewPayrollService()
 	companyService := service.NewCompanyService()
-	attendanceRecordService := service.NewAttendanceRecordService()
+	attendanceRecordService := service.NewAttendanceRecordService(companyService)
 	scheduleService := service.NewScheduleService()
 	leaveService := service.NewLeaveService()
 	documentService := service.NewDocumentService()

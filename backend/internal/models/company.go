@@ -45,7 +45,8 @@ type Company struct {
 }
 
 type HRSettings struct {
-	BPJS *BPJSConfig `json:"bpjs,omitempty"`
+	BPJS               *BPJSConfig `json:"bpjs,omitempty"`
+	FaceMatchThreshold *float64    `json:"face_match_threshold,omitempty"`
 }
 
 type UpdateCompanySettingsRequest struct {

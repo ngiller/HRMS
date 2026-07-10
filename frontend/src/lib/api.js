@@ -1954,4 +1954,4 @@ function arrayBufferToBase64(buffer) {
 };
 
 export { ApiError };
-export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, mutations, ApiError };
+export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, mutations, employeesApi, ApiError };

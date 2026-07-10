@@ -343,9 +343,9 @@
 				</div>
 
 				<!-- Pagination Row -->
-				<div class="flex items-center justify-between px-5 py-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 mt-5 shadow-sm">
-					<div class="text-xs text-gray-400 dark:text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
-					<div class="flex items-center gap-1.5">
+				<div class="flex flex-col sm:flex-row items-center justify-center sm:justify-between px-5 py-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 mt-5 shadow-sm gap-4 sm:gap-0">
+					<div class="text-xs text-gray-400 dark:text-gray-500 text-center sm:text-left">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
+					<div class="flex flex-wrap items-center justify-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition cursor-pointer">Sebelumnya</button>
 						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}

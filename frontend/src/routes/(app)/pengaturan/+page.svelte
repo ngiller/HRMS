@@ -35,6 +35,7 @@
 		bpjs_jkk_rate?: number;
 		hr_settings?: {
 			bpjs?: BPJSConfig;
+			face_match_threshold?: number;
 		};
 	};
 
@@ -44,7 +45,7 @@ let isSaving = $state(false);
 let loadError = $state('');
 	let errorMessage = $state('');
 	let successMessage = $state('');
-	let activeTab = $state<'company' | 'bpjs' | 'workflow'>('bpjs');
+	let activeTab = $state<'company' | 'bpjs' | 'workflow' | 'attendance'>('bpjs');
 
 	// ── Workflow Config ──
 	import { approvalWorkflows as wfApi } from '$lib/api.js';
@@ -132,6 +133,7 @@ let loadError = $state('');
 			jkk: { enabled: true, company_rate: 0 },
 			jkm: { enabled: true, company_rate: 0.3, ceiling: 0 },
 		} as BPJSConfig,
+		face_match_threshold: 0.6,
 	});
 
 	onMount(async () => {
@@ -151,6 +153,11 @@ let loadError = $state('');
 				edit.bpjs_jht_number = res.data.bpjs_jht_number || '';
 				edit.bpjs_jp_number = res.data.bpjs_jp_number || '';
 				edit.bpjs_jkk_rate = res.data.bpjs_jkk_rate || 0.54;
+
+				// Load face_match_threshold from hr_settings
+				if (res.data.hr_settings?.face_match_threshold != null) {
+					edit.face_match_threshold = res.data.hr_settings.face_match_threshold;
+				}
 
 				if (res.data.hr_settings?.bpjs) {
 					const b = res.data.hr_settings.bpjs;
@@ -242,6 +249,7 @@ let loadError = $state('');
 				bpjs_jkk_rate: edit.bpjs_jkk_rate || undefined,
 				hr_settings: {
 					bpjs: Object.keys(bpjsPayload).length > 0 ? bpjsPayload : undefined,
+					face_match_threshold: edit.face_match_threshold,
 				},
 			};
 
@@ -302,6 +310,10 @@ let loadError = $state('');
 			<button onclick={() => activeTab = 'workflow'}
 				class="px-5 py-2 rounded-lg text-sm font-medium transition cursor-pointer {activeTab === 'workflow' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
 				Workflow Persetujuan
+			</button>
+			<button onclick={() => activeTab = 'attendance'}
+				class="px-5 py-2 rounded-lg text-sm font-medium transition cursor-pointer {activeTab === 'attendance' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+				Konfigurasi Absensi
 			</button>
 		</div>
 
@@ -619,6 +631,65 @@ let loadError = $state('');
 									{/each}
 								</div>
 							{/if}
+						</div>
+					</div>
+				</div>
+
+			{:else if activeTab === 'attendance'}
+				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-teal-50 to-white dark:from-gray-800 dark:to-gray-900">
+						<div class="flex items-center gap-3">
+							<svg class="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+							<h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Konfigurasi Absensi</h2>
+						</div>
+						<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-8">Atur threshold verifikasi wajah dan pengaturan absensi lainnya.</p>
+					</div>
+
+					<div class="p-6">
+						<div class="bg-teal-50/30 dark:bg-gray-800/50 rounded-xl p-5 border border-teal-100 dark:border-gray-700">
+							<div class="flex items-center justify-between mb-6">
+								<div>
+									<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Threshold Verifikasi Wajah</h3>
+									<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Batas kemiripan wajah untuk verifikasi absensi. Semakin kecil nilai, semakin ketat verifikasi.</p>
+								</div>
+							</div>
+
+							<div class="px-2">
+								<input
+									type="range"
+									min="0.1"
+									max="1.0"
+									step="0.05"
+									bind:value={edit.face_match_threshold}
+									class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-teal-600"
+								/>
+								<div class="flex items-center justify-between mt-2">
+									<div class="flex items-center gap-2">
+										<span class="text-xs text-gray-400">Ketat</span>
+										<div class="w-20 h-1.5 rounded-full bg-gradient-to-r from-teal-600 via-amber-400 to-red-400"></div>
+										<span class="text-xs text-gray-400">Longgar</span>
+									</div>
+									<span class="text-sm font-semibold text-teal-700 dark:text-teal-300 tabular-nums">{edit.face_match_threshold.toFixed(2)}</span>
+								</div>
+							</div>
+
+							<div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+								<div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-center">
+									<div class="text-xs text-gray-400 mb-1">Sangat Ketat</div>
+									<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">0.10 - 0.30</div>
+									<div class="text-xs text-teal-600 dark:text-teal-400 mt-1">Cocok untuk keamanan tinggi</div>
+								</div>
+								<div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-center">
+									<div class="text-xs text-gray-400 mb-1">Normal</div>
+									<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">0.35 - 0.60</div>
+									<div class="text-xs text-amber-600 dark:text-amber-400 mt-1">Default: 0.60 — rekomendasi</div>
+								</div>
+								<div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-center">
+									<div class="text-xs text-gray-400 mb-1">Longgar</div>
+									<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">0.65 - 1.00</div>
+									<div class="text-xs text-red-600 dark:text-red-400 mt-1">Risiko false positive tinggi</div>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>

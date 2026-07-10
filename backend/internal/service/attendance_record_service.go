@@ -19,10 +19,14 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-type AttendanceRecordService struct{}
+type AttendanceRecordService struct {
+	companyService *CompanyService
+}
 
-func NewAttendanceRecordService() *AttendanceRecordService {
-	return &AttendanceRecordService{}
+func NewAttendanceRecordService(companyService *CompanyService) *AttendanceRecordService {
+	return &AttendanceRecordService{
+		companyService: companyService,
+	}
 }
 
 func saveBase64Photo(b64data *string, prefix string) (*string, error) {
@@ -135,12 +139,28 @@ func (s *AttendanceRecordService) verifyFaceDescriptor(ctx context.Context, empl
 	}
 	distance := math.Sqrt(sumSquares)
 
-	const faceMatchThreshold = 0.6
+	faceMatchThreshold := s.getFaceMatchThreshold(ctx)
 	if distance > faceMatchThreshold {
 		return errors.New("wajah tidak cocok dengan data karyawan")
 	}
 
 	return nil
+}
+
+func (s *AttendanceRecordService) getFaceMatchThreshold(ctx context.Context) float64 {
+	// Default threshold
+	const defaultThreshold = 0.6
+
+	company, err := s.companyService.GetSettings(ctx)
+	if err != nil || company == nil {
+		return defaultThreshold
+	}
+
+	if company.HRSettings.FaceMatchThreshold != nil && *company.HRSettings.FaceMatchThreshold > 0 {
+		return *company.HRSettings.FaceMatchThreshold
+	}
+
+	return defaultThreshold
 }
 
 func (s *AttendanceRecordService) autoSaveFaceDescriptor(ctx context.Context, employeeID string, descriptor *string) {
