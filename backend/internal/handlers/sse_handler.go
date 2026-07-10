@@ -53,14 +53,17 @@ func (h *SSEHandler) HandleSSE(c *fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("X-Accel-Buffering", "no")
 
-	// Subscribe to hub (defer cleanup)
+	// Subscribe to hub (cleanup happens inside SetBodyStreamWriter)
 	client := h.hub.Subscribe(userID)
-	defer h.hub.Unsubscribe(client)
 
-	log.Printf("[SSE] Connection established: user=%s", userID)
-
-	// Use SetBodyStreamWriter which handles streaming + flushing via fasthttp's bufio writer
+	// SetBodyStreamWriter streams the response body via a fasthttp-managed goroutine
+	// The RequestCtx stays alive inside the writer callback, so using
+	// c.Context() inside it is safe.
 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		defer h.hub.Unsubscribe(client)
+
+		log.Printf("[SSE] Connection established: user=%s", userID)
+
 		// Send initial connection event
 		_, _ = fmt.Fprintf(w, "event: connected\ndata: {\"status\":\"connected\"}\n\n")
 		_ = w.Flush()
@@ -70,21 +73,23 @@ func (h *SSEHandler) HandleSSE(c *fiber.Ctx) error {
 
 		for {
 			select {
-			case <-c.Context().Done():
-				log.Printf("[SSE] Connection closed: user=%s", userID)
-				return
-
 			case data, ok := <-client.Events:
 				if !ok {
 					return
 				}
 				_, _ = fmt.Fprintf(w, "event: approval_update\ndata: %s\n\n", string(data))
-				_ = w.Flush()
+				if err := w.Flush(); err != nil {
+					log.Printf("[SSE] Client disconnected: user=%s, err=%v", userID, err)
+					return
+				}
 
 			case <-keepalive.C:
 				// Send keepalive comment to prevent connection/load balancer timeout
 				_, _ = fmt.Fprintf(w, ": keepalive\n\n")
-				_ = w.Flush()
+				if err := w.Flush(); err != nil {
+					log.Printf("[SSE] Keepalive flush error (client disconnected): user=%s, err=%v", userID, err)
+					return
+				}
 			}
 		}
 	})
