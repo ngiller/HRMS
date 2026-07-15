@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { payroll as payrollApi } from '$lib/api.js';
+		import { payroll as payrollApi } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions';
 
 	type PayslipData = {
@@ -69,7 +68,54 @@
 	async function downloadPDF() {
 		if (!payslipRef || !payslip) return;
 		isDownloading = true;
+		let forceLightStyle: HTMLStyleElement | null = null;
 		try {
+			// Force light mode before capture (fix dark mode in PDF)
+			const isDarkMode = document.documentElement.classList.contains('dark');
+			if (isDarkMode) {
+				forceLightStyle = document.createElement('style');
+				forceLightStyle.textContent = `
+					.force-light-pdf { background: #ffffff !important; color: #111827 !important; }
+					.force-light-pdf * { background: transparent !important; }
+					.force-light-pdf .bg-gradient-to-br { background: #f8fafc !important; }
+					.force-light-pdf .bg-gradient-to-r { background: #f9fafb !important; }
+					.force-light-pdf .bg-white { background: #ffffff !important; }
+					.force-light-pdf .bg-gray-50,
+					.force-light-pdf .bg-gray-50\\/50,
+					.force-light-pdf .bg-gray-50\\/80 { background: #f9fafb !important; }
+					.force-light-pdf .bg-emerald-50\\/80 { background: #ecfdf5 !important; }
+					.force-light-pdf .bg-red-50\\/80 { background: #fef2f2 !important; }
+					.force-light-pdf .bg-emerald-50\\/50 { background: #ecfdf5 !important; }
+					.force-light-pdf .bg-red-50\\/50 { background: #fef2f2 !important; }
+					.force-light-pdf .text-gray-900,
+					.force-light-pdf .text-gray-800,
+					.force-light-pdf .text-gray-700,
+					.force-light-pdf .text-gray-600,
+					.force-light-pdf .text-gray-500,
+					.force-light-pdf .text-gray-400 { color: #111827 !important; }
+					.force-light-pdf .text-emerald-600,
+					.force-light-pdf .text-emerald-700,
+					.force-light-pdf .text-emerald-800 { color: #059669 !important; }
+					.force-light-pdf .text-red-600,
+					.force-light-pdf .text-red-700,
+					.force-light-pdf .text-red-800 { color: #dc2626 !important; }
+					.force-light-pdf .text-blue-600,
+					.force-light-pdf .text-blue-700,
+					.force-light-pdf .text-blue-500,
+					.force-light-pdf .text-blue-400 { color: #2563eb !important; }
+					.force-light-pdf .text-amber-600 { color: #d97706 !important; }
+					.force-light-pdf .text-white { color: #ffffff !important; }
+					.force-light-pdf .border-white\\/10,
+					.force-light-pdf .border-white\\/20 { border-color: #e5e7eb !important; }
+					.force-light-pdf .shadow-xl,
+					.force-light-pdf .shadow-2xl,
+					.force-light-pdf .shadow-sm,
+					.force-light-pdf .shadow-inner { box-shadow: none !important; }
+				`;
+				document.head.appendChild(forceLightStyle);
+				payslipRef.classList.add('force-light-pdf');
+			}
+
 			const { toPng } = await import('html-to-image');
 			const { jsPDF } = await import('jspdf');
 
@@ -91,6 +137,13 @@
 		} catch (err) {
 			console.error('Failed to generate PDF:', err);
 		} finally {
+			// Restore dark mode state
+			if (payslipRef) {
+				payslipRef.classList.remove('force-light-pdf');
+			}
+			if (forceLightStyle) {
+				forceLightStyle.remove();
+			}
 			isDownloading = false;
 		}
 	}
@@ -133,7 +186,7 @@
 
 <div class="w-full max-w-full mx-auto px-4 xl:px-8">
 	<button onclick={() => history.back()}
-		class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition mb-5 cursor-pointer group">
+		class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition mb-5 cursor-pointer group no-print">
 		<svg class="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 			<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
 		</svg>
@@ -154,13 +207,13 @@
 			<p class="text-sm text-gray-500">{errorMessage}</p>
 		</div>
 	{:else if payslip}
-		<!-- ═══════ PAYSLIP CONTENT FOR PDF ═══════ -->
+		<!-- ===== PAYSLIP CONTENT FOR PDF / PRINT ===== -->
 		<div bind:this={payslipRef} class="print-area">
-			<!-- ═══════ HEADER ═══════ -->
+			<!-- ===== HEADER ===== -->
 			<div class="border-b border-gray-200 px-6 py-5 bg-gradient-to-r from-gray-50 to-white">
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-4">
-						<div class="w-12 h-12 rounded-xl bg-[#1A56DB] flex items-center justify-center text-white shadow-sm">
+						<div class="w-12 h-12 rounded-xl bg-[#1A56DB] flex items-center justify-center text-white shadow-sm no-print">
 							<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 0 4.5 6h.75m13.5 0h.75a.75.75 0 0 0 .75-.75V4.5M12 3v18m-9-4.5h18" />
 							</svg>
@@ -170,12 +223,12 @@
 							<p class="text-sm text-gray-500 mt-0.5">{payslip.period_name}</p>
 						</div>
 					</div>
-					<div class="flex items-center gap-3">
+					<div class="flex items-center gap-3 no-print">
 						<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ring-1 ring-inset {statusBadge(payslip.period_status)}">
 							<span class="w-1.5 h-1.5 rounded-full bg-current"></span>
 							{statusLabel(payslip.period_status)}
 						</span>					<button onclick={() => window.print()}
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition cursor-pointer">
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition cursor-pointer">
 							<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659" />
 							</svg>
@@ -197,18 +250,18 @@
 			</div>
 
 			<div class="p-6 space-y-6">
-				<!-- ═══════ EMPLOYEE INFO CARD ═══════ -->
+				<!-- ===== EMPLOYEE INFO CARD ===== -->
 				<div class="bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 px-5 py-4">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-3">
-							<div class="w-10 h-10 rounded-full bg-[#1A56DB]/10 flex items-center justify-center text-[#1A56DB]">
+							<div class="w-10 h-10 rounded-full bg-[#1A56DB]/10 flex items-center justify-center text-[#1A56DB] no-print">
 								<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
 								</svg>
 							</div>
 							<div>
 								<p class="text-sm font-semibold text-gray-900">{payslip.employee_name}</p>
-								<p class="text-xs text-gray-500">{payslip.department_name} • {payslip.position_name}</p>
+								<p class="text-xs text-gray-500">{payslip.department_name} &bull; {payslip.position_name}</p>
 							</div>
 						</div>
 						<div class="text-right">
@@ -223,13 +276,13 @@
 					</div>
 				</div>
 
-				<!-- ═══════ TWO-COLUMN: INCOME vs DEDUCTIONS ═══════ -->
+				<!-- ===== TWO-COLUMN: INCOME vs DEDUCTIONS ===== -->
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 					<!-- LEFT: INCOME -->
 					<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
 						<div class="bg-emerald-50/80 border-b border-emerald-100 px-4 py-3">
 							<div class="flex items-center gap-2">
-								<div class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-white">
+								<div class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-white no-print">
 									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 									</svg>
@@ -254,7 +307,7 @@
 										<span class="text-sm text-gray-600">Upah Harian</span>
 										<div class="flex items-center gap-1.5 text-xs text-gray-400">
 											<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 font-medium text-gray-500">{formatCurrency(dailyRate)}</span>
-											<span class="text-gray-300">×</span>
+											<span class="text-gray-300">&times;</span>
 											<span class="font-medium text-gray-500">{payslip.total_days_worked} hari</span>
 											<span class="text-gray-300">=</span>
 											<span class="font-semibold text-gray-600">{formatCurrency(payslip.daily_wage)}</span>
@@ -265,7 +318,7 @@
 							{/if}
 
 							<!-- Allowances -->
-							{#each payslip.allowances || [] as allowance}
+							{#each payslip.allowances || [] as allowance (allowance)}
 								<div class="flex justify-between items-center py-2.5">
 									<span class="text-sm text-gray-600">{allowance.name}</span>
 									<span class="text-sm font-medium text-emerald-600 tabular-nums">+ {formatCurrency(allowance.amount)}</span>
@@ -278,7 +331,7 @@
 								<div class="flex justify-between items-center py-2.5">
 									<div class="flex flex-col">
 										<span class="text-sm text-gray-600">Lembur</span>
-										<span class="text-xs text-gray-400 mt-0.5">{formatCurrency(overtimeRate)}/jam × {payslip.overtime_hours} jam</span>
+										<span class="text-xs text-gray-400 mt-0.5">{formatCurrency(overtimeRate)}/jam &times; {payslip.overtime_hours} jam</span>
 									</div>
 									<span class="text-sm font-medium text-amber-600 tabular-nums">+ {formatCurrency(payslip.overtime_pay)}</span>
 								</div>
@@ -312,7 +365,7 @@
 					<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
 						<div class="bg-red-50/80 border-b border-red-100 px-4 py-3">
 							<div class="flex items-center gap-2">
-								<div class="w-7 h-7 rounded-lg bg-red-500 flex items-center justify-center text-white">
+								<div class="w-7 h-7 rounded-lg bg-red-500 flex items-center justify-center text-white no-print">
 									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
 									</svg>
@@ -372,7 +425,7 @@
 								d.name !== 'PPh 21' && 
 								d.name !== 'Pinjaman' &&
 								d.name !== 'Lain-lain'
-							) as deduction}
+							) as deduction (deduction.name)}
 								<div class="flex justify-between items-center py-2.5">
 									<span class="text-sm text-gray-600">{deduction.name}</span>
 									<span class="text-sm font-medium text-red-600 tabular-nums">{formatCurrency(deduction.amount)}</span>
@@ -399,7 +452,7 @@
 					</div>
 				</div>
 
-				<!-- ═══════ TAKE HOME PAY ═══════ -->
+				<!-- ===== TAKE HOME PAY ===== -->
 				<div class="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between shadow-xl shadow-indigo-900/20 text-white gap-6 group hover:shadow-2xl hover:shadow-indigo-900/30 transition-all duration-300 border border-white/10">
 					<!-- decorative shapes -->
 					<div class="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full bg-white/10 blur-3xl group-hover:bg-white/20 transition-all duration-500"></div>
@@ -422,7 +475,7 @@
 								<span>Kotor:</span>
 								<span>{formatCurrency(payslip.gross_salary)}</span>
 							</div>
-							<span class="hidden sm:inline text-white/40 px-1">•</span>
+							<span class="hidden sm:inline text-white/40 px-1">&bull;</span>
 							<div class="flex items-center gap-1.5 opacity-90">
 								<span>Potongan:</span>
 								<span class="text-red-200">-{formatCurrency(payslip.total_deductions)}</span>
@@ -431,12 +484,12 @@
 					</div>
 					
 					<div class="relative z-10 hidden md:flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-						<span class="text-3xl drop-shadow-sm">💰</span>
+						<span class="text-3xl drop-shadow-sm">&#x1F4B0;</span>
 					</div>
 				</div>
 
 
-				<!-- ═══════ NOTES ═══════ -->
+				<!-- ===== NOTES ===== -->
 				{#if payslip.notes}
 					<div class="bg-gray-50 rounded-xl border border-gray-200 px-5 py-3.5">
 						<div class="flex items-start gap-2">
@@ -453,194 +506,132 @@
 </div>
 
 
-
 <style>
 	@media print {
 		@page {
 			size: A4;
-			margin: 15mm 15mm 15mm 15mm;
+			margin: 0;
 		}
 
-		/* Sembunyiin semua elemen, tampilkan hanya area payslip */
-		:global(body *) {
-			visibility: hidden !important;
-		}
-		.print-area, .print-area * {
-			visibility: visible !important;
-		}
-		.print-area {
-			position: absolute !important;
-			left: 0 !important;
-			top: 0 !important;
-			width: 100% !important;
-			max-width: 100% !important;
-			padding: 0 !important;
-			margin: 0 !important;
+		/* Reset body for clean print */
+		:global(body) {
+			background: #ffffff !important;
+			overflow: hidden !important;
+			-webkit-print-color-adjust: exact !important;
+			print-color-adjust: exact !important;
 		}
 
-		/* Sembunyiin tombol */
-		button, .cursor-pointer, .no-print {
+		/* Hide sidebar, topbar, bottom nav, and other chrome */
+		:global(aside),
+		:global(header),
+		:global(.bottom-tab-bar),
+		:global(.BottomTabBar),
+		:global(nav),
+		:global(.no-print),
+		:global(button),
+		button, .no-print {
 			display: none !important;
 		}
 
-		/* Hilangin shadow & rounding untuk cetak */
-		.shadow-sm, .shadow-2xl, .shadow {
+		/* Position print-area to fill the entire page */
+		:global(.print-area) {
+			position: fixed !important;
+			top: 0 !important;
+			left: 0 !important;
+			width: 100% !important;
+			height: auto !important;
+			min-height: 100vh !important;
+			z-index: 99999 !important;
+			background: #ffffff !important;
+			max-width: 100% !important;
+			padding: 12mm !important;
+			margin: 0 !important;
+			overflow: visible !important;
+			-webkit-print-color-adjust: exact !important;
+			print-color-adjust: exact !important;
+		}
+
+		/* Remove ALL shadows, filters, rounded corners */
+		:global(*),
+		* {
 			box-shadow: none !important;
+			filter: none !important;
+			-webkit-filter: none !important;
+			backdrop-filter: none !important;
+			-webkit-backdrop-filter: none !important;
 		}
 		.rounded-xl, .rounded-lg, .rounded-2xl, .rounded-full {
 			border-radius: 0 !important;
 		}
 
-		/* Border tetep tipis */
-		.border {
-			border-width: 1px !important;
+		/* Force ALL text to dark readable */
+		:global(.print-area),
+		:global(.print-area *),
+		.print-area, .print-area * {
+			color: #111827 !important;
+			background: transparent !important;
 		}
 
-		/* Pastiin teks hitam solid biar jelas */
-		.text-gray-900, .text-gray-800, .text-gray-700, .text-gray-600, .text-gray-500, .text-gray-400 {
-			color: #000 !important;
-		}
-		.text-emerald-600, .text-emerald-700, .text-emerald-800 {
-			color: #059669 !important;
-		}
-		.text-red-600, .text-red-700, .text-red-800 {
-			color: #dc2626 !important;
-		}
-		.text-blue-600, .text-blue-700, .text-blue-500, .text-blue-400 {
-			color: #2563eb !important;
-		}
-		.text-amber-600 {
-			color: #d97706 !important;
-		}
+		/* Force ALL backgrounds to light */
+		[class*="bg-white"] { background: #ffffff !important; }
+		[class*="bg-gray"] { background: #f9fafb !important; }
+		[class*="bg-emerald"] { background: #ecfdf5 !important; }
+		[class*="bg-red"] { background: #fef2f2 !important; }
+		[class*="bg-gradient"] { background: #f9fafb !important; }
+		[class*="bg-blue"] { background: #eff6ff !important; }
+		[class*="bg-purple"] { background: #f5f3ff !important; }
 
-		/* Gradient jadi solid biar gak error print */
-		.bg-gradient-to-r {
-			background: #f9fafb !important;
-		}
-
-		/* Background cards */
-		.bg-emerald-50\/80 {
-			background: #ecfdf5 !important;
-		}
-		.bg-red-50\/80 {
-			background: #fef2f2 !important;
-		}
-		.bg-emerald-50\/50 {
-			background: #ecfdf5 !important;
-		}
-		.bg-red-50\/50 {
-			background: #fef2f2 !important;
-		}
-		.bg-blue-50, .bg-gradient-to-r.from-blue-50 {
-			background: #eff6ff !important;
-		}
-		.bg-gray-50 {
-			background: #f9fafb !important;
-		}
-
-		/* Pastiin layout dua kolom */
-		.grid.grid-cols-1.lg\:grid-cols-2 {
-			display: grid !important;
-			grid-template-columns: 1fr 1fr !important;
-			gap: 12px !important;
-		}
-
-		/* Ukuran font pas buat cetak */
-		.text-sm {
-			font-size: 11px !important;
-		}
-		.text-xs {
-			font-size: 9px !important;
-		}
-		.text-xl {
-			font-size: 18px !important;
-		}
-		.text-3xl {
-			font-size: 22px !important;
-		}
-		.text-base {
-			font-size: 13px !important;
-		}
-
-		/* Padding/gap lebih hemat */
-		.space-y-6 {
-			margin-top: 0 !important;
-		}
-		.p-6 {
-			padding: 16px !important;
-		}
-		.px-6 {
-			padding-left: 16px !important;
-			padding-right: 16px !important;
-		}
-		.py-5 {
-			padding-top: 12px !important;
-			padding-bottom: 12px !important;
-		}
-		.px-5 {
-			padding-left: 16px !important;
-			padding-right: 16px !important;
-		}
-		.py-4 {
-			padding-top: 10px !important;
-			padding-bottom: 10px !important;
-		}
-		.px-4 {
-			padding-left: 12px !important;
-			padding-right: 12px !important;
-		}
-		.py-3 {
-			padding-top: 8px !important;
-			padding-bottom: 8px !important;
-		}
-		.py-2\.5 {
-			padding-top: 6px !important;
-			padding-bottom: 6px !important;
-		}
-		.gap-6 {
-			gap: 12px !important;
-		}
-		.gap-4 {
-			gap: 10px !important;
-		}
-		.gap-3 {
-			gap: 8px !important;
-		}
-		.gap-2 {
-			gap: 6px !important;
-		}
-		.gap-1\.5 {
-			gap: 4px !important;
-		}
-
-		/* SVG ikon disembunyiin */
-		svg {
-			display: none !important;
-		}
-
-		/* W-10, h-10 dll gak perlu di print */
-		.w-12, .h-12, .w-10, .h-10, .w-7, .h-7 {
-			display: none !important;
-		}
-
-		/* Fix border untuk print */
-		.border-gray-200 {
+		/* Take-home-pay: solid white */
+		[class*="from-blue-"][class*="via-indigo-"][class*="to-purple-"] {
+			background: #ffffff !important;
 			border-color: #e5e7eb !important;
 		}
-		.border-emerald-200 {
-			border-color: #a7f3d0 !important;
+
+		/* Preserve semantic colors */
+		[class*="text-emerald"] { color: #059669 !important; }
+		[class*="text-red"] { color: #dc2626 !important; }
+		[class*="text-blue"] { color: #2563eb !important; }
+		[class*="text-amber"] { color: #d97706 !important; }
+
+		/* Hide decorative elements */
+		svg { display: none !important; }
+		[class*="blur-"] { display: none !important; }
+		[class*="w-12"], [class*="h-12"], [class*="w-10"], [class*="h-10"],
+		[class*="w-7"], [class*="h-7"], [class*="w-16"], [class*="h-16"] { display: none !important; }
+
+		/* Two-column layout */
+		[class*="grid-cols-1"][class*="lg:grid-cols-2"] {
+			display: grid !important;
+			grid-template-columns: 1fr 1fr !important;
+			gap: 8px !important;
 		}
-		.border-red-200 {
-			border-color: #fecaca !important;
-		}
-		.border-blue-200 {
-			border-color: #bfdbfe !important;
-		}
-		.border-emerald-100 {
-			border-color: #d1fae5 !important;
-		}
-		.border-red-100 {
-			border-color: #fee2e2 !important;
-		}
+
+		/* Compact font sizes */
+		.text-sm { font-size: 10px !important; }
+		.text-xs { font-size: 9px !important; }
+		.text-xl { font-size: 14px !important; }
+		[class*="text-4xl"], [class*="text-5xl"] { font-size: 16px !important; }
+		.text-3xl { font-size: 14px !important; }
+
+		/* Compact spacing */
+		.p-6 { padding: 8px !important; }
+		.px-6 { padding-left: 8px !important; padding-right: 8px !important; }
+		.py-5 { padding-top: 6px !important; padding-bottom: 6px !important; }
+		.px-5 { padding-left: 8px !important; padding-right: 8px !important; }
+		.py-4 { padding-top: 5px !important; padding-bottom: 5px !important; }
+		.px-4 { padding-left: 6px !important; padding-right: 6px !important; }
+		.py-3 { padding-top: 4px !important; padding-bottom: 4px !important; }
+		[class*="py-2"][class*="5"] { padding-top: 3px !important; padding-bottom: 3px !important; }
+		.gap-6 { gap: 6px !important; }
+		.gap-4 { gap: 5px !important; }
+		.gap-3 { gap: 4px !important; }
+		.gap-2 { gap: 3px !important; }
+
+		/* Border colors */
+		.border { border-width: 1px !important; }
+		[class*="border-gray"] { border-color: #d1d5db !important; }
+		[class*="border-emerald"] { border-color: #a7f3d0 !important; }
+		[class*="border-red"] { border-color: #fecaca !important; }
+		[class*="border-blue"] { border-color: #bfdbfe !important; }
 	}
 </style>

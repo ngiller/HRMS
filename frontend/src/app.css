@@ -338,3 +338,8 @@ html.dark {
 	border-color: rgb(55 65 81);
 	color: rgb(243 244 246);
 }
+
+/* Fix text overlapping with dropdown arrows globally */
+select {
+	padding-right: 2.5rem !important;
+}

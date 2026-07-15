@@ -6,9 +6,9 @@
   import { auth, notifications, approvals } from "$lib/api.js";
   import { onMount } from "svelte";
   import { connectSSE, disconnectSSE } from "$lib/sse.js";
-	import { slide, fade } from "svelte/transition";
+	import { slide } from "svelte/transition";
 	import { fly } from "svelte/transition";
-  import { getAccessibleMenus } from "$lib/permissions.js";
+  import { getAccessibleMenus, hasPermission, SIDEBAR_MENUS } from "$lib/permissions.js";
   import PWAInstallPrompt from "$lib/components/PWAInstallPrompt.svelte";
   import BottomTabBar from "$lib/components/BottomTabBar.svelte";
 
@@ -48,16 +48,42 @@
   // Auth guard: redirect to login if not authenticated
   $effect(() => {
     if (!auth.isAuthenticated()) {
+// eslint-disable-next-line svelte/no-navigation-without-resolve
       goto("/login", { replaceState: true });
     }
   });
 
-  let user = $state(auth.getUser() as UserData | null);
-
-  // Re-sync user data (bisa berubah setelah login dari tab lain)
+  // Route guard: prevent accessing unauthorized pages based on roles
   $effect(() => {
-    user = auth.getUser() as UserData | null;
+    if (!auth.isAuthenticated()) return;
+    const pathname = $page.url.pathname;
+    
+    // Allow payslip detail paths ( /penggajian/payslip/... ) if user has payslip.read
+    // Karena route guard bisa salah match ke module 'payroll' (parent path) yang employee tidak punya
+    if (pathname.startsWith('/penggajian/payslip/') && hasPermission('payslip', 'read')) {
+      return; // Payslip detail page already handles its own permission checks
+    }
+    
+    // Flatten SIDEBAR_MENUS to get all route definitions
+    const allItems = SIDEBAR_MENUS.flatMap(group => group.items);
+    
+    // Find the item matching the current path (longest matching path prefix)
+    const matchedItem = allItems
+      .filter(item => item.path && (pathname === item.path || pathname.startsWith(item.path + '/')))
+      .sort((a, b) => b.path.length - a.path.length)[0];
+      
+    if (matchedItem && matchedItem.module) {
+      if (!hasPermission(matchedItem.module, 'read')) {
+        console.warn(`Access denied for ${pathname} (Requires read on ${matchedItem.module})`);
+        // eslint-disable-next-line svelte/no-navigation-without-resolve
+        goto("/dashboard", { replaceState: true });
+      }
+    }
   });
+
+  // Using async goto is safe in $effect because Svelte handles it
+
+  let user = $derived(auth.getUser() as UserData | null);
 
   function getInitials(name: string): string {
     if (!name) return "NA";
@@ -66,11 +92,13 @@
 
   async function handleLogout() {
     await auth.logout();
-    goto("/login", { replaceState: true });
+// eslint-disable-next-line svelte/no-navigation-without-resolve
+    await goto("/login", { replaceState: true });
   }
 
   // Nav items from permissions helper (filtered by user role)
-  let baseNavItems = $derived(getAccessibleMenus());
+  let sessionTrigger = $state(0);
+  let baseNavItems = $derived(sessionTrigger >= 0 ? getAccessibleMenus() : []);
   
   let navItems = $derived.by(() => {
     if (!menuSearchQuery.trim()) return baseNavItems;
@@ -138,7 +166,7 @@
     if (auth.isAuthenticated()) {
       const token = auth.getAccessToken();
       if (token) {
-        connectSSE(token, {
+        connectSSE(() => auth.getAccessToken() || '', {
           onEvent: (data) => {
             if (data && data.type === 'approval_update') {
               handleSSEApprovalEvent();
@@ -150,11 +178,29 @@
       }
     }
 
+    const handleSessionUpdate = () => {
+      sessionTrigger++;
+    };
+
+    const handleSSERoleUpdate = async (e: any) => {
+      const data = e.detail?.data;
+      const currentUser = auth.getUser() as any;
+      if (currentUser && (data?.slug === currentUser.role_slug || data?.role_id === currentUser.role_id)) {
+        console.log('[SSE] Role updated, refreshing session...');
+        await auth.refreshSession();
+      }
+    };
+
+    window.addEventListener('auth:session_update', handleSessionUpdate);
+    window.addEventListener('sse:role_update', handleSSERoleUpdate);
+
     // Fallback: poll pending approvals every 30s
     const interval = setInterval(fetchPendingCount, 30000);
     return () => {
       clearInterval(interval);
       disconnectSSE();
+      window.removeEventListener('auth:session_update', handleSessionUpdate);
+      window.removeEventListener('sse:role_update', handleSSERoleUpdate);
     };
   });
 
@@ -177,11 +223,13 @@
   // Sidebar accordions state
   let openGroups = $state<Record<string, boolean>>({
     "Utama": true,
-    "Kepegawaian": false,
-    "Waktu & Kehadiran": false,
+    "Waktu & Kehadiran": true,
     "Kompensasi & Benefit": false,
     "Informasi": false,
-    "Pengaturan & Master Data": false
+    "Pengembangan & Disiplin": false,
+    "Kepegawaian": false,
+    "Master Data": false,
+    "Pengaturan": false
   });
 
   function toggleGroup(group: string) {
@@ -233,6 +281,8 @@
     },
   ];
 </script>
+
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 
 <svelte:window bind:innerWidth />
 
@@ -286,7 +336,7 @@
 
     <!-- Nav Items -->
     <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-      {#each navItems as group}
+      {#each navItems as group (group)}
         <div class="mb-2">
           {#if group.group}
             <button 
@@ -308,7 +358,8 @@
           
           {#if !group.group || isGroupOpen(group.group)}
           <div class="space-y-1 mt-1" transition:slide={{ duration: 200 }}>
-            {#each group.items as item}
+            {#each group.items as item (item)}
+              
               <a
                 href={item.path}
                 class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group relative {isActive(
@@ -356,6 +407,7 @@
 
     <!-- Bottom section -->
     <div class="p-3 border-t border-gray-200 dark:border-gray-800">
+      
       <a
         href="/dashboard/pengaturan"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition"
@@ -469,14 +521,14 @@
                 {#if recentNotifs.length === 0}
                   <div class="p-6 text-center text-gray-500 dark:text-gray-400 text-sm">Belum ada notifikasi baru.</div>
                 {:else}
-                  {#each recentNotifs as notif}
-                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  {#each recentNotifs as notif (notif)}
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    
                     <div 
-                      onclick={() => { 
+                      onclick={async () => { 
                         if (!notif.is_read) markNotifAsRead(notif.id);
                         notifDropdownOpen = false;
-                        goto('/notifikasi');
+                        await goto('/notifikasi');
                       }}
                       class="p-3 flex gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition cursor-pointer relative {notif.is_read ? 'opacity-75' : 'bg-blue-50/20 dark:bg-blue-900/10'}"
                     >
@@ -498,6 +550,7 @@
               </div>
               
               <div class="p-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                
                 <a 
                   href="/notifikasi" 
                   onclick={() => { notifDropdownOpen = false; }}
@@ -565,7 +618,7 @@
               tabindex="-1"
               class="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 py-1.5 z-50"
             >
-              {#each menuItems as item}
+              {#each menuItems as item (item)}
                 {#if item.label === "Logout"}
                   <button
                     onclick={handleLogout}
@@ -589,6 +642,7 @@
                     {item.label}
                   </button>
                 {:else}
+                  
                   <a
                     href={item.href}
                     class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
@@ -627,7 +681,6 @@
   </div>
 </div>
 {:else}
-  <!-- ===================== Mobile Layout (Talenta Style) ===================== -->	  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
   class="md:hidden min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col"
@@ -664,8 +717,9 @@
         </button>
 
         <!-- Notifications -->
+        
         <button
-          onclick={(e) => { e.stopPropagation(); goto('/notifikasi'); }}
+          onclick={async (e) => { e.stopPropagation(); await goto('/notifikasi'); }}
           class="relative p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition-all duration-150 cursor-pointer"
           aria-label="Notifikasi"
         >
@@ -702,7 +756,7 @@
                 <div class="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.full_name || "Pengguna"}</div>
                 <div class="text-[10px] text-gray-400 dark:text-gray-500 truncate">{user?.position_name || user?.role_name || ""}</div>
               </div>
-              {#each menuItems as item}
+              {#each menuItems as item (item)}
                 {#if item.label === "Logout"}
                   <button
                     onclick={handleLogout}
@@ -715,6 +769,7 @@
                     {item.label}
                   </button>
                 {:else}
+                  
                   <a
                     href={item.href}
                     class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"

@@ -240,7 +240,7 @@
 			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
 				<div class="flex flex-wrap items-center gap-2">
 					<button onclick={() => { typeFilter = ''; page = 1; load(); }} class="px-3.5 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer {!typeFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}">Semua</button>
-					{#each Object.entries(announcementTypes) as [key, label]}
+					{#each Object.entries(announcementTypes) as [key, label] (key)}
 						<button onclick={() => { typeFilter = key; page = 1; load(); }} class="px-3.5 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer {typeFilter === key ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}">{label}</button>
 					{/each}
 				</div>
@@ -256,7 +256,7 @@
 			<PullToRefresh onRefresh={load}>
 			{#if isLoading}
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					{#each [1, 2, 3, 4] as _}
+					{#each [1, 2, 3, 4] as _ (_)}
 						<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 space-y-4 animate-pulse">
 							<div class="flex justify-between items-center"><div class="h-5 bg-gray-100 dark:bg-gray-850 rounded w-16"></div><div class="w-4 h-4 bg-gray-100 dark:bg-gray-850 rounded-full"></div></div>
 							<div class="h-6 bg-gray-100 dark:bg-gray-850 rounded w-3/4"></div>
@@ -275,7 +275,7 @@
 				</div>
 			{:else}
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					{#each items as item}
+					{#each items as item (item)}
 						{@const isCurrentDetail = detailId === item.id && showDetail}
 						{@const borderStyle = item.is_pinned
 							? 'border-amber-400 dark:border-amber-500/60 bg-amber-50/10 dark:bg-amber-950/5 ring-1 ring-amber-400/30'
@@ -347,7 +347,7 @@
 					<div class="text-xs text-gray-400 dark:text-gray-500 text-center sm:text-left">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex flex-wrap items-center justify-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-semibold rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}">{pageNum}</button>
@@ -380,7 +380,7 @@
 						<div>
 							<label for="ann-type" class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Tipe</label>
 							<select id="ann-type" bind:value={form.announcement_type} class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
-								{#each Object.entries(announcementTypes) as [key, label]}
+								{#each Object.entries(announcementTypes) as [key, label] (key)}
 									<option value={key}>{label}</option>
 								{/each}
 							</select>
@@ -441,7 +441,7 @@
 								
 								<div class="flex flex-wrap items-center gap-x-6 gap-y-3 mb-10 pb-6 border-b border-gray-100 dark:border-gray-800 text-sm text-gray-500 dark:text-gray-400">
 									<div class="flex items-center gap-2">
-										<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-700 flex items-center justify-center font-bold text-xs ring-1 ring-blue-200">
+										<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs ring-1 ring-blue-200 dark:ring-blue-800/50">
 											{getInitials(detailData.created_by_name || 'Admin')}
 										</div>
 										<span class="font-medium text-gray-900 dark:text-gray-200">{detailData.created_by_name || '-'}</span>
@@ -462,7 +462,7 @@
 									</div>
 								</div>
 
-								<div class="prose prose-blue max-w-none text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-loose text-[15px] md:text-base">
+								<div class="prose prose-blue dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-loose text-[15px] md:text-base">
 									{detailData.content}
 								</div>
 							</div>

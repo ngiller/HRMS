@@ -6,6 +6,7 @@ import MobileCard from '$lib/components/MobileCard.svelte';
 import EmptyState from '$lib/components/EmptyState.svelte';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
+	import { hasPermission } from '$lib/permissions.js';
 
 	interface ReprimandItem {
 		id: string; employee_name: string; reprimand_type: string; title: string;
@@ -20,6 +21,8 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	let currentPage = $state(1);
 	let perPage = $state(25);
 	let isLoading = $state(true);
+	let searchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
 	let statusFilter = $state('');
 	let errorMessage = $state('');
 
@@ -29,6 +32,21 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	let employeeOptions = $state<EmployeeOption[]>([]);
 
 	let showDetail = $state(false);
+	let filteredData = $derived.by(() => {
+		if (!searchQuery.trim()) return data;
+		const q = searchQuery.toLowerCase();
+		return data.filter(i =>
+			i.employee_name?.toLowerCase().includes(q) ||
+			i.title?.toLowerCase().includes(q) ||
+			i.reprimand_type?.toLowerCase().includes(q)
+		);
+	});
+
+	function onSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { searchQuery = target.value; }, 400);
+	}
 	let detailItem = $state<ReprimandItem | null>(null);
 	let detailLoading = $state(false);
 
@@ -37,7 +55,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	onMount(() => { loadData(); loadEmployees(); });
 
 	async function loadEmployees() {
-		try { const res = await employees.list(1, 100); if (res?.success) employeeOptions = res.data; } catch {}
+		try { const res = await employees.list(1, 100); if (res?.success) employeeOptions = res.data; } catch { /* noop */ }
 	}
 
 	async function loadData() {
@@ -122,7 +140,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			<h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Surat Peringatan</h1>
 			<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Kelola surat peringatan karyawan (SP1/SP2/SP3)</p>
 		</div>
-		{#if !showForm}
+		{#if !showForm && hasPermission('reprimand', 'create')}
 			<button onclick={openForm} class="px-4 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition cursor-pointer flex items-center gap-2">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 				Terbitkan SP
@@ -145,7 +163,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						<label for="sp-employee" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Karyawan <span class="text-red-500">*</span></label>
 						<select id="sp-employee" bind:value={createForm.employee_id} required class="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-[#1A56DB]/20">
 							<option value="">Pilih Karyawan</option>
-							{#each employeeOptions as emp}<option value={emp.id}>{emp.full_name}</option>{/each}
+							{#each employeeOptions as emp (emp)}<option value={emp.id}>{emp.full_name}</option>{/each}
 						</select>
 					</div>
 					<div>
@@ -207,7 +225,9 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Informasi SP</h3>
 							<div class="space-y-3">
 								<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.employee_name}</p></div>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								<div><span class="text-xs text-gray-400">Tipe</span><p>{@html getTypeBadge(item.reprimand_type)}</p></div>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								<div><span class="text-xs text-gray-400">Status</span><p>{@html getStatusBadge(item.status)}</p></div>
 								<div><span class="text-xs text-gray-400">Judul</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.title}</p></div>
 								<div><span class="text-xs text-gray-400">Tanggal Diterbitkan</span><p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.issued_date)}</p></div>
@@ -234,7 +254,12 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			</div>
 		</div>
 	{:else}
-		<div class="flex gap-3 mb-4">
+		<div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+		<div class="relative flex-1 max-w-md">
+			<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+			<input type="search" value={searchQuery} placeholder="Cari surat peringatan..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+		</div>
+				<div class="flex gap-3">
 			<select bind:value={statusFilter} onchange={() => { currentPage = 1; loadData(); }}
 				class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
 				<option value="">Semua Status</option>
@@ -242,6 +267,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				<option value="acknowledged">Diakui</option>
 				<option value="expired">Kadaluarsa</option>
 			</select>
+			</div>
 		</div>
 		{#if errorMessage}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg px-4 py-3 mb-4">{errorMessage}</div>{/if}
 		<div class="hidden md:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -263,11 +289,13 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						{:else if data.length === 0}
 							<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada surat peringatan</td></tr>
 						{:else}
-							{#each data as item}
+							{#each filteredData as item (item)}
 								<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition {detailItem?.id === item.id && showDetail ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}">
 									<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.employee_name}</td>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<td class="px-4 py-3">{@html getTypeBadge(item.reprimand_type)}</td>
 									<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{item.title}</td>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<td class="px-4 py-3">{@html getStatusBadge(item.status)}</td>
 									<td class="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{new Date(item.created_at).toLocaleDateString('id-ID')}</td>
 									<td class="px-4 py-3"><button onclick={() => loadDetail(item.id)} class="text-xs text-[#1A56DB] hover:underline font-medium cursor-pointer">Detail</button></td>
@@ -288,7 +316,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						description="Belum ada surat peringatan yang diterbitkan."
 					/>
 				{:else}
-					{#each data as item}
+					{#each filteredData as item (item)}
 						<MobileCard
 							title={item.employee_name}
 							subtitle={item.title}
@@ -297,17 +325,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							badges={[{ label: typeLabels[item.reprimand_type] || item.reprimand_type, color: typeColors[item.reprimand_type] || 'bg-gray-100 text-gray-600' }]}
 							onclick={() => loadDetail(item.id)}
 						>
-							{#snippet children()}
-								<div class="flex items-center justify-between">
-									<div class="flex items-center gap-2">
-										{@html getStatusBadge(item.status)}
-										<span class="text-xs text-gray-400 dark:text-gray-500">{formatDate(item.created_at)}</span>
-									</div>
-									<svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-										<path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-									</svg>
-								</div>
-							{/snippet}
 						</MobileCard>
 					{/each}
 				{/if}

@@ -1,9 +1,10 @@
 <script lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { attendance, employeesApi, auth } from '$lib/api.js';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
-	import { hasPermission } from '$lib/permissions';
+	import config from '$lib/config.js';
+	import { hasPermission } from '$lib/permissions.js';
 
 	// Camera detection config
 	const DETECTION_INTERVAL_MS = 300;
@@ -24,6 +25,39 @@
 	let showCheckInConfirm = $state(false);
 	let showCheckOutConfirm = $state(false);
 
+	// Permission status
+	let camGranted = $state<boolean | null>(null);
+	let locGranted = $state<boolean | null>(null);
+	let checkingPerms = $state(true);
+
+	onMount(async () => {
+		checkPermissions();
+		await loadFaceDetectionScript();
+		loadTodayStatus();
+		loadHistory();
+	});
+
+	async function checkPermissions() {
+		checkingPerms = true;
+		// Check camera
+		try {
+			const camResult = await navigator.permissions.query({ name: 'camera' as PermissionName });
+			camGranted = camResult.state === 'granted';
+			camResult.onchange = () => { camGranted = camResult.state === 'granted'; };
+		} catch {
+			camGranted = null;
+		}
+		// Check location
+		try {
+			const locResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+			locGranted = locResult.state === 'granted';
+			locResult.onchange = () => { locGranted = locResult.state === 'granted'; };
+		} catch {
+			locGranted = null;
+		}
+		checkingPerms = false;
+	}
+
 	// Camera
 	let videoEl = $state<HTMLVideoElement>();
 	let canvasEl = $state<HTMLCanvasElement>();
@@ -38,17 +72,23 @@
 	// Check-in/out result
 	let checkResult = $state<{ success: boolean; message: string } | null>(null);
 
+	function openDetail(item: any) {
+		if (item?.id) {
+			goto(`/absensi/${item.id}`);
+		}
+	}
+
+	function getPhotoUrl(url: string | null | undefined): string {
+		if (!url) return '';
+		if (url.startsWith('http')) return url;
+		return `${config.API_BASE_URL}${url}`;
+	}
+
 	// Face registration
 	let showFaceRegistration = $state(false);
 	let faceRegLoading = $state(false);
 	let faceRegError = $state('');
 	let faceRegSuccess = $state(false);
-
-	onMount(async () => {
-		await loadFaceDetectionScript();
-		loadTodayStatus();
-		loadHistory();
-	});
 
 	async function loadTodayStatus() {
 		loadingStatus = true;
@@ -67,8 +107,8 @@
 		try {
 			const res = await attendance.myHistory(pageNum, perPage);
 			if (res?.success) {
-				items = res.data?.records || [];
-				total = res.data?.total || 0;
+				items = res.data || [];
+				total = (res.meta as any)?.total || 0;
 			}
 		} catch {
 			// Silent
@@ -187,6 +227,34 @@
 		showCheckOutConfirm = false;
 	}
 
+	
+	function getCoordinates(): Promise<{ lat: number; lng: number } | null> {
+		return new Promise((resolve) => {
+			if (typeof window === 'undefined' || !navigator.geolocation) {
+				console.warn('Geolocation not supported');
+				resolve(null);
+				return;
+			}
+			navigator.geolocation.getCurrentPosition(
+				(position) => {
+					resolve({
+						lat: position.coords.latitude,
+						lng: position.coords.longitude
+					});
+				},
+				(error) => {
+					console.warn('Geolocation error:', error);
+					resolve(null);
+				},
+				{
+					enableHighAccuracy: true,
+					timeout: 5000,
+					maximumAge: 0
+				}
+			);
+		});
+	}
+
 	async function handleCheckIn() {
 		showCamera = true;
 		showCheckInConfirm = true;
@@ -210,13 +278,18 @@
 			const descriptor = await computeFaceDescriptor(videoEl);
 			lastDescriptor = descriptor;
 
+			const coords = await getCoordinates();
+
 			const payload: Record<string, any> = {
 				photo: photoDataUrl,
 			};
 			if (descriptor) {
 				payload.face_descriptor = JSON.stringify(Array.from(descriptor));
 			}
-
+			if (coords) {
+				payload.lat = coords.lat;
+				payload.lng = coords.lng;
+			}
 			const res = await attendance.checkIn(payload);
 			if (res?.success) {
 				checkResult = { success: true, message: 'Check-in berhasil!' };
@@ -243,11 +316,17 @@
 			const descriptor = await computeFaceDescriptor(videoEl);
 			lastDescriptor = descriptor;
 
+			const coords = await getCoordinates();
+
 			const payload: Record<string, any> = {
 				photo: photoDataUrl,
 			};
 			if (descriptor) {
 				payload.face_descriptor = JSON.stringify(Array.from(descriptor));
+			}
+			if (coords) {
+				payload.lat = coords.lat;
+				payload.lng = coords.lng;
 			}
 
 			const res = await attendance.checkOut(payload);
@@ -332,6 +411,37 @@
 		return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
+	function getHour(timeStr: string | null | undefined): number | null {
+		if (!timeStr) return null;
+		const d = new Date(timeStr);
+		if (isNaN(d.getTime())) return null;
+		return d.getHours();
+	}
+
+	/**
+	 * Deteksi apakah record ini telat — pake data backend, plus fallback time-based heuristic
+	 * buat record lama yg is_late-nya salah di database.
+	 * Normal jam kerja mulai 7-9 pagi. Lewat jam 10 = pasti telat.
+	 */
+	function isLateRecord(item: any): boolean {
+		if (item.is_late === true || item.status === 'terlambat') return true;
+		if (!item.check_in_time) return false;
+		const d = new Date(item.check_in_time);
+		const hour = d.getHours();
+		const min = d.getMinutes();
+		if (hour > 8 || (hour === 8 && min > 0)) return true;
+		return false;
+	}
+
+	function isEarlyLeaveRecord(item: any): boolean {
+		if (item.is_early_leave === true) return true;
+		if (!item.check_out_time) return false;
+		const d = new Date(item.check_out_time);
+		const hour = d.getHours();
+		if (hour < 17) return true;
+		return false;
+	}
+
 	function getStatusBadge(status: string) {
 		const map: Record<string, string> = {
 			present: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -367,13 +477,34 @@
 			<p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Check-in / Check-out kehadiran hari ini</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<button onclick={handleStartFaceRegistration}
-				class="hidden sm:inline-flex px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition cursor-pointer dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 flex items-center gap-1.5">
-				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
-				Registrasi Wajah
-			</button>
 		</div>
 	</div>
+
+	<!-- Device Permission Status -->
+	{#if !checkingPerms}
+		<div class="mb-3 flex items-center gap-3 px-4 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-sm">
+			<div class="flex items-center gap-1.5 text-xs">
+				<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
+				<span class="text-gray-500 dark:text-gray-400">Kamera:</span>
+				<span class="font-medium {camGranted === true ? 'text-emerald-600 dark:text-emerald-400' : camGranted === false ? 'text-red-500 dark:text-red-400' : 'text-gray-400'}">
+					{camGranted === true ? '✓ Aktif' : camGranted === false ? '✗ Diblokir' : '...'}
+				</span>
+			</div>
+			<div class="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+			<div class="flex items-center gap-1.5 text-xs">
+				<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+				<span class="text-gray-500 dark:text-gray-400">Lokasi:</span>
+				<span class="font-medium {locGranted === true ? 'text-emerald-600 dark:text-emerald-400' : locGranted === false ? 'text-red-500 dark:text-red-400' : 'text-gray-400'}">
+					{locGranted === true ? '✓ Aktif' : locGranted === false ? '✗ Diblokir' : '...'}
+				</span>
+			</div>
+			{#if camGranted === false || locGranted === false}
+				<div class="ml-auto">
+					<a href="/dashboard/pengaturan" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-medium">Atur Izin</a>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	{#if checkResult}
 		<div class="mb-4 px-5 py-3.5 rounded-xl border {checkResult.success ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'}">
@@ -468,30 +599,32 @@
 								Batal
 							</button>
 						</div>
-					{:else if showCheckInConfirm}
-						<button onclick={confirmCheckIn}
-							disabled={checkInLoading || !faceDetected}
-							class="w-full px-5 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer flex items-center justify-center gap-2">
-							{#if checkInLoading}
-								<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-								Memproses Check-in...
-							{:else}
-								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-								Konfirmasi Check-in
-							{/if}
-						</button>
-					{:else if showCheckOutConfirm}
-						<button onclick={confirmCheckOut}
-							disabled={checkOutLoading || !faceDetected}
-							class="w-full px-5 py-3 bg-amber-600 text-white rounded-xl text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer flex items-center justify-center gap-2">
-							{#if checkOutLoading}
-								<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-								Memproses Check-out...
-							{:else}
-								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-								Konfirmasi Check-out
-							{/if}
-						</button>
+					{:else if showCheckInConfirm || showCheckOutConfirm}
+						{#if showCheckInConfirm}
+							<button onclick={confirmCheckIn}
+								disabled={checkInLoading || !faceDetected}
+								class="w-full px-5 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer flex items-center justify-center gap-2">
+								{#if checkInLoading}
+									<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+									Memproses Check-in...
+								{:else}
+									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+									Konfirmasi Check-in
+								{/if}
+							</button>
+						{:else}
+							<button onclick={confirmCheckOut}
+								disabled={checkOutLoading || !faceDetected}
+								class="w-full px-5 py-3 bg-amber-600 text-white rounded-xl text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer flex items-center justify-center gap-2">
+								{#if checkOutLoading}
+									<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+									Memproses Check-out...
+								{:else}
+									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+									Konfirmasi Check-out
+								{/if}
+							</button>
+						{/if}
 					{/if}
 
 					<p class="text-xs text-gray-400 text-center">
@@ -503,13 +636,6 @@
 	{/if}
 
 	<canvas bind:this={photoCanvasEl} class="hidden"></canvas>
-
-	<!-- Mobile: Registrasi Wajah quick action (only on mobile) -->
-	<button onclick={handleStartFaceRegistration}
-		class="sm:hidden w-full mb-3 px-4 py-3 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-xl text-sm font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition cursor-pointer flex items-center justify-center gap-2 active:scale-[0.98]">
-		<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
-		Registrasi Wajah
-	</button>
 
 	<!-- Status & Action Cards -->
 	<div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -531,6 +657,15 @@
 					</div>
 				</div>
 			</div>
+			{#if todayStatus?.has_checked_in && todayStatus?.record?.check_in_location_name}
+			<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
+				<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+					<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+					<span>{todayStatus.record.check_in_location_name}</span>
+				</div>
+			</div>
+			{/if}
+
 			<button onclick={handleCheckIn}
 				disabled={todayStatus?.has_checked_in || loadingStatus}
 				class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_in ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}">
@@ -556,6 +691,14 @@
 					</div>
 				</div>
 			</div>
+			{#if todayStatus?.has_checked_out && todayStatus?.record?.check_out_location_name}
+			<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
+				<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+					<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+					<span>{todayStatus.record.check_out_location_name}</span>
+				</div>
+			</div>
+			{/if}
 			<button onclick={handleCheckOut}
 				disabled={todayStatus?.has_checked_out || !todayStatus?.has_checked_in || loadingStatus || todayStatus?.has_checked_in === false}
 				class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_out ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-amber-600 text-white hover:bg-amber-700'}">
@@ -594,27 +737,66 @@
 				<p class="text-xs sm:text-sm text-gray-400">Belum ada riwayat absensi</p>
 			</div>
 		{:else}
-			<div class="divide-y divide-gray-100 dark:divide-gray-700/50">
-				{#each items as item}
-					<div class="px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors active:bg-gray-100 dark:active:bg-gray-700/50">
-						<div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
-							<div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0">
-								<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-							</div>
-							<div class="min-w-0">
-								<div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">{formatDate(item.date)}</div>
-								<div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-									{formatTime(item.check_in_time)} → {formatTime(item.check_out_time)}
+			<div class="p-3 sm:p-4 space-y-2.5">
+				{#each items as item (item)}
+					<div onclick={() => openDetail(item)} class="group bg-white dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-md active:shadow-sm transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]">
+						<!-- Colored top bar based on status -->
+						<div class="h-1 {item.status === 'late' || item.status === 'terlambat' ? 'bg-red-500' : item.status === 'present' || item.status === 'hadir' ? 'bg-emerald-500' : item.status === 'leave' || item.status === 'cuti' ? 'bg-blue-500' : item.status === 'sick' || item.status === 'sakit' ? 'bg-purple-500' : item.status === 'holiday' || item.status === 'libur' ? 'bg-amber-400' : 'bg-gray-400'}"></div>
+						
+						<div class="p-3.5 sm:p-4">
+							<!-- Top row: Date + Status -->
+							<div class="flex items-center justify-between mb-3">
+								<div class="flex items-center gap-2.5">
+									<div class="w-9 h-9 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center shrink-0">
+										<svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+									</div>
+									<div>
+										<p class="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(item.date)}</p>
+										{#if item.day_name}
+											<p class="text-[10px] text-gray-400 dark:text-gray-500">{item.day_name.trim()}</p>
+										{/if}
+									</div>
+								</div>
+								<div class="flex items-center gap-2">
+									{#if isLateRecord(item)}
+										<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+											{item.late_minutes && item.late_minutes > 0 ? `Telat ${item.late_minutes}m` : 'Telat'}
+										</span>
+									{/if}
+									<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {getStatusBadge(item.status)}">{getStatusText(item.status)}</span>
+									<svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
 								</div>
 							</div>
-						</div>
-						<div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-							{#if item.is_late && item.late_minutes && item.late_minutes > 0}
-								<span class="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">{item.late_minutes} mnt</span>
+
+							<!-- Time row -->
+							<div class="grid grid-cols-2 gap-2">
+								<div class="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+									<div class="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+										<svg class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+									</div>
+									<div class="min-w-0">
+										<p class="text-[10px] text-gray-400 dark:text-gray-500">Check-In</p>
+										<p class="text-sm font-bold tabular-nums {isLateRecord(item) ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">{formatTime(item.check_in_time)}</p>
+									</div>
+								</div>
+								<div class="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+									<div class="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+										<svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" /></svg>
+									</div>
+									<div class="min-w-0">
+										<p class="text-[10px] text-gray-400 dark:text-gray-500">Check-Out</p>
+										<p class="text-sm font-bold tabular-nums {isEarlyLeaveRecord(item) ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">{formatTime(item.check_out_time)}</p>
+									</div>
+								</div>
+							</div>
+
+							<!-- Location row -->
+							{#if item.check_in_location_name || item.check_out_location_name}
+								<div class="mt-2 flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-gray-500">
+									<svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+									<span class="truncate">{item.check_in_location_name || item.check_out_location_name || '-'}</span>
+								</div>
 							{/if}
-							<span class="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium {getStatusBadge(item.status)}">
-								{getStatusText(item.status)}
-							</span>
 						</div>
 					</div>
 				{/each}

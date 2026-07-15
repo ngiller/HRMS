@@ -13,7 +13,7 @@ let isConnected = false;
 
 /**
  * Connect to the SSE endpoint.
- * @param {string} token - JWT access token
+ * @param {string | (() => string)} tokenOrGetter - JWT access token or a function that returns it
  * @param {{
  *   reconnectDelay?: number,
  *   onEvent?: (data: any) => void,
@@ -22,11 +22,16 @@ let isConnected = false;
  * }} [options]
  * @returns {EventSource|null}
  */
-export function connectSSE(token, options = {}) {
+export function connectSSE(tokenOrGetter, options = {}) {
 	const { reconnectDelay = 5000, onEvent, onConnected, onDisconnected } = options;
 
 	// Close existing connection
 	disconnectSSE();
+
+	let token = typeof tokenOrGetter === 'function' ? tokenOrGetter() : tokenOrGetter;
+	if (!token && typeof window !== 'undefined') {
+		token = localStorage.getItem('token') || '';
+	}
 
 	if (!token) return null;
 
@@ -56,6 +61,22 @@ export function connectSSE(token, options = {}) {
 		}
 	});
 
+	eventSource.addEventListener('role_update', (event) => {
+		try {
+			const data = JSON.parse(event.data);
+			console.log('[SSE] Role update:', data);
+
+			// Dispatch a custom DOM event for components to listen to
+			window.dispatchEvent(
+				new CustomEvent('sse:role_update', { detail: data })
+			);
+
+			if (onEvent) onEvent(data);
+		} catch (e) {
+			console.error('[SSE] Failed to parse event:', e);
+		}
+	});
+
 	eventSource.onerror = () => {
 		isConnected = false;
 		console.warn('[SSE] Connection error, will reconnect...');
@@ -71,7 +92,7 @@ export function connectSSE(token, options = {}) {
 		if (reconnectTimer) clearTimeout(reconnectTimer);
 		reconnectTimer = setTimeout(() => {
 			console.log('[SSE] Reconnecting...');
-			connectSSE(token, options);
+			connectSSE(tokenOrGetter, options);
 		}, reconnectDelay);
 	};
 

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { approvals as approvalsApi } from '$lib/api.js';
+	import { approvals as approvalsApi, leaveRequests, overtime, reimbursements, shiftChangeRequests, loans, mutations, manualAttendance, resign } from '$lib/api.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
+	import config from '$lib/config.js';
 
 	type PendingApproval = {
 		tracking_id: string;
@@ -38,6 +39,8 @@
 		shift_change: 'Permintaan Shift',
 		loan: 'Pinjaman',
 		mutation: 'Mutasi',
+		manual_attendance: 'Absensi Manual',
+		resign: 'Resign',
 	};
 
 	const ENTITY_ICONS: Record<string, string> = {
@@ -47,6 +50,8 @@
 		shift_change: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182',
 		loan: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z',
 		mutation: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+		manual_attendance: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z',
+		resign: 'M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3',
 	};
 
 	const ENTITY_COLORS: Record<string, string> = {
@@ -56,6 +61,8 @@
 		shift_change: 'from-purple-50 to-purple-100 text-purple-600 ring-purple-200',
 		loan: 'from-rose-50 to-rose-100 text-rose-600 ring-rose-200',
 		mutation: 'from-indigo-50 to-indigo-100 text-indigo-600 ring-indigo-200',
+		manual_attendance: 'from-cyan-50 to-cyan-100 text-cyan-600 ring-cyan-200',
+		resign: 'from-orange-50 to-orange-100 text-orange-600 ring-orange-200',
 	};
 
 	onMount(() => {
@@ -65,6 +72,55 @@
 		return () => clearInterval(interval);
 	});
 
+	let showDetailModal = $state(false);
+	let detailLoading = $state(false);
+	let detailData = $state<any>(null);
+	let detailType = $state('');
+
+	function getPhotoUrl(url: string | null | undefined): string {
+		if (!url) return '';
+		if (url.startsWith('http')) return url;
+		return `${config.API_BASE_URL}${url}`;
+	}
+
+	async function handleViewDetail(entityType: string, entityId: string) {
+		detailType = entityType;
+		detailLoading = true;
+		detailData = null;
+		showDetailModal = true;
+		try {
+			let res: any;
+			if (entityType === 'leave') {
+				res = await leaveRequests.get(entityId);
+			} else if (entityType === 'overtime') {
+				res = await overtime.get(entityId);
+			} else if (entityType === 'reimbursement') {
+				res = await reimbursements.get(entityId);
+			} else if (entityType === 'shift_change') {
+				res = await shiftChangeRequests.get(entityId);
+			} else if (entityType === 'loan') {
+				res = await loans.get(entityId);
+			} else if (entityType === 'mutation') {
+				res = await mutations.get(entityId);
+			} else if (entityType === 'manual_attendance') {
+				res = await manualAttendance.get(entityId);
+			} else if (entityType === 'resign') {
+				res = await resign.get(entityId);
+			}
+			
+			if (res && res.success) {
+				detailData = res.data;
+			} else {
+				actionError = 'Gagal memuat detail pengajuan';
+			}
+		} catch (err: any) {
+			console.error(err);
+			actionError = 'Terjadi kesalahan saat memuat detail';
+		} finally {
+			detailLoading = false;
+		}
+	}
+
 	async function loadPendingApprovals(isBackgroundRefresh = false) {
 		if (!isBackgroundRefresh) isLoading = true;
 		errorMessage = '';
@@ -72,7 +128,8 @@
 			const res: any = await approvalsApi.getPending();
 			if (res.success && res.data) {
 				const d = res.data as { items: PendingApproval[]; total: number };
-				pendingApprovals = d.items || [];
+				// Sort from newest date first
+				pendingApprovals = (d.items || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 				total = d.total || 0;
 			} else {
 				pendingApprovals = [];
@@ -123,6 +180,11 @@
 	function formatDate(dateStr: string): string {
 		if (!dateStr) return '-';
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+	}
+
+	function formatTime(dateStr: string): string {
+		if (!dateStr) return '-';
+		return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 	}
 
 	function formatCurrency(val: number): string {
@@ -193,7 +255,7 @@
 		{/if}
 
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-			{#each pendingApprovals as item}
+			{#each pendingApprovals as item (item)}
 				{@const color = getColorBase(item.entity_type)}
 				<div class="bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 flex flex-col relative overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
 					<!-- Top decorative border -->
@@ -243,7 +305,7 @@
 								<span class="text-blue-600 dark:text-blue-400 font-bold">{item.current_step} <span class="text-gray-400">/ {item.total_steps}</span></span>
 							</div>
 							<div class="h-1.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden flex gap-0.5">
-								{#each Array(item.total_steps) as _, i}
+								{#each Array(item.total_steps) as _, i (i)}
 									<div class="h-full flex-1 rounded-full {i < item.current_step ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-600'}"></div>
 								{/each}
 							</div>
@@ -280,7 +342,6 @@
 
 <!-- Reject Modal -->
 <AnimatedPresence show={showRejectModal} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={() => { if (!actionLoading) showRejectModal = false; }} onkeydown={(e) => { if (e.key === 'Escape') showRejectModal = false; }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -313,4 +374,245 @@
 			</div>
 		</div>
 	</div>
+
+
+<!-- Detail Modal -->
+<AnimatedPresence show={showDetailModal} type="scale" duration={200}>
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div onclick={() => { if (!detailLoading) showDetailModal = false; }} onkeydown={(e) => { if (e.key === 'Escape') showDetailModal = false; }}
+		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Detail pengajuan" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
+			<!-- Header -->
+			<div class="px-6 py-5 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+				<h3 class="text-base font-bold text-gray-900 dark:text-white">Detail Pengajuan {ENTITY_LABELS[detailType] || detailType}</h3>
+				<button onclick={() => showDetailModal = false} class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer">
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+				</button>
+			</div>
+
+			<!-- Body -->
+			<div class="p-6 overflow-y-auto space-y-5 flex-1">
+				{#if detailLoading}
+					<div class="flex flex-col items-center justify-center py-10 gap-2">
+						<div class="animate-spin h-7 w-7 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+						<span class="text-xs text-gray-400">Memuat data...</span>
+					</div>
+				{:else if detailData}
+					<div class="grid grid-cols-2 gap-4">
+						<!-- Common fields -->
+						<div class="col-span-2 bg-gray-50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-800/80">
+							<span class="text-[10px] uppercase font-bold text-gray-400">Pengaju</span>
+							<p class="text-sm font-semibold text-gray-900 dark:text-white">{detailData.employee_name || detailData.requestor_name || '-'}</p>
+						</div>
+
+						<!-- Leave Details -->
+						{#if detailType === 'leave'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jenis Cuti</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.leave_type_name || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Durasi</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.total_days} Hari</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tanggal Cuti</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">
+									{new Date(detailData.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+									—
+									{new Date(detailData.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							</div>
+							{#if detailData.contact_during_leave}
+								<div class="col-span-2">
+									<span class="text-[10px] uppercase font-bold text-gray-400">Kontak Selama Cuti</span>
+									<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.contact_during_leave}</p>
+								</div>
+							{/if}
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Alasan</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.reason || '-'}</p>
+							</div>
+
+						<!-- Overtime Details -->
+						{:else if detailType === 'overtime'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tipe Lembur</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.overtime_type || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Total Durasi</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.total_hours} Jam</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tanggal Lembur</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">
+									{new Date(detailData.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Alasan</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.reason || '-'}</p>
+							</div>
+
+						<!-- Reimbursement Details -->
+						{:else if detailType === 'reimbursement'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Kategori / Tipe</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.type || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Nominal</span>
+								<p class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(detailData.amount)}</p>
+							</div>
+							{#if detailData.receipt_photo_url}
+								<div class="col-span-2">
+									<span class="text-[10px] uppercase font-bold text-gray-400">Bukti Nota / Resi</span>
+									<div class="mt-1 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 max-h-48 bg-gray-50">
+										<img src={getPhotoUrl(detailData.receipt_photo_url)} alt="Kuitansi" class="h-full w-auto max-w-full object-contain cursor-pointer mx-auto" onclick={() => window.open(getPhotoUrl(detailData.receipt_photo_url), '_blank')} />
+									</div>
+								</div>
+							{/if}
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Keterangan</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.description || '-'}</p>
+							</div>
+
+						<!-- Shift Change Details -->
+						{:else if detailType === 'shift_change'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tipe Permintaan</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.request_type === 'swap' ? 'Tukar Shift' : 'Ubah Shift'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tanggal Target</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.target_date}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Shift Asal</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300">{detailData.current_schedule_name || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Shift Tujuan</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.requested_schedule_name || '-'}</p>
+							</div>
+							{#if detailData.request_type === 'swap'}
+								<div class="col-span-2">
+									<span class="text-[10px] uppercase font-bold text-gray-400">Partner Tukar</span>
+									<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.swap_partner_name || '-'}</p>
+								</div>
+							{/if}
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Alasan</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.reason || '-'}</p>
+							</div>
+
+						<!-- Loan Details -->
+						{:else if detailType === 'loan'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jenis Pinjaman</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.type || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jumlah Pinjaman</span>
+								<p class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(detailData.amount)}</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tujuan Pinjaman</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.purpose || '-'}</p>
+							</div>
+
+						<!-- Mutation Details -->
+						{:else if detailType === 'mutation'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tipe Mutasi</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white uppercase">{detailData.mutation_type || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tanggal Efektif</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">
+									{new Date(detailData.effective_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Departemen Asal</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300">{detailData.old_department_name || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Departemen Baru</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.new_department_name || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jabatan Asal</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300">{detailData.old_position_name || '-'}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jabatan Baru</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{detailData.new_position_name || '-'}</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Alasan Mutasi</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.reason || '-'}</p>
+							</div>
+
+						<!-- Manual Attendance Details -->
+						{:else if detailType === 'manual_attendance'}
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tanggal Absen</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">
+									{new Date(detailData.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jam Masuk Target</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{formatTime(detailData.check_in_time)}</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jam Pulang Target</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">{formatTime(detailData.check_out_time)}</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Alasan Perbaikan</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.reason || '-'}</p>
+							</div>
+
+						<!-- Resign Details -->
+						{:else if detailType === 'resign'}
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Tanggal Pengunduran Diri</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">
+									{new Date(detailData.resign_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Hari Kerja Terakhir</span>
+								<p class="text-sm font-medium text-gray-900 dark:text-white">
+									{new Date(detailData.last_working_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+								</p>
+							</div>
+							<div>
+								<span class="text-[10px] uppercase font-bold text-gray-400">Jenis Resign</span>
+								<p class="text-sm font-medium text-gray-950 dark:text-white uppercase">{detailData.resign_type || '-'}</p>
+							</div>
+							<div class="col-span-2">
+								<span class="text-[10px] uppercase font-bold text-gray-400">Alasan Keluar</span>
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailData.reason || '-'}</p>
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<p class="text-sm text-gray-500 text-center py-6">Gagal memuat detail pengajuan.</p>
+				{/if}
+			</div>
+
+			<!-- Footer -->
+			<div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end gap-3">
+				<button onclick={() => showDetailModal = false} class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-semibold transition cursor-pointer">
+					Tutup
+				</button>
+			</div>
+		</div>
+	</div>
+</AnimatedPresence>
+
 </AnimatedPresence>

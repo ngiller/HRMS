@@ -1,4 +1,6 @@
 <script lang="ts">
+/* eslint-disable svelte/no-navigation-without-resolve */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { employees as employeesApi, departments as deptApi, roles as rolesApi, positions as positionsApi, positionGrades as gradesApi, ApiError } from '$lib/api.js';
@@ -135,13 +137,14 @@
 	async function loadDropdowns() {
 		try {
 			const [deptResp, roleResp, posResp, gradeResp] = await Promise.all([
-				deptApi.getAll(),
-				rolesApi.list(1, 100),
-				positionsApi.getAll(),
-				gradesApi.getAll(),
+				deptApi.getAll().catch(() => ({ data: [] })),
+				rolesApi.list(1, 100).catch(() => ({ data: { roles: [] } })),
+				positionsApi.getAll().catch(() => ({ data: [] })),
+				gradesApi.getAll().catch(() => ({ data: [] })),
 			]);
 			departments = deptResp.data || [];
-			roles = (roleResp.data || []).filter((r: any) => r.slug !== 'super_admin');
+			const rolesData = roleResp.data?.roles || roleResp.data || [];
+			roles = (Array.isArray(rolesData) ? rolesData : []).filter((r: any) => r.slug !== 'super_admin');
 			positions = posResp.data || [];
 			positionGrades = gradeResp.data || [];
 		} catch {
@@ -608,6 +611,8 @@ function getStatusBadge(status: string): string {
 	}
 </script>
 
+<!-- eslint-disable svelte/no-useless-children-snippet -->
+
 <div class="w-full">
 	<!-- Header Section -->
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -661,7 +666,7 @@ function getStatusBadge(status: string): string {
 					<p class="text-sm font-medium {importResult.success > 0 ? 'text-emerald-800' : 'text-red-800'}">{importResult.message}</p>
 					{#if importResult.errors && importResult.errors.length > 0}
 						<ul class="mt-1 space-y-0.5">
-							{#each importResult.errors as err}
+							{#each importResult.errors as err (err)}
 								<li class="text-xs text-red-600">{err}</li>
 							{/each}
 						</ul>
@@ -735,14 +740,14 @@ function getStatusBadge(status: string): string {
 			<select bind:value={filterDepartment} onchange={() => { page = 1; loadEmployees(); }}
 				class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition">
 				<option value="">Semua Departemen</option>
-				{#each departments as d}
+				{#each departments as d (d.id)}
 					<option value={d.id}>{d.name}</option>
 				{/each}
 			</select>
 			<select bind:value={filterStatus} onchange={() => { page = 1; loadEmployees(); }}
 			class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition">
 				<option value="">Semua Status</option>
-				{#each Object.keys(employmentStatusColors) as st}
+				{#each Object.keys(employmentStatusColors) as st (st)}
 					<option value={st}>{st.charAt(0).toUpperCase() + st.slice(1)}</option>
 				{/each}
 			</select>
@@ -929,7 +934,7 @@ function getStatusBadge(status: string): string {
 										onchange={() => { form.position_id = ''; }}
 										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="">Pilih departemen (opsional)</option>
-										{#each departments as d}
+										{#each departments as d (d.id)}
 											<option value={d.id}>{d.name} ({d.code})</option>
 										{/each}
 									</select>
@@ -941,7 +946,7 @@ function getStatusBadge(status: string): string {
 									<select bind:value={form.position_id}
 										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="">Pilih posisi (opsional)</option>
-										{#each positions.filter(p => !form.department_id || p.department_id === form.department_id) as p}
+										{#each positions.filter(p => !form.department_id || p.department_id === form.department_id) as p (p.id)}
 											<option value={p.id}>{p.name}</option>
 										{/each}
 									</select>
@@ -974,7 +979,7 @@ function getStatusBadge(status: string): string {
 									<select bind:value={form.role_id}
 										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
 										<option value="">Pilih role (opsional)</option>
-										{#each roles as r}
+										{#each roles as r (r.id)}
 											<option value={r.id}>{r.name}</option>
 										{/each}
 									</select>
@@ -1105,7 +1110,7 @@ function getStatusBadge(status: string): string {
 				<!-- Mobile Cards -->
 				<PullToRefresh onRefresh={loadEmployees}>
 					<div class="md:hidden space-y-3">
-						{#each employees as emp}
+						{#each employees as emp (emp.id)}
 							<MobileCard
 								title={emp.full_name}
 								subtitle={emp.position_name || emp.email || '-'}
@@ -1149,7 +1154,7 @@ function getStatusBadge(status: string): string {
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1}
 							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 hover:text-gray-900 dark:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)}

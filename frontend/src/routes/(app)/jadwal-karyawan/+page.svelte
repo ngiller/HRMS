@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { employeeSchedules as api, scheduleTemplates as templateApi, employees, attendanceLocations } from '$lib/api.js';
-	import { hasPermission } from '$lib/permissions.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 	import MobileCard from '$lib/components/MobileCard.svelte';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
@@ -39,15 +38,32 @@
 	let schedules = $state<ScheduleEntry[]>([]);
 	let totalSchedules = $state(0);
 	let schedPage = $state(1);
-	let schedPerPage = $state(25);
+	let schedPerPage = $state(10);
 	let schedTotalPages = $state(0);
 	let schedEmployeeId = $state('');
+	let searchQuery = $state('');
 	let isLoadingSchedules = $state(false);
 	let schedError = $state('');
+
+	let filteredSchedules = $derived(
+		schedules.filter(s => {
+			const query = searchQuery.toLowerCase().trim();
+			if (!query) return true;
+			return (
+				(s.employee_name && s.employee_name.toLowerCase().includes(query)) ||
+				(s.employee_id && s.employee_id.toLowerCase().includes(query)) ||
+				(s.template_name && s.template_name.toLowerCase().includes(query)) ||
+				(s.location_names && s.location_names.toLowerCase().includes(query))
+			);
+		})
+	);
 
 	// Delete
 	let showDeleteConfirm = $state(false);
 	let deletingId = $state<string | null>(null);
+
+	// Edit
+	let editingId = $state<string | null>(null);
 
 	// === Tab 2: Assign Schedule ===
 	let employees_list = $state<EmployeeSummary[]>([]);
@@ -162,6 +178,12 @@
 				if (!item) return '';
 				const container = document.createElement('div');
 				container.className = 'flex items-center justify-end gap-1';
+				
+				const editBtn = createActionButton(
+					'<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>',
+					'p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer', 'Edit', () => openEdit(item.id));
+				container.appendChild(editBtn);
+
 				const deleteBtn = createActionButton(
 					'<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>',
 					'p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer', 'Hapus', () => confirmDelete(item.id));
@@ -191,7 +213,7 @@
 	$effect(() => {
 		if (schedules.length > 0 && gridContainer && activeTab === 'list') {
 			if (!gridApi && agGridModule) { gridApi = agGridModule.createGrid(gridContainer, gridOptions) as GridApi; }
-			gridApi?.updateGridOptions({ rowData: schedules });
+			gridApi?.updateGridOptions({ rowData: filteredSchedules });
 		}
 	});
 
@@ -264,6 +286,41 @@
 		};
 		assignedLocations = [];
 		assignFormError = '';
+		editingId = null;
+	}
+
+	async function openEdit(id: string) {
+		try {
+			const resp = await api.get(id);
+			const data = resp.data;
+			activeTab = 'assign';
+			editingId = id;
+			
+			assignForm = {
+				employee_id: data.employee_id || '',
+				template_id: data.template_id || '',
+				day_of_week: data.day_of_week !== null ? String(data.day_of_week) : '',
+				specific_date: data.specific_date ? data.specific_date.split('T')[0] : '',
+				start_time: data.start_time || '',
+				end_time: data.end_time || '',
+				break_start: data.break_start || '12:00',
+				break_end: data.break_end || '13:00',
+				is_remote: data.is_remote || false,
+				effective_from: data.effective_from ? data.effective_from.split('T')[0] : '',
+				effective_until: data.effective_until ? data.effective_until.split('T')[0] : '',
+				priority: data.priority || 0,
+				reason: data.reason || '',
+				use_template: !!data.template_id,
+			};
+
+			assignedLocations = (data.locations || []).map((l: any) => ({
+				attendance_location_id: l.attendance_location_id,
+				day_of_week: l.day_of_week !== null ? String(l.day_of_week) : null,
+			}));
+			assignFormError = '';
+		} catch (error: any) {
+			schedError = error.message || 'Gagal memuat detail jadwal';
+		}
 	}
 
 	async function handleAssign() {
@@ -284,28 +341,39 @@
 				employee_id: assignForm.employee_id,
 				effective_from: assignForm.effective_from,
 				reason: assignForm.reason || '',
-				locations: assignedLocations.map(l => ({
-					attendance_location_id: l.attendance_location_id,
-					day_of_week: l.day_of_week ? parseInt(l.day_of_week) : null,
-				})),
+				locations: assignedLocations
+					.filter(l => l.attendance_location_id)
+					.map(l => ({
+						attendance_location_id: l.attendance_location_id,
+						day_of_week: l.day_of_week ? parseInt(l.day_of_week) : null,
+					})),
 			};
 
 			if (isPeriodic) payload.day_of_week = parseInt(assignForm.day_of_week);
 			if (isSpecific) payload.specific_date = assignForm.specific_date;
-			if (assignForm.effective_until) payload.effective_until = assignForm.effective_until;
-			if (assignForm.priority) payload.priority = assignForm.priority;
-			if (assignForm.is_remote) payload.is_remote = true;
+			payload.effective_until = assignForm.effective_until || '';
+			payload.priority = assignForm.priority || 0;
+			payload.is_remote = assignForm.is_remote;
 
 			if (assignForm.use_template && assignForm.template_id) {
 				payload.template_id = assignForm.template_id;
+				payload.start_time = '';
+				payload.end_time = '';
+				payload.break_start = '';
+				payload.break_end = '';
 			} else {
+				payload.template_id = '';
 				payload.start_time = assignForm.start_time || '08:00';
 				payload.end_time = assignForm.end_time || '17:00';
 				payload.break_start = assignForm.break_start || '12:00';
 				payload.break_end = assignForm.break_end || '13:00';
 			}
 
-			await api.create(payload);
+			if (editingId) {
+				await api.update(editingId, payload);
+			} else {
+				await api.create(payload);
+			}
 			resetForm();
 			activeTab = 'list';
 			loadSchedules();
@@ -371,10 +439,14 @@
 			<p class="text-sm text-gray-500 mt-0.5">Atur jadwal kerja fleksibel per karyawan — periodik atau tanggal spesifik</p>
 		</div>
 		{#if activeTab === 'list'}
-		<div>
-			<button onclick={() => { activeTab = 'resolve'; resolvedSchedule = null; resolveError = ''; }} class="px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition cursor-pointer flex items-center gap-2">
+		<div class="flex items-center gap-3">
+			<button onclick={() => { activeTab = 'resolve'; resolvedSchedule = null; resolveError = ''; }} class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition shadow-sm cursor-pointer active:scale-[0.97]">
 				<svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 				Alat Cek Jadwal
+			</button>
+			<button onclick={openAssignTab} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+				Tambah Jadwal
 			</button>
 		</div>
 		{/if}
@@ -385,22 +457,26 @@
 	{#if activeTab === 'list'}
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			<div class="px-5 py-3.5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-				<div class="flex items-center gap-3">
+				<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full">
+					<!-- Search Input -->
+					<div class="relative flex-1 sm:max-w-xs">
+						<span class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none text-gray-400">
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+						</span>
+						<input type="search" bind:value={searchQuery} placeholder="Cari nama atau template..." class="w-full ps-9 pe-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white" />
+					</div>
+					<!-- Employee Filter Dropdown -->
 					<div class="relative">
 						<select bind:value={schedEmployeeId} onchange={() => { schedPage = 1; loadSchedules(); }} class="w-full sm:w-56 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 							<option value="">Semua Karyawan</option>
-							{#each employees_list as emp}
+							{#each employees_list as emp (emp)}
 								<option value={emp.id}>{emp.full_name} ({emp.employee_id})</option>
 							{/each}
 						</select>
 					</div>
 				</div>
-				<div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-					<div class="text-xs text-gray-400">{totalSchedules > 0 ? `${totalSchedules} jadwal ditemukan` : ''}</div>
-					<button onclick={openAssignTab} class="px-4 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer flex items-center gap-2">
-						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-						Tambah Jadwal
-					</button>
+				<div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+					<div class="text-xs text-gray-400">{filteredSchedules.length > 0 ? `${filteredSchedules.length} jadwal ditemukan` : 'Tidak ada jadwal ditemukan'}</div>
 				</div>
 			</div>
 
@@ -420,7 +496,7 @@
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-50 flex items-center justify-center"><svg class="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></div>
 					<h3 class="text-sm font-semibold text-gray-900 mb-1">Belum ada jadwal khusus</h3>
 					<p class="text-sm text-gray-500 mb-4">Karyawan akan mengikuti jadwal default dari departemen masing-masing.</p>
-					<button onclick={openAssignTab} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium hover:bg-[#1e40af] transition cursor-pointer">Tambah Jadwal</button>
+					<button onclick={openAssignTab} class="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">Tambah Jadwal</button>
 				</div>
 			{/if}
 			{#if schedules.length > 0}
@@ -429,7 +505,7 @@
 				</div>
 				<div class="md:hidden space-y-3">
 					<PullToRefresh onRefresh={loadSchedules}>
-					{#each schedules as s}
+					{#each filteredSchedules as s (s)}
 						<MobileCard
 							title={s.employee_name}
 							subtitle={`${s.template_name || 'Manual'} · ${s.start_time?.slice(0,5)}-${s.end_time?.slice(0,5)}`}
@@ -437,16 +513,6 @@
 							avatarColor={getAvatarTheme('schedule').gradientClasses}
 							badges={s.is_remote ? [{ label: 'WFH', color: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' }] : undefined}
 						>
-							{#snippet children()}
-								<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-									<div class="flex items-center gap-1.5">
-										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-										</svg>
-										<span>{s.specific_date ? formatDate(s.specific_date) : (s.day_of_week != null ? `Setiap ${DAY_LABELS[s.day_of_week]}` : 'Periodik')}</span>
-									</div>
-								</div>
-							{/snippet}
 							{#snippet footer()}
 								<div class="flex items-center justify-between">
 									<span class="text-xs text-gray-400">
@@ -458,6 +524,10 @@
 								</div>
 							{/snippet}
 						</MobileCard>
+					{:else}
+						<div class="py-8 text-center text-sm text-gray-500">
+							Tidak ada jadwal yang cocok dengan kata kunci "{searchQuery}"
+						</div>
 					{/each}
 					</PullToRefresh>
 				</div>
@@ -465,7 +535,7 @@
 					<div class="text-xs text-gray-500">Menampilkan {(schedPage - 1) * schedPerPage + 1}-{Math.min(schedPage * schedPerPage, totalSchedules)} dari <span class="font-medium text-gray-700">{totalSchedules}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToSchedPage(schedPage - 1)} disabled={schedPage <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, schedTotalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, schedTotalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(schedPage - 2, schedTotalPages - 4)) + i}
 							{#if pageNum <= schedTotalPages}
 								<button onclick={() => goToSchedPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === schedPage ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
@@ -479,186 +549,244 @@
 
 	<div style="display: {activeTab === 'assign' ? 'block' : 'none'}">
 		<!-- Tab 2: Assign Schedule -->
-		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
-				<h2 class="text-lg font-semibold text-gray-900">Tambah Jadwal Karyawan</h2>
-				<button onclick={() => { activeTab = 'list'; }} class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer" aria-label="Tutup">
-					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+		<div class="bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm">
+			<!-- Tab Header -->
+			<div class="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850">
+				<div>
+					<h2 class="text-lg font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Jadwal Kerja Karyawan' : 'Atur Jadwal Kerja Karyawan'}</h2>
+					<p class="text-xs text-gray-500 dark:text-gray-400">Konfigurasikan jam kerja, periode pengulangan, dan validasi koordinat lokasi absen</p>
+				</div>
+				<button onclick={() => { activeTab = 'list'; }} class="p-2 rounded-xl text-gray-400 hover:text-gray-650 hover:bg-gray-105 dark:hover:bg-gray-750 transition cursor-pointer" aria-label="Tutup">
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
 				</button>
 			</div>
-			<div class="px-6 py-5 space-y-4">
-				{#if assignFormError}<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">{assignFormError}</div>{/if}
 
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-						<label class="block text-sm font-medium text-gray-700 mb-1.5">
-							Karyawan <span class="text-red-500">*</span>
-							<select bind:value={assignForm.employee_id} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
-								<option value="">Pilih karyawan</option>
-								{#each employees_list as emp}
-									<option value={emp.id}>{emp.full_name} ({emp.employee_id})</option>
-								{/each}
-							</select>
-						</label>
-					</div>
-					<div>
-						<div>
-						<span class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Jadwal <span class="text-red-500">*</span></span>
-						<div class="flex items-center gap-4">
-							<label class="inline-flex items-center gap-2 cursor-pointer">
-								<input type="radio" bind:group={assignForm.use_template} value={true} class="text-[#1A56DB] focus:ring-[#1A56DB]/20" />
-								<span class="text-sm text-gray-700">Pakai Template</span>
-							</label>
-							<label class="inline-flex items-center gap-2 cursor-pointer">
-								<input type="radio" bind:group={assignForm.use_template} value={false} class="text-[#1A56DB] focus:ring-[#1A56DB]/20" />
-								<span class="text-sm text-gray-700">Manual</span>
-							</label>
-						</div>						</div>
-					</div>
-
-				{#if assignForm.use_template}
-					<div>
-						<label class="block text-sm font-medium text-gray-700 mb-1.5">
-							Pilih Template
-							<select bind:value={assignForm.template_id} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
-								<option value="">Pilih template (opsional)</option>
-								{#each templates as t}
-									<option value={t.id}>{t.name} ({t.day_count} hari)</option>
-								{/each}
-							</select>
-						</label>
-					</div>
-				{:else}
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-1.5">
-								Jam Mulai
-								<input type="time" bind:value={assignForm.start_time} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-							</label>
-						</div>
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-1.5">
-								Jam Selesai
-								<input type="time" bind:value={assignForm.end_time} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-							</label>
-						</div>
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-1.5">
-								Istirahat Mulai
-								<input type="time" bind:value={assignForm.break_start} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-							</label>
-						</div>
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-1.5">
-								Istirahat Selesai
-								<input type="time" bind:value={assignForm.break_end} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-							</label>
-						</div>
+			<!-- Tab Form Content (Scrollable if needed, structured in responsive grid) -->
+			<div class="p-6 space-y-6">
+				{#if assignFormError}
+					<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+						<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+						{assignFormError}
 					</div>
 				{/if}
 
-				<div class="border-t border-gray-100 pt-4">
-					<h3 class="text-sm font-semibold text-gray-800 mb-3">Penjadwalan</h3>
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-1.5">
-							Hari dalam Seminggu (periodik)
-							<select bind:value={assignForm.day_of_week} onchange={() => { if (assignForm.day_of_week !== '') assignForm.specific_date = ''; }} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
-								<option value="">Pilih hari (opsional)</option>
-								<option value="0">Senin</option>
-								<option value="1">Selasa</option>
-								<option value="2">Rabu</option>
-								<option value="3">Kamis</option>
-								<option value="4">Jumat</option>
-								<option value="5">Sabtu</option>
-								<option value="6">Minggu</option>						</select>
-							<p class="text-xs text-gray-400 mt-1">Atau pilih tanggal spesifik di bawah</p>
-						</label>
-						</div>
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-1.5">
-							Tanggal Spesifik
-							<input type="date" bind:value={assignForm.specific_date} onchange={() => { if (assignForm.specific_date !== '') assignForm.day_of_week = ''; }} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-						</label>
-							<p class="text-xs text-gray-400 mt-1">Untuk jadwal satu hari tertentu (libur nasional, dll)</p>
-						</div>
-					</div>
-				</div>
+				<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+					<!-- Left & Mid Column: Main configurations (span 2) -->
+					<div class="lg:col-span-2 space-y-6">
+						<!-- Card 1: Identitas & Jam Kerja -->
+						<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-5 shadow-sm">
+							<div class="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-gray-700">
+								<svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+								<h3 class="text-sm font-bold text-gray-900 dark:text-white">Identitas & Jam Kerja</h3>
+							</div>
 
-				<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-					<div>
-						<label class="block text-sm font-medium text-gray-700 mb-1.5">
-						Mulai Berlaku <span class="text-red-500">*</span>
-						<input type="date" bind:value={assignForm.effective_from} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-					</label>
-					</div>
-					<div>
-						<label class="block text-sm font-medium text-gray-700 mb-1.5">
-						Berlaku Sampai
-						<input type="date" bind:value={assignForm.effective_until} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-					</label>
-						<p class="text-xs text-gray-400 mt-1">Kosongkan jika berlaku terus</p>
-					</div>
-					<div>
-						<label class="block text-sm font-medium text-gray-700 mb-1.5">
-						Prioritas
-						<input type="number" bind:value={assignForm.priority} min="0" max="100" class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" />
-					</label>
-						<p class="text-xs text-gray-400 mt-1">Makin tinggi, makin diutamakan</p>
-					</div>
-				</div>
-
-				<div class="flex items-center gap-3">
-					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={assignForm.is_remote} class="sr-only peer" />
-						<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1A56DB]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1A56DB]"></div>
-						<span class="ms-2 text-sm font-medium text-gray-700">Remote / WFH (tanpa validasi GPS)</span>
-					</label>
-				</div>
-
-				<div>
-					<label class="block text-sm font-medium text-gray-700 mb-1.5">
-					Alasan
-					<input type="text" bind:value={assignForm.reason} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition" placeholder="Contoh: Jadwal Ramadhan, Lembur Proyek" />
-				</label>
-				</div>
-
-				<!-- Locations -->
-				<div class="border-t border-gray-100 pt-4">
-					<div class="flex items-center justify-between mb-3">
-						<h3 class="text-sm font-semibold text-gray-800">Lokasi Absensi</h3>
-						<button onclick={addLocation} class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition cursor-pointer">
-							<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-							Tambah Lokasi
-						</button>
-					</div>
-					{#if assignedLocations.length === 0}
-						<p class="text-xs text-gray-400">Tidak ada lokasi khusus — karyawan bisa absen dari lokasi mana pun yang aktif.</p>
-					{:else}
-						<div class="space-y-2">
-							{#each assignedLocations as loc, i}
-								<div class="flex items-center gap-2">
-									<select bind:value={loc.attendance_location_id} onchange={(e) => updateLocation(i, 'attendance_location_id', (e.target as HTMLSelectElement).value)} class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
-										<option value="">Pilih lokasi</option>
-										{#each locations as l}
-											<option value={l.id}>{l.name}</option>
-										{/each}
-									</select>
-									<button onclick={() => removeLocation(i)} class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer" aria-label="Hapus lokasi">
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-									</button>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Karyawan <span class="text-red-500">*</span>
+										<select bind:value={assignForm.employee_id} disabled={!!editingId} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+											<option value="">Pilih karyawan</option>
+											{#each employees_list as emp (emp)}
+												<option value={emp.id}>{emp.full_name} ({emp.employee_id})</option>
+											{/each}
+										</select>
+									</label>
 								</div>
-							{/each}
+
+								<div>
+									<span class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Tipe Jam Kerja <span class="text-red-500">*</span></span>
+									<div class="grid grid-cols-2 gap-2 mt-1.5">
+										<button type="button" onclick={() => assignForm.use_template = true} class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition active:scale-[0.98] cursor-pointer {assignForm.use_template ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300 shadow-sm' : 'border-gray-200 hover:bg-gray-50 text-gray-700 dark:border-gray-700 dark:hover:bg-gray-900 dark:text-gray-300'}" style="outline: none;">
+											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" /></svg>
+											Pakai Template
+										</button>
+										<button type="button" onclick={() => assignForm.use_template = false} class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition active:scale-[0.98] cursor-pointer {!assignForm.use_template ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300 shadow-sm' : 'border-gray-200 hover:bg-gray-50 text-gray-700 dark:border-gray-700 dark:hover:bg-gray-900 dark:text-gray-300'}" style="outline: none;">
+											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 1 0 0 4m0-4a2 2 0 1 1 0 4m-6 8a2 2 0 1 0-4 0m4 0a2 2 0 1 1-4 0m0 0v2m4-2v-4m12 4a2 2 0 1 0-4 0m4 0a2 2 0 1 1-4 0m0 0v2m4-2V6" /></svg>
+											Kustom Manual
+										</button>
+									</div>
+								</div>
+							</div>
+
+							{#if assignForm.use_template}
+								<div class="pt-2 animate-in fade-in duration-300">
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Pilih Template Jadwal Kerja
+										<select bind:value={assignForm.template_id} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+											<option value="">Pilih template jadwal</option>
+											{#each templates as t (t)}
+												<option value={t.id}>{t.name} ({t.day_count} hari)</option>
+											{/each}
+										</select>
+									</label>
+								</div>
+							{:else}
+								<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 animate-in fade-in duration-300">
+									<div>
+										<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+											Jam Masuk
+											<input type="time" bind:value={assignForm.start_time} class="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+										</label>
+									</div>
+									<div>
+										<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+											Jam Pulang
+											<input type="time" bind:value={assignForm.end_time} class="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+										</label>
+									</div>
+									<div>
+										<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+											Mulai Istirahat
+											<input type="time" bind:value={assignForm.break_start} class="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+										</label>
+									</div>
+									<div>
+										<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+											Selesai Istirahat
+											<input type="time" bind:value={assignForm.break_end} class="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+										</label>
+									</div>
+								</div>
+							{/if}
 						</div>
-					{/if}
+
+						<!-- Card 2: Penjadwalan & Masa Berlaku -->
+						<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-5 shadow-sm">
+							<div class="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-gray-700">
+								<svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+								<h3 class="text-sm font-bold text-gray-900 dark:text-white">Pengulangan & Masa Berlaku</h3>
+							</div>
+
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Hari Kerja Rutin (Periodik)
+										<select bind:value={assignForm.day_of_week} disabled={!!editingId} onchange={() => { if (assignForm.day_of_week !== '') assignForm.specific_date = ''; }} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+											<option value="">Pilih hari rutin (opsional)</option>
+											<option value="0">Senin</option>
+											<option value="1">Selasa</option>
+											<option value="2">Rabu</option>
+											<option value="3">Kamis</option>
+											<option value="4">Jumat</option>
+											<option value="5">Sabtu</option>
+											<option value="6">Minggu</option>
+										</select>
+									</label>
+									<span class="text-[10px] text-gray-400 mt-1 block">Untuk jadwal berulang mingguan.</span>
+								</div>
+
+								<div>
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Tanggal Spesifik
+										<input type="date" bind:value={assignForm.specific_date} disabled={!!editingId} onchange={() => { if (assignForm.specific_date !== '') assignForm.day_of_week = ''; }} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed" />
+									</label>
+									<span class="text-[10px] text-gray-400 mt-1 block">Untuk kejadian khusus 1 hari saja (misal: lembur khusus, event).</span>
+								</div>
+							</div>
+
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+								<div>
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Mulai Berlaku <span class="text-red-500">*</span>
+										<input type="date" bind:value={assignForm.effective_from} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+									</label>
+								</div>
+								<div>
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Berlaku Sampai
+										<input type="date" bind:value={assignForm.effective_until} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+									</label>
+									<span class="text-[10px] text-gray-400 mt-1 block">Kosongkan jika aktif seterusnya.</span>
+								</div>
+								<div>
+									<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+										Prioritas Jadwal
+										<input type="number" bind:value={assignForm.priority} min="0" max="100" class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
+									</label>
+									<span class="text-[10px] text-gray-400 mt-1 block">Makin tinggi prioritas, makin diutamakan.</span>
+								</div>
+							</div>
+
+							<div class="pt-2">
+								<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+									Alasan / Keterangan Jadwal
+									<input type="text" bind:value={assignForm.reason} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-900 text-gray-900 dark:text-white" placeholder="Contoh: Shift Ganti, Lembur Proyek A" />
+								</label>
+							</div>
+						</div>
+					</div>
+
+					<!-- Right Column: Verification, WFH & Locations (span 1) -->
+					<div class="space-y-6">
+						<!-- Card 3: Validasi WFH / Remote -->
+						<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-4 shadow-sm">
+							<div class="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-gray-700">
+								<svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>
+								<h3 class="text-sm font-bold text-gray-900 dark:text-white">Jenis Validasi Absen</h3>
+							</div>
+
+							<div class="flex items-start gap-3 p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-100 dark:border-purple-900/30">
+								<label class="relative inline-flex items-center cursor-pointer mt-0.5 shrink-0">
+									<input type="checkbox" bind:checked={assignForm.is_remote} class="sr-only peer" />
+									<div class="w-9 h-5 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+								</label>
+								<div>
+									<span class="text-xs font-bold text-purple-950 dark:text-purple-300">Jadwal Remote / WFH</span>
+									<p class="text-[10px] text-purple-700 dark:text-purple-400 mt-0.5 leading-relaxed">Aktifkan jika karyawan diperbolehkan melakukan check-in dari mana saja tanpa validasi jarak koordinat GPS kantor.</p>
+								</div>
+							</div>
+						</div>
+
+						<!-- Card 4: Lokasi Absensi -->
+						<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-4 shadow-sm">
+							<div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+								<div class="flex items-center gap-2.5">
+									<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+									<h3 class="text-sm font-bold text-gray-900 dark:text-white">Lokasi Absensi</h3>
+								</div>
+								<button type="button" onclick={addLocation} class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm">
+									<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+									Tambah
+								</button>
+							</div>
+
+							{#if assignedLocations.length === 0}
+								<div class="text-center py-6 px-3 bg-gray-50 dark:bg-gray-900/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
+									<svg class="w-8 h-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+									<p class="text-xs text-gray-500 dark:text-gray-400 leading-normal">
+										Tidak ada lokasi terkunci.<br />Karyawan bebas absen dari lokasi kantor manapun yang aktif.
+									</p>
+								</div>
+							{:else}
+								<div class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+									{#each assignedLocations as loc, i (i)}
+										<div class="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900/30 rounded-xl border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-300">
+											<select bind:value={loc.attendance_location_id} onchange={(e) => updateLocation(i, 'attendance_location_id', (e.target as HTMLSelectElement).value)} class="flex-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+												<option value="">Pilih Lokasi Kantor</option>
+												{#each locations as l (l)}
+													<option value={l.id}>{l.name}</option>
+												{/each}
+											</select>
+											<button type="button" onclick={() => removeLocation(i)} class="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-955/20 transition cursor-pointer" aria-label="Hapus lokasi">
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+											</button>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
 				</div>
 			</div>
 
-			<div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-				<button onclick={() => { activeTab = 'list'; }} class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition cursor-pointer">Batal</button>
-				<button onclick={handleAssign} disabled={isAssigning} class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 cursor-pointer">
-					{#if isAssigning}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{/if}
-					Simpan Jadwal
+			<!-- Footer -->
+			<div class="flex items-center justify-end gap-3 px-6 py-5 border-t border-gray-200 dark:border-gray-750 bg-white dark:bg-gray-800">
+				<button onclick={() => { activeTab = 'list'; }} class="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-300 transition cursor-pointer">Batal</button>
+				<button onclick={handleAssign} disabled={isAssigning} class="px-6 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 cursor-pointer active:scale-[0.98]">
+					{#if isAssigning}
+						<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+					{/if}
+					{editingId ? 'Simpan Perubahan' : 'Simpan Jadwal'}
 				</button>
 			</div>
 		</div>
@@ -683,7 +811,7 @@
 							Karyawan <span class="text-red-500">*</span>
 							<select bind:value={resolveEmployeeId} class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 								<option value="">Pilih karyawan</option>
-								{#each employees_list as emp}
+								{#each employees_list as emp (emp)}
 									<option value={emp.id}>{emp.full_name} ({emp.employee_id})</option>
 								{/each}
 							</select>
@@ -696,7 +824,7 @@
 					</label>
 					</div>
 					<div class="flex items-end">
-						<button onclick={handleResolve} disabled={isResolving} class="w-full px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 cursor-pointer">
+						<button onclick={handleResolve} disabled={isResolving} class="w-full px-5 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 cursor-pointer">
 							{#if isResolving}<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>{/if}
 							Cek Jadwal
 						</button>
@@ -707,6 +835,20 @@
 					<div class="bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3 rounded-lg flex items-center gap-2">
 						<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
 						{resolveError}
+					</div>
+				{/if}
+
+				{#if !resolvedSchedule && !resolveError}
+					<div class="py-12 px-4 text-center border-t border-gray-150 dark:border-gray-800 mt-2">
+						<div class="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-650 dark:text-blue-400">
+							<svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+							</svg>
+						</div>
+						<h3 class="text-sm font-bold text-gray-900 dark:text-white">Cek Jadwal Efektif Karyawan</h3>
+						<p class="text-xs text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">
+							Pilih nama karyawan dan tentukan tanggal di atas, lalu klik tombol <strong>"Cek Jadwal"</strong> untuk menganalisis jadwal kerja final yang berlaku (gabungan dari override libur, shift mingguan, jadwal individu, atau jadwal departemen).
+						</p>
 					</div>
 				{/if}
 
@@ -762,7 +904,7 @@
 			</div>
 		</div>
 	{/if}
-</div></div>
+</div>
 
 	<!-- Delete Confirmation Modal -->
 	<AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
