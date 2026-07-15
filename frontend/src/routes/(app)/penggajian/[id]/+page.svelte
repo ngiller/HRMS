@@ -1,4 +1,5 @@
 <script lang="ts">
+/* eslint-disable svelte/no-navigation-without-resolve */
 	import { onMount, onDestroy } from 'svelte';
 	import { page as appPage } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -296,11 +297,11 @@
 	}
 </script>
 
+<!-- eslint-disable svelte/no-useless-children-snippet -->
+
 <!-- THR Calculation Modal -->
 {#if showTHRModal}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<div onclick={closeTHRModal} onkeydown={(e) => { if (e.key === 'Escape') closeTHRModal(); }}
+			<div onclick={closeTHRModal} onkeydown={(e) => { if (e.key === 'Escape') closeTHRModal(); }}
 		role="presentation" tabindex="-1" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} class="bg-white rounded-2xl shadow-2xl w-full max-w-md" role="dialog" tabindex="-1" aria-modal="true" aria-label="Hitung THR">
 			<div class="px-6 py-6">
@@ -377,7 +378,7 @@
 			<div class="h-6 bg-gray-100 rounded w-48"></div>
 			<div class="h-4 bg-gray-50 rounded w-72"></div>
 			<div class="grid grid-cols-4 gap-4 mt-4">
-				{#each [1,2,3,4] as _}<div class="h-20 bg-gray-100 rounded-xl"></div>{/each}
+				{#each [1,2,3,4] as _, i (i)}<div class="h-20 bg-gray-100 rounded-xl"></div>{/each}
 			</div>
 		</div>
 	{:else if errorMessage}
@@ -395,6 +396,14 @@
 				</div>
 				<div class="flex items-center gap-2">
 					{#if hasPermission('payroll', 'update') && (period.status === 'draft' || period.status === 'calculated')}
+						<button onclick={() => payrollApi.calculatePayroll(periodId).then(() => loadData())}
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 transition-all cursor-pointer"
+							title={period.status === 'calculated' ? 'Hitung Ulang Gaji' : 'Hitung Gaji'}>
+							<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm3.75-4.5h.008v.008H12v-.008Zm0 2.25h.008v.008H12V13.5Zm0 2.25h.008v.008H12v-.008Zm3.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75h3.75a.75.75 0 0 0 .75-.75v-3.75a.75.75 0 0 0-.75-.75H18ZM4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
+							</svg>
+							{period.status === 'calculated' ? 'Hitung Ulang' : 'Hitung Gaji'}
+						</button>
 						<button onclick={handleOpenTHRModal}
 							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer"
 							title="Hitung THR untuk periode ini">
@@ -452,7 +461,7 @@
 
 				<PullToRefresh onRefresh={loadData}>
 				<div class="md:hidden space-y-3">
-					{#each items as item}
+					{#each items as item (item)}
 						<MobileCard
 							title={item.employee_name}
 							subtitle={`${item.department_name} · ${item.position_name}`}

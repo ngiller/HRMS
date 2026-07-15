@@ -132,8 +132,9 @@
 		}
 	}
 
-	function viewDetail(id: string) {
-		goto(`/penggajian/${id}`);
+	async function viewDetail(id: string) {
+// eslint-disable-next-line svelte/no-navigation-without-resolve
+		await goto(`/penggajian/${id}`);
 	}
 
 	function formatDate(dateStr: string): string {
@@ -241,6 +242,11 @@
 					container.appendChild(calcBtn);
 				}
 				if (p.status === 'calculated' && hasPermission('payroll', 'update')) {
+					const calcBtn = createActionButton(iconCalculate(),
+						'p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition cursor-pointer',
+						'Hitung Ulang', () => openConfirm('calculate', p));
+					container.appendChild(calcBtn);
+					
 					const approveBtn = createActionButton(iconApprove(),
 						'p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition cursor-pointer',
 						'Setujui', () => openConfirm('approve', p));
@@ -365,7 +371,7 @@
 					<label for="payroll-month" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Bulan Acuan</label>
 					<select id="payroll-month" bind:value={formData.month}
 						class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
-						{#each Array.from({ length: 12 }, (_, i) => i + 1) as m}
+						{#each Array.from({ length: 12 }, (_, i) => i + 1) as m (m)}
 							<option value={m}>{monthName(m)}</option>
 						{/each}
 					</select>
@@ -448,7 +454,7 @@
 
 			<PullToRefresh onRefresh={loadPeriods}>
 			<div class="md:hidden space-y-3">
-				{#each periods as p}
+				{#each periods as p (p)}
 					<MobileCard
 						title={p.period_name}
 						subtitle={`${monthName(p.month)} ${p.year}`}
@@ -457,14 +463,6 @@
 						badges={[{ label: statusLabel(p.status), color: getStatusColor(p.status) }]}
 						onclick={() => viewDetail(p.id)}
 					>
-						{#snippet children()}
-							<div class="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
-								<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-								</svg>
-								{formatDate(p.start_date)} — {formatDate(p.end_date)}
-							</div>
-						{/snippet}
 						{#snippet footer()}
 							<div class="flex items-center justify-between">
 								<span class="text-xs text-gray-500 dark:text-gray-400">{p.total_employee} karyawan</span>
@@ -495,7 +493,6 @@
 
 <!-- Confirm Modal -->
 {#if showConfirm}
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelConfirm} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelConfirm(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
