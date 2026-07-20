@@ -224,8 +224,15 @@ describe('getAccessibleMenus', () => {
 		expect(kepegawaianGroup).toBeDefined();
 		expect(kepegawaianGroup!.items.some((m) => m.label === 'Karyawan')).toBe(true);
 		expect(kepegawaianGroup!.items.some((m) => m.label === 'Departemen')).toBe(true);
-		// Dokumen is also in Kepegawaian but requires "document" module
+		// Dokumen requires "document" module
 		expect(kepegawaianGroup!.items.some((m) => m.label === 'Dokumen Karyawan')).toBe(false);
+		// Resign, Mutasi, KPI, Surat Peringatan are now in "Pengembangan SDM" group
+		const pengembanganGroup = menus.find((g) => g.group === 'Pengembangan & Disiplin');
+		expect(pengembanganGroup).toBeDefined();
+		expect(pengembanganGroup!.items.some((m) => m.label === 'Mutasi & Promosi')).toBe(true);
+		expect(pengembanganGroup!.items.some((m) => m.label === 'Resign')).toBe(true);
+		expect(pengembanganGroup!.items.some((m) => m.label === 'KPI')).toBe(false); // requires kpi module
+		expect(pengembanganGroup!.items.some((m) => m.label === 'Surat Peringatan')).toBe(false); // requires reprimand module
 	});
 
 	it('excludes groups where all items are filtered out', () => {

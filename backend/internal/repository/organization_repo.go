@@ -13,6 +13,7 @@ type DeptTreeNode struct {
 	ID       uuid.UUID
 	Name     string
 	ParentID *uuid.UUID
+	HeadID   *uuid.UUID
 	HeadName string
 }
 
@@ -24,17 +25,20 @@ type PosTreeNode struct {
 }
 
 type EmpTreeNode struct {
-	ID           uuid.UUID
-	FullName     string
-	EmployeeID   string
-	PositionID   *uuid.UUID
-	DepartmentID *uuid.UUID
-	JoinDate     time.Time
+	ID               uuid.UUID
+	FullName         string
+	EmployeeID       string
+	PositionID       *uuid.UUID
+	DepartmentID     *uuid.UUID
+	JoinDate         time.Time
+	ApprovalLineID   *uuid.UUID
+	ApprovalLineName string
 }
 
 func GetAllDeptsForTree(ctx context.Context) ([]DeptTreeNode, error) {
 	query := `
 		SELECT d.id, d.name, d.parent_id,
+			d.head_id,
 			COALESCE(e.full_name, '') as head_name
 		FROM departments d
 		LEFT JOIN employees e ON d.head_id = e.id
@@ -50,7 +54,7 @@ func GetAllDeptsForTree(ctx context.Context) ([]DeptTreeNode, error) {
 	var depts []DeptTreeNode
 	for rows.Next() {
 		var d DeptTreeNode
-		if err := rows.Scan(&d.ID, &d.Name, &d.ParentID, &d.HeadName); err != nil {
+		if err := rows.Scan(&d.ID, &d.Name, &d.ParentID, &d.HeadID, &d.HeadName); err != nil {
 			return nil, err
 		}
 		depts = append(depts, d)
@@ -86,8 +90,11 @@ func GetAllPositionsForTree(ctx context.Context) ([]PosTreeNode, error) {
 
 func GetAllEmployeesForTree(ctx context.Context) ([]EmpTreeNode, error) {
 	query := `
-		SELECT e.id, e.full_name, e.employee_id, e.position_id, e.department_id, e.join_date
+		SELECT e.id, e.full_name, e.employee_id, e.position_id, e.department_id, e.join_date,
+			e.approval_line_id,
+			COALESCE(atasan.full_name, '') as atasan_name
 		FROM employees e
+		LEFT JOIN employees atasan ON e.approval_line_id = atasan.id
 		WHERE e.deleted_at IS NULL AND e.is_active = TRUE
 		ORDER BY e.full_name ASC
 	`
@@ -100,7 +107,8 @@ func GetAllEmployeesForTree(ctx context.Context) ([]EmpTreeNode, error) {
 	var employees []EmpTreeNode
 	for rows.Next() {
 		var emp EmpTreeNode
-		if err := rows.Scan(&emp.ID, &emp.FullName, &emp.EmployeeID, &emp.PositionID, &emp.DepartmentID, &emp.JoinDate); err != nil {
+		if err := rows.Scan(&emp.ID, &emp.FullName, &emp.EmployeeID, &emp.PositionID, &emp.DepartmentID, &emp.JoinDate,
+			&emp.ApprovalLineID, &emp.ApprovalLineName); err != nil {
 			return nil, err
 		}
 		employees = append(employees, emp)

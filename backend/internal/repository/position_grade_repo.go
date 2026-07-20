@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"hrms-backend/internal/database"
@@ -178,6 +179,19 @@ func DeletePositionGrade(ctx context.Context, id, userID string) error {
 		_, err := tx.Exec(ctx, `DELETE FROM position_grades WHERE id::text = $1`, id)
 		return err
 	})
+}
+
+// GetPositionGradeByName looks up a position grade ID by name (case-insensitive).
+func GetPositionGradeByName(ctx context.Context, name string) (*string, error) {
+	var id string
+	err := database.Pool.QueryRow(ctx, `SELECT id::text FROM position_grades WHERE LOWER(name) = LOWER($1) LIMIT 1`, name).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &id, nil
 }
 
 func CheckPositionGradeNameExists(ctx context.Context, name string, excludeID string) (bool, error) {

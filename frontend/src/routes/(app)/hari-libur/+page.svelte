@@ -50,6 +50,17 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	let monthFilter = $state<number | null>(null);
 	let isLoading = $state(true);
 	let errorMessage = $state('');
+	let searchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
+
+	function onSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			searchQuery = target.value;
+			gridApi?.setGridOption('quickFilterText', target.value);
+		}, 400);
+	}
 
 	let showForm = $state(false);
 	let formTitle = $state('');
@@ -284,15 +295,20 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 
 	{#if !showForm}
 		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+			<div class="relative flex-1 max-w-md">
+				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+				<input type="search" value={searchQuery} placeholder="Cari hari libur..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+			</div>
+			
 			<div class="flex flex-wrap items-center gap-2">
 				<button onclick={() => { typeFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!typeFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">Semua</button>
-				{#each Object.entries(holidayTypes) as [key, label]}
+				{#each Object.entries(holidayTypes) as [key, label] (key)}
 					<button onclick={() => { typeFilter = key; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {typeFilter === key ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{label}</button>
 				{/each}
 			</div>
 			<div class="flex items-center gap-2">
 				<select bind:value={yearFilter} onchange={() => { page = 1; load(); }} class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-800 rounded-lg outline-none bg-white dark:bg-gray-900">
-					{#each [2026, 2027, 2025] as year}
+					{#each [2026, 2027, 2025] as year (year)}
 						<option value={year}>{year}</option>
 					{/each}
 				</select>
@@ -319,7 +335,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<div>
 						<label for="hol-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipe</label>
 						<select id="hol-type" bind:value={form.holiday_type} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
-							{#each Object.entries(holidayTypes) as [key, label]}
+							{#each Object.entries(holidayTypes) as [key, label] (key)}
 								<option value={key}>{label}</option>
 							{/each}
 						</select>
@@ -366,7 +382,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			{:else}
 				<!-- Calendar-like header -->
 				<div class="hidden md:grid grid-cols-12 gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-					{#each Array.from({ length: 12 }, (_, i) => i) as monthIdx}
+					{#each Array.from({ length: 12 }, (_, i) => i) as monthIdx (monthIdx)}
 						<button onclick={() => { monthFilter = monthFilter === monthIdx ? null : monthIdx; }}
 							class="text-center text-xs font-medium py-2 px-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer {monthFilter === monthIdx ? 'bg-[#1A56DB] text-white shadow-sm' : monthIdx === new Date().getMonth() && monthFilter === null ? 'bg-[#1A56DB]/10 text-[#1A56DB]' : 'text-gray-600 dark:text-gray-400'}">
 							{monthNames[monthIdx].substring(0, 3)}
@@ -380,11 +396,11 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				<!-- Mobile: grouped by month -->
 				<PullToRefresh onRefresh={load}>
 					<div class="md:hidden space-y-3">
-						{#each [...new Set(items.map(i => getMonth(i.date)))] as month}
+						{#each [...new Set(items.map(i => getMonth(i.date)))] as month (month)}
 							<div class="px-4 py-2">
 								<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{month}</h3>
 							</div>
-							{#each items.filter(i => getMonth(i.date) === month) as item}
+							{#each items.filter(i => getMonth(i.date) === month) as item (item)}
 								<MobileCard
 									title={item.name}
 									subtitle={`${formatShortDate(item.date)}${item.is_recurring_yearly ? ' · Tahunan' : ''}`}
@@ -392,11 +408,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 									avatarColor={getAvatarTheme('holiday').gradientClasses}
 									badges={[{ label: holidayTypes[item.holiday_type] || item.holiday_type, color: typeColors[item.holiday_type] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }]}
 								>
-									{#snippet children()}
-										{#if item.description}
-											<div class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{item.description}</div>
-										{/if}
-									{/snippet}
 									{#snippet footer()}
 										<div class="flex items-center gap-2">
 											{#if hasPermission('announcement', 'update')}
@@ -416,7 +427,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>

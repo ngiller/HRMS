@@ -343,3 +343,34 @@ html.dark {
 select {
 	padding-right: 2.5rem !important;
 }
+
+/* ============================================
+   Shimmer Animation (formerly in PulseLoader)
+   ============================================ */
+
+.shimmer {
+	background: linear-gradient(
+		90deg,
+		#e5e7eb 25%,
+		#f3f4f6 37%,
+		#e5e7eb 63%
+	);
+	background-size: 200% 100%;
+	animation: shimmer-slide 1.6s ease-in-out infinite;
+}
+
+:where(.dark) .shimmer {
+	background: linear-gradient(
+		90deg,
+		#374151 25%,
+		#4b5563 37%,
+		#374151 63%
+	);
+	background-size: 200% 100%;
+	animation: shimmer-slide 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer-slide {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}

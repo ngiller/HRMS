@@ -176,7 +176,6 @@ INSERT INTO roles (name, slug, description, is_system_role, permissions) VALUES
         "reimbursement": {"create": true, "read": true},
         "overtime": {"create": true, "read": true},
         "loan": {"create": true, "read": true},
-        "kpi": {"create": true, "read": true},
         "reprimand": {"read": true},
         "payslip": {"read": true},
         "announcement": {"read": true},

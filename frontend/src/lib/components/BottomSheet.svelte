@@ -88,8 +88,6 @@
 </script>
 
 {#if open}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-end justify-center"
 		onclick={handleBackdropClick}
@@ -103,7 +101,6 @@
 		></div>
 
 		<!-- Sheet -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			bind:this={sheetEl}
 			role="dialog"

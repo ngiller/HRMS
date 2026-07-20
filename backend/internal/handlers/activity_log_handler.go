@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"hrms-backend/internal/database"
 	"hrms-backend/internal/models"
 	"hrms-backend/internal/service"
 
@@ -43,10 +44,17 @@ func (h *ActivityLogHandler) ListActivityLogs(c *fiber.Ctx) error {
 		}
 	}
 
+	// Regular employees can only see their own activity logs
+	userID := c.Query("user_id")
+	roleSlug, _ := c.Locals("role_slug").(string)
+	if roleSlug == "employee" {
+		userID = database.UserIDFromContext(c.Locals("user_id"))
+	}
+
 	filter := &models.ActivityLogFilter{
 		Action:     c.Query("action"),
 		EntityType: c.Query("entity_type"),
-		UserID:     c.Query("user_id"),
+		UserID:     userID,
 		StartDate:  startDate,
 		EndDate:    endDate,
 		Page:       page,
@@ -65,9 +73,19 @@ func (h *ActivityLogHandler) ListActivityLogs(c *fiber.Ctx) error {
 func (h *ActivityLogHandler) GetActivityLog(c *fiber.Ctx) error {
 	id := c.Params("id")
 
+	roleSlug, _ := c.Locals("role_slug").(string)
+
 	log, err := h.svc.GetActivityLog(c.Context(), id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse("Log aktivitas tidak ditemukan"))
+	}
+
+	// Regular employees can only see their own logs
+	if roleSlug == "employee" {
+		userID := database.UserIDFromContext(c.Locals("user_id"))
+		if log.UserID == nil || *log.UserID != userID {
+			return c.Status(fiber.StatusForbidden).JSON(ErrorResponse("Anda tidak memiliki akses untuk melihat log ini"))
+		}
 	}
 
 	return c.JSON(SuccessResponse(log, "Detail log aktivitas"))

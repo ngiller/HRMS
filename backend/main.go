@@ -145,6 +145,12 @@ func main() {
 	mutationService := service.NewMutationService()
 	mutationHandler := handlers.NewMutationHandler(mutationService)
 
+	// Initialize Shift & Roster services
+	shiftService := service.NewShiftService()
+	rosterService := service.NewRosterService()
+	shiftHandler := handlers.NewShiftHandler(shiftService)
+	rosterHandler := handlers.NewRosterHandler(rosterService)
+
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:       "HRMS API",
@@ -189,6 +195,8 @@ func main() {
 		approvalWorkflowHandler,
 		pushSubscriptionHandler,
 		mutationHandler,
+		shiftHandler,
+		rosterHandler,
 		sseHandler,
 		authService)
 

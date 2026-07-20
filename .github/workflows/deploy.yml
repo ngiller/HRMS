@@ -1,0 +1,152 @@
+# ============================================================
+# GitHub Actions — Deploy to Production
+# ============================================================
+# Triggered by push to main branch or manual dispatch.
+# Builds Docker images and deploys to production server via SSH.
+# ============================================================
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "22"
+
+jobs:
+  test:
+    name: Pre-deploy Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Go Build & Vet
+        run: |
+          cd backend
+          go build ./...
+          go vet ./...
+        working-directory: ${{ github.workspace }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend Check
+        run: |
+          cd frontend
+          npm ci
+          npm run check
+        working-directory: ${{ github.workspace }}
+
+      - name: Frontend Build
+        run: |
+          cd frontend
+          npm run build
+        working-directory: ${{ github.workspace }}
+
+  deploy:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod
+          push: false
+          load: true
+          tags: hrms-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save image as tarball
+        run: docker save hrms-api:latest | gzip > hrms-api.tar.gz
+
+      - name: Copy image to server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          source: "hrms-api.tar.gz,docker-compose.prod.yml,.env.example"
+          target: "/opt/hrms/"
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            cd /opt/hrms
+            echo "📦 Loading image..."
+            docker load < hrms-api.tar.gz
+            rm -f hrms-api.tar.gz
+
+            echo "🔄 Restarting services..."
+            docker compose -f docker-compose.prod.yml up -d --force-recreate api migrate
+
+            echo "🧹 Cleaning up..."
+            docker system prune -f
+
+            echo "✅ Verifying health..."
+            for i in 1 2 3 4 5; do
+              if curl -s --fail http://localhost:8080/api/health > /dev/null 2>&1; then
+                echo "✅ Health check passed (attempt $i)"
+                break
+              fi
+              echo "⏳ Waiting for API to be ready (attempt $i)..."
+              sleep 3
+            done
+            curl -s --fail http://localhost:8080/api/health && echo "✅ API is live" || echo "⚠️ Health check failed after 5 attempts"
+
+      - name: Notify success
+        if: success()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_TITLE: "✅ HRMS Deployed"
+          SLACK_MESSAGE: "Production deployment successful! 🚀"
+          SLACK_COLOR: good
+        continue-on-error: true
+
+      - name: Notify failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_TITLE: "❌ HRMS Deployment Failed"
+          SLACK_MESSAGE: "Deployment failed. Check workflow logs."
+          SLACK_COLOR: danger
+        continue-on-error: true

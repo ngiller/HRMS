@@ -36,6 +36,8 @@
 		hr_settings?: {
 			bpjs?: BPJSConfig;
 			face_match_threshold?: number;
+			cutoff_start_day?: number;
+			cutoff_end_day?: number;
 		};
 	};
 
@@ -45,73 +47,7 @@ let isSaving = $state(false);
 let loadError = $state('');
 	let errorMessage = $state('');
 	let successMessage = $state('');
-	let activeTab = $state<'company' | 'bpjs' | 'workflow' | 'attendance'>('bpjs');
-
-	// ── Workflow Config ──
-	import { approvalWorkflows as wfApi } from '$lib/api.js';
-
-	type WorkflowSummary = {
-		id: string;
-		entity_type: string;
-		is_active: boolean;
-		steps: Array<{
-			id: string;
-			step_order: number;
-			approver_type: string;
-			condition_field: string;
-			condition_operator: string;
-			condition_value: number;
-			is_last?: boolean;
-		}>;
-	};
-
-	let workflows = $state<WorkflowSummary[]>([]);
-	let wfLoading = $state(false);
-	let wfError = $state('');
-
-	const ENTITY_LABELS: Record<string, string> = {
-		leave: 'Cuti',
-		overtime: 'Lembur',
-		reimbursement: 'Reimbursement',
-		shift_change: 'Permintaan Shift',
-		loan: 'Pinjaman',
-	};
-
-	const APPROVER_LABELS: Record<string, string> = {
-		department_head: 'Kepala Departemen',
-		hr_manager: 'HR Manager',
-		finance: 'Finance',
-		director: 'Direktur',
-		approval_line: 'Atasan Langsung',
-	};
-
-	async function loadWorkflows() {
-		wfLoading = true;
-		wfError = '';
-		try {
-			const res: any = await wfApi.list();
-			workflows = res.data || [];
-		} catch (err: unknown) {
-			wfError = (err as { message?: string }).message || 'Gagal memuat workflow';
-		} finally {
-			wfLoading = false;
-		}
-	}
-
-	$effect(() => {
-		if (activeTab === 'workflow') {
-			loadWorkflows();
-		}
-	});
-
-	async function handleToggleWorkflow(wf: WorkflowSummary) {
-		try {
-			await wfApi.create({ entity_type: wf.entity_type, is_active: !wf.is_active });
-			loadWorkflows();
-		} catch (err: unknown) {
-			wfError = (err as { message?: string }).message || 'Gagal mengubah status workflow';
-		}
-	}
+	let activeTab = $state<'company' | 'bpjs' | 'attendance'>('bpjs');
 
 	let edit = $state({
 		name: '',
@@ -134,6 +70,8 @@ let loadError = $state('');
 			jkm: { enabled: true, company_rate: 0.3, ceiling: 0 },
 		} as BPJSConfig,
 		face_match_threshold: 0.6,
+		cutoff_start_day: 26,
+		cutoff_end_day: 25,
 	});
 
 	onMount(async () => {
@@ -157,6 +95,18 @@ let loadError = $state('');
 				// Load face_match_threshold from hr_settings
 				if (res.data.hr_settings?.face_match_threshold != null) {
 					edit.face_match_threshold = res.data.hr_settings.face_match_threshold;
+				}
+
+				// Load cutoff days from hr_settings
+				if (res.data.hr_settings?.cutoff_start_day != null) {
+					edit.cutoff_start_day = res.data.hr_settings.cutoff_start_day;
+				} else {
+					edit.cutoff_start_day = 26;
+				}
+				if (res.data.hr_settings?.cutoff_end_day != null) {
+					edit.cutoff_end_day = res.data.hr_settings.cutoff_end_day;
+				} else {
+					edit.cutoff_end_day = 25;
 				}
 
 				if (res.data.hr_settings?.bpjs) {
@@ -250,6 +200,8 @@ let loadError = $state('');
 				hr_settings: {
 					bpjs: Object.keys(bpjsPayload).length > 0 ? bpjsPayload : undefined,
 					face_match_threshold: edit.face_match_threshold,
+					cutoff_start_day: edit.cutoff_start_day,
+					cutoff_end_day: edit.cutoff_end_day,
 				},
 			};
 
@@ -306,10 +258,6 @@ let loadError = $state('');
 			<button onclick={() => activeTab = 'company'}
 				class="px-5 py-2 rounded-lg text-sm font-medium transition cursor-pointer {activeTab === 'company' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
 				Profil Perusahaan
-			</button>
-			<button onclick={() => activeTab = 'workflow'}
-				class="px-5 py-2 rounded-lg text-sm font-medium transition cursor-pointer {activeTab === 'workflow' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
-				Workflow Persetujuan
 			</button>
 			<button onclick={() => activeTab = 'attendance'}
 				class="px-5 py-2 rounded-lg text-sm font-medium transition cursor-pointer {activeTab === 'attendance' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
@@ -575,66 +523,6 @@ let loadError = $state('');
 					</div>
 				</div>
 
-			{:else if activeTab === 'workflow'}
-				<div class="space-y-4">
-					<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
-						<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-indigo-50 to-white dark:from-gray-800 dark:to-gray-900">
-							<div class="flex items-center gap-3">
-								<svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-								<h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Workflow Persetujuan</h2>
-							</div>
-							<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-8">Atur alur persetujuan multi-level untuk setiap modul.</p>
-						</div>
-
-						<div class="p-6">
-							{#if wfLoading}
-								<PulseLoader variant="card" count={3} />
-							{:else if wfError}
-								<div class="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-4 py-3">{wfError}</div>
-							{:else if workflows.length === 0}
-								<p class="text-sm text-gray-400 text-center py-8">Belum ada workflow yang dikonfigurasi.</p>
-							{:else}
-								<div class="space-y-3">
-									{#each workflows as wf}
-										<div class="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-											<div class="flex items-center justify-between mb-3">
-												<div class="flex items-center gap-3">
-													<div class="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
-														<svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-													</div>
-													<div>
-														<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{ENTITY_LABELS[wf.entity_type] || wf.entity_type}</h3>
-														<p class="text-xs text-gray-400">{wf.steps?.length || 0} level persetujuan</p>
-													</div>
-												</div>
-												<label class="relative inline-flex items-center cursor-pointer">
-													<input type="checkbox" checked={wf.is_active} onchange={() => handleToggleWorkflow(wf)} class="sr-only peer" />
-													<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-												</label>
-											</div>
-											{#if wf.steps && wf.steps.length > 0}
-												<div class="flex flex-wrap gap-2">
-													{#each wf.steps as step}
-														<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-1 ring-gray-200 dark:ring-gray-700">
-															{APPROVER_LABELS[step.approver_type] || step.approver_type}
-															{#if step.condition_field}
-																<span class="text-gray-400">(jika {step.condition_field} {step.condition_operator} {step.condition_value})</span>
-															{/if}
-														</span>
-														{#if !step.is_last}
-															<svg class="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
-														{/if}
-													{/each}
-												</div>
-											{/if}
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					</div>
-				</div>
-
 			{:else if activeTab === 'attendance'}
 				<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
 					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-teal-50 to-white dark:from-gray-800 dark:to-gray-900">
@@ -688,6 +576,37 @@ let loadError = $state('');
 									<div class="text-xs text-gray-400 mb-1">Longgar</div>
 									<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">0.65 - 1.00</div>
 									<div class="text-xs text-red-600 dark:text-red-400 mt-1">Risiko false positive tinggi</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Periode Absensi (Buka & Tutup Buku) -->
+						<div class="bg-indigo-50/30 dark:bg-gray-800/50 rounded-xl p-5 border border-indigo-100 dark:border-gray-700 mt-6">
+							<div class="mb-4">
+								<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Siklus Periode Absensi (Buka & Tutup Buku)</h3>
+								<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Tentukan tanggal mulai (buka buku) dan tanggal selesai (tutup buku/cutoff) untuk perhitungan absensi bulanan.</p>
+							</div>
+
+							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tanggal Buka Buku (Mulai Siklus)</label>
+									<select bind:value={edit.cutoff_start_day}
+										class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+										{#each Array.from({ length: 31 }, (_, i) => i + 1) as day}
+											<option value={day}>Tanggal {day}</option>
+										{/each}
+									</select>
+									<span class="text-[10px] text-gray-400 mt-1 block">Biasanya tanggal 26 bulan sebelumnya.</span>
+								</div>
+								<div>
+									<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tanggal Tutup Buku (Cutoff/Akhir Siklus)</label>
+									<select bind:value={edit.cutoff_end_day}
+										class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+										{#each Array.from({ length: 31 }, (_, i) => i + 1) as day}
+											<option value={day}>Tanggal {day}</option>
+										{/each}
+									</select>
+									<span class="text-[10px] text-gray-400 mt-1 block">Biasanya tanggal 25 bulan berjalan.</span>
 								</div>
 							</div>
 						</div>

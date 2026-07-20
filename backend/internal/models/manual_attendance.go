@@ -17,7 +17,7 @@ type ManualAttendanceRequest struct {
 	Reason          string     `json:"reason"`
 	Status          string     `json:"status"`
 	ApprovedBy      *uuid.UUID `json:"approved_by"`
-	ApprovedByName  string     `json:"approved_by_name,omitempty"`
+	ApprovedByName  string     `json:"approved_by_name"`
 	ApprovedAt      *time.Time `json:"approved_at"`
 	RejectionReason string     `json:"rejection_reason,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`

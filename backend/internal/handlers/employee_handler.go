@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"os"
 	"strings"
 
 	"hrms-backend/internal/database"
@@ -61,13 +62,18 @@ func (h *EmployeeHandler) GetEmployee(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse(err.Error()))
 	}
 
-	// Sembunyikan gaji untuk karyawan biasa (kecuali data dirinya sendiri)
+	// Sembunyikan data sensitif untuk karyawan biasa (kecuali data dirinya sendiri)
 	roleSlug, _ := c.Locals("role_slug").(string)
 	if roleSlug == "employee" {
 		requestingUserID, _ := c.Locals("user_id").(string)
 		if requestingUserID != "" && employee.ID.String() != requestingUserID {
 			employee.BaseSalary = nil
 			employee.DailyWage = nil
+			employee.NIK = ""
+			employee.NPWP = ""
+			employee.BankName = ""
+			employee.BankAccount = ""
+			employee.AddressKTP = ""
 		}
 	}
 
@@ -310,7 +316,7 @@ func (h *EmployeeHandler) GetEmployeeHistory(c *fiber.Ctx) error {
 	))
 }
 
-// ExportEmployees exports all employees to Excel
+// ExportEmployees exports all employees to Excel (55-column format matching employee_template.xlsx)
 // GET /api/employees/export
 func (h *EmployeeHandler) ExportEmployees(c *fiber.Ctx) error {
 	fileBytes, err := h.employeeService.ExportEmployees(c.Context())
@@ -319,8 +325,41 @@ func (h *EmployeeHandler) ExportEmployees(c *fiber.Ctx) error {
 	}
 
 	c.Response().Header.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Response().Header.Set("Content-Disposition", "attachment; filename=employees.xlsx")
+	c.Response().Header.Set("Content-Disposition", "attachment; filename=karyawan.xlsx")
 	return c.Send(fileBytes)
+}
+
+// DownloadTemplate downloads the employee import template Excel file
+// GET /api/employees/template
+func (h *EmployeeHandler) DownloadTemplate(c *fiber.Ctx) error {
+	// Try to serve employee_template.xlsx first, fallback to template_import_karyawan.xlsx
+	templateFiles := []string{"employee_template.xlsx", "template_import_karyawan.xlsx"}
+	var templatePath string
+	for _, f := range templateFiles {
+		if _, err := os.Stat(f); err == nil {
+			templatePath = f
+			break
+		}
+	}
+
+	if templatePath == "" {
+		// Try relative to project root
+		for _, f := range templateFiles {
+			path := "../" + f
+			if _, err := os.Stat(path); err == nil {
+				templatePath = path
+				break
+			}
+		}
+	}
+
+	if templatePath == "" {
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse("File template tidak ditemukan"))
+	}
+
+	c.Response().Header.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Response().Header.Set("Content-Disposition", "attachment; filename=employee_template.xlsx")
+	return c.SendFile(templatePath)
 }
 
 // ImportEmployees imports employees from uploaded Excel file
@@ -368,6 +407,44 @@ func (h *EmployeeHandler) RegisterFaceDescriptor(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(SuccessResponse(fiber.Map{}, "Deskriptor wajah berhasil disimpan"))
+}
+
+// UploadMyPhoto handles photo upload for the authenticated user's own profile
+// POST /api/auth/photo
+func (h *EmployeeHandler) UploadMyPhoto(c *fiber.Ctx) error {
+	// Get the authenticated user's ID from JWT context
+	userID := database.UserIDFromContext(c.Locals("user_id"))
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse("User tidak terautentikasi"))
+	}
+
+	file, err := c.FormFile("photo")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse("File foto tidak ditemukan"))
+	}
+
+	// Validate file type
+	contentType := file.Header.Get("Content-Type")
+	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/jpg" {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse("Hanya file JPEG dan PNG yang diizinkan"))
+	}
+
+	// Max 2MB
+	if file.Size > 2*1024*1024 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse("Ukuran file maksimal 2MB"))
+	}
+
+	photoURL, err := h.employeeService.UploadPhoto(c.Context(), userID, file, userID)
+	if err != nil {
+		code := fiber.StatusInternalServerError
+		msg := err.Error()
+		if contains(msg, "tidak ditemukan") {
+			code = fiber.StatusNotFound
+		}
+		return c.Status(code).JSON(ErrorResponse(msg))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(SuccessResponse(fiber.Map{"photo_url": photoURL}, "Foto berhasil diupload"))
 }
 
 // UploadPhoto uploads employee photo

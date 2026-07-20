@@ -1,6 +1,8 @@
 <script lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount } from 'svelte';
 	import { auth, attendance, employeesApi } from '$lib/api.js';
+	import { hasPermission } from '$lib/permissions.js';
 
 	interface UserData {
 		id: string;
@@ -62,7 +64,7 @@
 		try {
 			const res = await attendance.myHistory(1, 5) as any;
 			if (res?.success) {
-				attendanceHistory = res.data?.records || [];
+				attendanceHistory = res.data || [];
 			}
 		} catch (e: any) {
 			historyError = e?.message || 'Gagal memuat riwayat absensi';
@@ -255,6 +257,8 @@
 	}
 </script>
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
+
 <div class="w-full">
 	<!-- Header -->
 	<div class="flex items-center gap-4 mb-6">
@@ -291,7 +295,7 @@
 						<span class="text-xs text-gray-400">{userData?.employee_id || user?.employee_id || '-'}</span>
 					</div>
 					<div class="divide-y divide-gray-100 dark:divide-gray-800">
-						{#each infoItems as item}
+						{#each infoItems as item (item)}
 							<div class="px-6 py-3.5 flex items-center justify-between">
 								<span class="text-sm text-gray-500 dark:text-gray-400">{item.label}</span>
 								<span class="text-sm font-medium text-gray-900 dark:text-gray-100">{item.value}</span>
@@ -323,7 +327,7 @@
 						</div>
 					{:else}
 						<div class="divide-y divide-gray-100 dark:divide-gray-800">
-							{#each attendanceHistory as record}
+							{#each attendanceHistory as record (record)}
 								<div class="px-6 py-3.5 flex items-center justify-between">
 									<div>
 										<div class="text-sm font-medium text-gray-900 dark:text-gray-100">{formatDate(record.date)}</div>
@@ -343,7 +347,7 @@
 
 			<!-- Right Column: Face Registration & Info -->
 			<div class="space-y-6">
-				<!-- Registrasi Wajah Card -->
+				{#if hasPermission('employee', 'update')}
 				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
 					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
 						<div class="flex items-center gap-2">
@@ -433,6 +437,7 @@
 						{/if}
 					</div>
 				</div>
+				{/if}
 
 				<!-- Info Card -->
 				<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">

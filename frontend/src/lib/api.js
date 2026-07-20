@@ -69,6 +69,7 @@ async function tryRefreshToken() {
 		if (newRefresh) localStorage.setItem(config.REFRESH_TOKEN_KEY, newRefresh);
 		return true;
 	} catch {
+		/* silently fail */
 		return false;
 	}
 }
@@ -126,7 +127,7 @@ async function request(endpoint, options = {}) {
 		requestHeaders['Content-Type'] = 'application/json';
 	}
 
-	let token = null;
+	let token;
 	if (auth) {
 		token = getAccessToken();
 		if (token) {
@@ -260,6 +261,22 @@ export const auth = {
 	/** @returns {Promise<ApiResponse>} */
 	getMe() {
 		return request('/api/auth/me');
+	},
+
+	async refreshSession() {
+		try {
+			const res = await request('/api/auth/me');
+			if (res && res.data) {
+				const currentUser = this.getUser();
+				const newUser = { ...currentUser, ...res.data };
+				localStorage.setItem(config.USER_DATA_KEY, JSON.stringify(newUser));
+				if (typeof window !== 'undefined') {
+					window.dispatchEvent(new CustomEvent('auth:session_update'));
+				}
+			}
+		} catch (e) {
+			console.error('Failed to refresh session:', e);
+		}
 	},
 
 	/**
@@ -401,6 +418,22 @@ export const employees = {
 		if (!response.ok) {
 			const data = await response.json().catch(() => ({}));
 			throw new ApiError(data.message || 'Gagal export data', response.status);
+		}
+		return response.blob();
+	},
+
+	/**
+	 * Download employee import template — returns blob
+	 * @returns {Promise<Blob>}
+	 */
+	async downloadTemplate() {
+		const token = getAccessToken();
+		const response = await fetch(`${config.API_BASE_URL}/api/employees/template`, {
+			headers: token ? { Authorization: `Bearer ${token}` } : {},
+		});
+		if (!response.ok) {
+			const data = await response.json().catch(() => ({}));
+			throw new ApiError(data.message || 'Gagal download template', response.status);
 		}
 		return response.blob();
 	},
@@ -741,7 +774,7 @@ export const attendanceLocations = {
 };	export const attendance = {
 	/** @returns {Promise<ApiResponse>} */
 	getTodayStatus() {
-		return request('/api/attendance/today');
+		return request(`/api/attendance/today?_t=${Date.now()}`);
 	},
 
 	/** @param {Object} data */
@@ -760,35 +793,45 @@ export const attendanceLocations = {
 		});
 	},
 
-	/** @param {number} [page] @param {number} [perPage] */
-	myHistory(page = 1, perPage = 25) {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [dateFrom] @param {string} [dateTo] */
+	myHistory(page = 1, perPage = 25, dateFrom = '', dateTo = '') {
 		const params = new URLSearchParams();
 		params.set('page', String(page));
 		params.set('per_page', String(perPage));
+		if (dateFrom) params.set('date_from', dateFrom);
+		if (dateTo) params.set('date_to', dateTo);
+		params.set('_t', String(Date.now()));
 		return request(`/api/attendance/my-history?${params}`);
 	},
 
-	/** @param {number} [page] @param {number} [perPage] @param {string} [deptId] @param {string} [status] @param {string} [dateFrom] @param {string} [dateTo] */
-	report(page = 1, perPage = 25, deptId = '', status = '', dateFrom = '', dateTo = '') {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [deptId] @param {string} [employeeId] @param {string} [status] @param {string} [dateFrom] @param {string} [dateTo] */
+	report(page = 1, perPage = 25, deptId = '', employeeId = '', status = '', dateFrom = '', dateTo = '') {
 		const params = new URLSearchParams();
 		params.set('page', String(page));
 		params.set('per_page', String(perPage));
 		if (deptId) params.set('department_id', deptId);
+		if (employeeId) params.set('employee_id', employeeId);
 		if (status) params.set('status', status);
 		if (dateFrom) params.set('date_from', dateFrom);
 		if (dateTo) params.set('date_to', dateTo);
-		return request(`/api/attendance?${params}`);
+		return request(`/api/attendance/report?${params}`);
+	},
+
+	/** @param {string} id */
+	getRecord(id) {
+		return request(`/api/attendance/${id}`, { auth: true });
 	},
 
 	/**
 	 * Export attendance report as Excel
-	 * @param {string} [deptId] @param {string} [status] @param {string} [dateFrom] @param {string} [dateTo]
+	 * @param {string} [deptId] @param {string} [employeeId] @param {string} [status] @param {string} [dateFrom] @param {string} [dateTo]
 	 * @returns {Promise<Blob>}
 	 */
-	async exportReport(deptId = '', status = '', dateFrom = '', dateTo = '') {
+	async exportReport(deptId = '', employeeId = '', status = '', dateFrom = '', dateTo = '') {
 		const token = typeof localStorage !== 'undefined' ? localStorage.getItem(config.ACCESS_TOKEN_KEY) : null;
 		const params = new URLSearchParams();
 		if (deptId) params.set('department_id', deptId);
+		if (employeeId) params.set('employee_id', employeeId);
 		if (status) params.set('status', status);
 		if (dateFrom) params.set('date_from', dateFrom);
 		if (dateTo) params.set('date_to', dateTo);
@@ -1211,6 +1254,32 @@ export const company = {
 		return request(`/api/employees/${employeeId}/bpjs-config`, {
 			method: 'PUT',
 			body: { bpjs_config: bpjsConfig },
+		});
+	},
+
+	/** @param {string} employeeId */
+	getEmployeeTaxConfig(employeeId) {
+		return request(`/api/employees/${employeeId}/tax-config`);
+	},
+
+	/** @param {string} employeeId @param {Object} taxConfig */
+	updateEmployeeTaxConfig(employeeId, taxConfig) {
+		return request(`/api/employees/${employeeId}/tax-config`, {
+			method: 'PUT',
+			body: { tax_config: taxConfig },
+		});
+	},
+
+	/** @param {string} employeeId */
+	getEmployeeOvertimeConfig(employeeId) {
+		return request(`/api/employees/${employeeId}/overtime-config`);
+	},
+
+	/** @param {string} employeeId @param {Object} overtimeConfig */
+	updateEmployeeOvertimeConfig(employeeId, overtimeConfig) {
+		return request(`/api/employees/${employeeId}/overtime-config`, {
+			method: 'PUT',
+			body: { overtime_config: overtimeConfig },
 		});
 	},
 };
@@ -1676,6 +1745,14 @@ export const approvalWorkflows = {
 		});
 	},
 
+	/** @param {string} id @param {Object} data */
+	update(id, data) {
+		return request(`/api/approval-workflows/${id}`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
 	/** @param {string} id */
 	remove(id) {
 		return request(`/api/approval-workflows/${id}`, {
@@ -1953,5 +2030,133 @@ function arrayBufferToBase64(buffer) {
 	},
 };
 
+export const shifts = {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [search] @param {string} [departmentId] */
+	list(page = 1, perPage = 25, search = '', departmentId = '') {
+		const params = new URLSearchParams();
+		params.set('page', String(page));
+		params.set('per_page', String(perPage));
+		if (search) params.set('search', search);
+		if (departmentId) params.set('department_id', departmentId);
+		return request(`/api/shifts?${params}`);
+	},
+
+	/** @param {string} id */
+	get(id) {
+		return request(`/api/shifts/${id}`);
+	},
+
+	/** @param {string} [departmentId] @returns {Promise<ApiResponse>} */
+	getAll(departmentId = '') {
+		const params = new URLSearchParams();
+		if (departmentId) params.set('department_id', departmentId);
+		return request(`/api/shifts/all?${params}`);
+	},
+
+	/** @param {Object} data */
+	create(data) {
+		return request('/api/shifts', {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} id @param {Object} data */
+	update(id, data) {
+		return request(`/api/shifts/${id}`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	remove(id) {
+		return request(`/api/shifts/${id}`, {
+			method: 'DELETE',
+		});
+	},
+};
+
+export const rosters = {
+	/** @param {number} [page] @param {number} [perPage] @param {string} [departmentId] */
+	list(page = 1, perPage = 25, departmentId = '') {
+		const params = new URLSearchParams();
+		params.set('page', String(page));
+		params.set('per_page', String(perPage));
+		if (departmentId) params.set('department_id', departmentId);
+		return request(`/api/rosters?${params}`);
+	},
+
+	/** @param {string} id */
+	get(id) {
+		return request(`/api/rosters/${id}`);
+	},
+
+	/** @param {Object} data */
+	create(data) {
+		return request('/api/rosters', {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} id @param {Object} data */
+	update(id, data) {
+		return request(`/api/rosters/${id}`, {
+			method: 'PUT',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	remove(id) {
+		return request(`/api/rosters/${id}`, {
+			method: 'DELETE',
+		});
+	},
+
+	/** @param {string} rosterId */
+	getEntries(rosterId) {
+		return request(`/api/rosters/${rosterId}/entries`);
+	},
+
+	/** @param {string} rosterId */
+	getCalendar(rosterId) {
+		return request(`/api/rosters/${rosterId}/calendar`);
+	},
+
+	/** @param {string} rosterId @param {Object} data */
+	bulkCreateEntries(rosterId, data) {
+		return request(`/api/rosters/${rosterId}/entries/bulk`, {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} rosterId @param {string} employeeId */
+	removeEmployee(rosterId, employeeId) {
+		return request(`/api/rosters/${rosterId}/employees/${employeeId}`, {
+			method: 'DELETE',
+		});
+	},
+};
+
+export const rosterEntries = {
+	/** @param {Object} data */
+	create(data) {
+		return request('/api/roster-entries', {
+			method: 'POST',
+			body: data,
+		});
+	},
+
+	/** @param {string} id */
+	remove(id) {
+		return request(`/api/roster-entries/${id}`, {
+			method: 'DELETE',
+		});
+	},
+};
+
 export { ApiError };
-export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, mutations, employeesApi, ApiError };
+export default { auth, employees, dashboard, shiftChangeRequests, overtime, reimbursements, attendance, leaveRequests, documents, announcements, holidays, loans, kpi, reprimands, dailyJournals, notifications, activityLogs, reports, company, approvalWorkflows, approvals, manualAttendance, resign, push, mutations, employeesApi, shifts, rosters, rosterEntries, ApiError };

@@ -39,6 +39,7 @@
 	}
 
 	function expandAllNodes(nodes: OrgNode[]) {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const next = new Set(expandedIds);
 		function walk(list: OrgNode[]) {
 			for (const node of list) {
@@ -65,6 +66,7 @@
 	}
 
 	function toggle(id: string) {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const next = new Set(expandedIds);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
@@ -72,6 +74,7 @@
 	}
 
 	function expandAll() {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const all = new Set<string>();
 		function walk(nodes: OrgNode[]) {
 			for (const n of nodes) {
@@ -94,6 +97,7 @@
 		if (node.meta?.head_name && String(node.meta.head_name).toLowerCase().includes(query)) return true;
 		if (node.meta?.grade_name && String(node.meta.grade_name).toLowerCase().includes(query)) return true;
 		if (node.meta?.employee_id && String(node.meta.employee_id).toLowerCase().includes(query)) return true;
+		if (node.meta?.atasan_nama && String(node.meta.atasan_nama).toLowerCase().includes(query)) return true;
 		if (node.children) return node.children.some(c => matchesSearch(c, query));
 		return false;
 	}
@@ -169,8 +173,24 @@
 		</div>
 	</div>
 
-	<!-- Stats Widget Cards -->
+	<!-- Atasan/Bawahan Legend -->
 	{#if !isLoading && !errorMessage}
+		<div class="flex items-center gap-4 mb-4 px-1">
+			<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+				<svg class="w-3.5 h-3.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+				<span>Atasan</span>
+			</div>
+			<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+				<svg class="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v9.75l-2.25-1.5a2.25 2.25 0 0 0-2.25 0v7.5l4.5 3 4.5-3 4.5 3 4.5-3V9.75a2.25 2.25 0 0 0-2.25 0l-2.25 1.5V9.75" /></svg>
+				<span>Bawahan</span>
+			</div>
+			<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+				<svg class="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg>
+				<span>Kepala Departemen</span>
+			</div>
+		</div>
+
+		<!-- Stats Widget Cards -->
 		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
 			<div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition-all duration-200">
 				<div class="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
@@ -243,7 +263,6 @@
 	{@const hasChildren = node.children && node.children.length > 0}
 	
 	<div class="mb-2">
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-gray-800 hover:shadow-sm cursor-pointer transition-all duration-150 active:scale-[0.98] {node.type === 'employee' ? 'bg-gray-50/50 dark:bg-gray-850/30' : ''}"
 			role="button"
@@ -289,32 +308,61 @@
 							{node.meta.grade_name}
 						</span>
 					{/if}
-					{#if node.type === 'employee'}
-						{#if node.meta?.employee_id}
-							<span class="text-xs text-gray-400 dark:text-gray-500 ml-2">#{node.meta.employee_id}</span>
-						{/if}
-						{#if node.meta?.join_date}
-							<span class="text-[10px] text-gray-400 dark:text-gray-500 ml-3 hidden sm:inline-flex items-center gap-1">
-								<svg class="w-3 h-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-								Bergabung: {formatDate(node.meta.join_date)}
-							</span>
-						{/if}
+				{#if node.type === 'employee'}
+					{#if node.meta?.is_department_head}
+						<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50 gap-1">
+							<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg>
+							Kadep
+						</span>
 					{/if}
+					{#if node.meta?.employee_id}
+						<span class="text-xs text-gray-400 dark:text-gray-500 ml-2">#{node.meta.employee_id}</span>
+					{/if}
+					{#if node.meta?.atasan_nama}
+						<span class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-violet-50 dark:bg-violet-900/15 text-violet-600 dark:text-violet-300 border border-violet-200/50 dark:border-violet-800/30">
+							<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+							{node.meta.atasan_nama}
+						</span>
+					{/if}
+					{#if node.meta?.join_date}
+						<span class="text-[10px] text-gray-400 dark:text-gray-500 ml-3 hidden sm:inline-flex items-center gap-1">
+							<svg class="w-3 h-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+							Bergabung: {formatDate(node.meta.join_date)}
+						</span>
+					{/if}
+				{/if}
 				</div>
 
 				<!-- Right indicators -->
 				<div class="flex items-center gap-2">
 					{#if node.type === 'employee'}
-						<!-- Status indicator -->
-						<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/30">
-							<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-							Aktif
-						</span>
+						{#if node.meta?.is_department_head}
+							<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30">
+								<span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+								Kepala Dept
+							</span>
+						{:else}
+							<!-- Status indicator -->
+							<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/30">
+								<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+								Aktif
+							</span>
+						{/if}
 					{/if}
-					{#if hasChildren}
-						<span class="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md tabular-nums">
-							{node.children!.length} cabang
-						</span>
+					{#if hasChildren && node.children}
+						{@const childTypes = new Set(node.children.map(c => c.type))}
+						{@const bawahanCount = node.children.filter(c => c.type === 'employee').length}
+						{@const otherCount = node.children.length - bawahanCount}
+						{#if node.type === 'employee' && bawahanCount > 0}
+							<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
+								<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v9.75l-2.25-1.5a2.25 2.25 0 0 0-2.25 0v7.5l4.5 3 4.5-3 4.5 3 4.5-3V9.75a2.25 2.25 0 0 0-2.25 0l-2.25 1.5V9.75" /></svg>
+								{bawahanCount} bawahan
+							</span>
+						{:else}
+							<span class="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md tabular-nums">
+								{node.children!.length} {otherCount > 0 && bawahanCount > 0 ? 'item' : childTypes.size === 1 && childTypes.has('employee') ? 'bawahan' : 'cabang'}
+							</span>
+						{/if}
 					{/if}
 				</div>
 			</div>

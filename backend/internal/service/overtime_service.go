@@ -87,7 +87,7 @@ func (s *OvertimeService) Create(ctx context.Context, employeeID string, req *mo
 	}
 
 	// Initialize workflow tracking (non-blocking, ignore errors)
-	err = s.initWorkflowTracking(ctx, "overtime", r.ID.String(), employeeID, r.TotalHours)
+	err = s.initWorkflowTracking(ctx, "overtime", r.ID.String(), employeeID)
 	if err != nil {
 		fmt.Printf("[WARN] Overtime workflow init: %v\n", err)
 	}
@@ -95,9 +95,9 @@ func (s *OvertimeService) Create(ctx context.Context, employeeID string, req *mo
 	return r, nil
 }
 
-func (s *OvertimeService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+func (s *OvertimeService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string) error {
 	wfSvc := NewApprovalWorkflowService()
-	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID)
 	return err
 }
 

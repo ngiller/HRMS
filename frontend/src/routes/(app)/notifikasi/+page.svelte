@@ -158,7 +158,7 @@
 			</div>
 		{:else}
 			<div class="divide-y divide-gray-100 dark:divide-gray-800/50">
-				{#each items as item}
+				{#each items as item (item)}
 					{@const style = getTypeIcon(item.notification_type)}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -175,6 +175,7 @@
 						
 						<div class="{style.bgClass} {style.colorClass} w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5 ring-4 ring-white dark:ring-gray-800">
 							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								{@html style.svg}
 							</svg>
 						</div>

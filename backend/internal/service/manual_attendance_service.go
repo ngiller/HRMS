@@ -37,14 +37,9 @@ func (s *ManualAttendanceService) Create(ctx context.Context, employeeID string,
 		return nil, err
 	}
 
-	// Initiate approval workflow
+	// Initiate approval workflow (if configured). If no workflow, leave as pending for manual approval.
 	wfSvc := NewApprovalWorkflowService()
-	_, wfErr := wfSvc.ResolveWorkflowForRequest(ctx, "manual_attendance", r.ID.String(), employeeID, 0)
-	if wfErr != nil {
-		// If no workflow configured, auto-approve (fallback)
-		_ = repository.UpdateManualAttendanceRequestStatus(ctx, r.ID.String(), "approved", employeeID, "")
-		_ = repository.CreateAttendanceFromManualRequest(ctx, r)
-	}
+	wfSvc.ResolveWorkflowForRequest(ctx, "manual_attendance", r.ID.String(), employeeID)
 
 	return r, nil
 }
@@ -72,16 +67,31 @@ func (s *ManualAttendanceService) Approve(ctx context.Context, id, userID string
 		return nil, errors.New("pengajuan absensi manual sudah diproses")
 	}
 
-	// Use approval workflow
+	// Prevent self-approval
+	if r.EmployeeID.String() == userID {
+		return nil, errors.New("tidak dapat menyetujui pengajuan sendiri")
+	}
+
+	// Try approval workflow first
 	wfSvc := NewApprovalWorkflowService()
 	result, err := wfSvc.ProcessApproval(ctx, "manual_attendance", id, userID, "approve", "")
 	if err != nil {
+		// If no workflow/tracking configured, do direct approval
+		if err.Error() == "tracking approval tidak ditemukan" {
+			_ = repository.UpdateManualAttendanceRequestStatus(ctx, id, "approved", userID, "")
+			updated, _ := repository.GetManualAttendanceRequest(ctx, id)
+			_ = repository.CreateAttendanceFromManualRequest(ctx, updated)
+			return updated, nil
+		}
 		return nil, err
 	}
 
 	// Only create attendance record if fully approved (no more pending levels)
 	updated, _ := repository.GetManualAttendanceRequest(ctx, id)
 	if result.FinalStatus == "approved" || updated.Status == "approved" {
+		// Update approved_by/approved_at (UpdateEntityStatusTx only sets status, not approved_by)
+		_ = repository.UpdateManualAttendanceRequestStatus(ctx, id, "approved", userID, "")
+		updated, _ = repository.GetManualAttendanceRequest(ctx, id)
 		_ = repository.CreateAttendanceFromManualRequest(ctx, updated)
 	}
 
@@ -97,9 +107,21 @@ func (s *ManualAttendanceService) Reject(ctx context.Context, id, userID, reason
 		return nil, errors.New("pengajuan absensi manual sudah diproses")
 	}
 
+	// Prevent self-rejection
+	if r.EmployeeID.String() == userID {
+		return nil, errors.New("tidak dapat menolak pengajuan sendiri")
+	}
+
 	wfSvc := NewApprovalWorkflowService()
 	_, err = wfSvc.ProcessApproval(ctx, "manual_attendance", id, userID, "reject", reason)
 	if err != nil {
+		// If no workflow/tracking configured, do direct rejection
+		if err.Error() == "tracking approval tidak ditemukan" {
+			if err := repository.UpdateManualAttendanceRequestStatus(ctx, id, "rejected", userID, reason); err != nil {
+				return nil, err
+			}
+			return repository.GetManualAttendanceRequest(ctx, id)
+		}
 		return nil, err
 	}
 

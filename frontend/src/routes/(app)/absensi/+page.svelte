@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { attendance, employeesApi, auth } from '$lib/api.js';
+	import { attendance, employeesApi, auth, company as companyApi, holidays } from '$lib/api.js';
 	import config from '$lib/config.js';
 	import { hasPermission } from '$lib/permissions.js';
 
@@ -15,7 +15,7 @@
 	let items = $state<any[]>([]);
 	let total = $state(0);
 	let pageNum = $state(1);
-	const perPage = 10;
+	const perPage = 50;
 	let loadingStatus = $state(true);
 	let loadingHistory = $state(true);
 	let checkInLoading = $state(false);
@@ -24,6 +24,11 @@
 	let showCamera = $state(false);
 	let showCheckInConfirm = $state(false);
 	let showCheckOutConfirm = $state(false);
+
+	// Date Filters for History
+	let filterDateFrom = $state('');
+	let filterDateTo = $state('');
+	let holidayList = $state<any[]>([]);
 
 	// Permission status
 	let camGranted = $state<boolean | null>(null);
@@ -34,7 +39,152 @@
 		checkPermissions();
 		await loadFaceDetectionScript();
 		loadTodayStatus();
+		
+		// Load company settings and holidays concurrently
+		try {
+			const [settingsRes, holidayRes] = await Promise.all([
+				companyApi.getSettings(),
+				holidays.getByYear(new Date().getFullYear())
+			]) as any;
+
+			if (holidayRes?.success && holidayRes?.data) {
+				holidayList = holidayRes.data.holidays || [];
+			}
+
+			if (settingsRes?.success && settingsRes?.data?.hr_settings) {
+				const hrs = settingsRes.data.hr_settings;
+				const startDay = hrs.cutoff_start_day || 26;
+				const endDay = hrs.cutoff_end_day || 25;
+				const period = calculateActiveCutoffPeriod(startDay, endDay);
+				filterDateFrom = period.start;
+				filterDateTo = period.end;
+			} else {
+				// Default fallback
+				const period = calculateActiveCutoffPeriod(26, 25);
+				filterDateFrom = period.start;
+				filterDateTo = period.end;
+			}
+		} catch {
+			// Default fallback
+			const period = calculateActiveCutoffPeriod(26, 25);
+			filterDateFrom = period.start;
+			filterDateTo = period.end;
+		}
+
 		loadHistory();
+	});
+
+	function calculateActiveCutoffPeriod(startDay: number, endDay: number) {
+		const now = new Date();
+		const year = now.getFullYear();
+		const month = now.getMonth(); // 0-indexed: 0=Jan, 11=Dec
+		const day = now.getDate();
+
+		let fromDate: Date;
+		let toDate: Date;
+
+		if (!startDay || !endDay) {
+			// Calendar month default
+			fromDate = new Date(year, month, 1);
+			toDate = new Date(year, month + 1, 0); // Last day of month
+		} else {
+			// If endDay is 25:
+			// If today is <= 25:
+			//   Period runs from M-1 26th to M 25th
+			// If today is > 25:
+			//   Period runs from M 26th to M+1 25th
+			if (day <= endDay) {
+				fromDate = new Date(year, month - 1, startDay);
+				toDate = new Date(year, month, endDay);
+			} else {
+				fromDate = new Date(year, month, startDay);
+				toDate = new Date(year, month + 1, endDay);
+			}
+		}
+
+		// Format to YYYY-MM-DD
+		const formatYYYYMMDD = (d: Date) => {
+			const y = d.getFullYear();
+			const m = String(d.getMonth() + 1).padStart(2, '0');
+			const dayStr = String(d.getDate()).padStart(2, '0');
+			return `${y}-${m}-${dayStr}`;
+		};
+
+		return {
+			start: formatYYYYMMDD(fromDate),
+			end: formatYYYYMMDD(toDate)
+		};
+	}
+
+	function generateDateRange(startStr: string, endStr: string) {
+		const list: string[] = [];
+		if (!startStr || !endStr) return list;
+		const start = new Date(startStr);
+		const end = new Date(endStr);
+		const curr = new Date(start);
+		while (curr <= end) {
+			list.push(curr.toISOString().split('T')[0]);
+			curr.setDate(curr.getDate() + 1);
+		}
+		return list.reverse(); // Newest dates first
+	}
+
+	let timesheetItems = $derived.by(() => {
+		if (!filterDateFrom || !filterDateTo) return [];
+		
+		const dates = generateDateRange(filterDateFrom, filterDateTo);
+		const recordMap = new Map<string, any>();
+		
+		items.forEach(item => {
+			if (item.date) {
+				const dateStr = item.date.split('T')[0];
+				recordMap.set(dateStr, item);
+			}
+		});
+
+		const todayStr = new Date().toISOString().split('T')[0];
+
+		return dates.map(dateStr => {
+			if (recordMap.has(dateStr)) {
+				const rec = recordMap.get(dateStr);
+				const matchingHoliday = holidayList.find(h => h.date === dateStr);
+				if (matchingHoliday) {
+					rec.holiday_name = matchingHoliday.name;
+				}
+				return rec;
+			}
+
+			const dateObj = new Date(dateStr);
+			const dayOfWeek = dateObj.getDay(); // 0=Sunday, 6=Saturday
+			const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+			
+			const matchingHoliday = holidayList.find(h => h.date === dateStr);
+			
+			let status = 'absent';
+			let holidayName = '';
+			if (matchingHoliday) {
+				status = 'holiday';
+				holidayName = matchingHoliday.name;
+			} else if (isWeekend) {
+				status = 'holiday';
+				holidayName = 'Libur Akhir Pekan';
+			} else if (dateStr > todayStr) {
+				status = 'scheduled';
+			} else if (dateStr === todayStr) {
+				status = 'scheduled';
+			}
+
+			return {
+				id: '',
+				date: dateStr + 'T00:00:00Z',
+				day_name: dateObj.toLocaleDateString('id-ID', { weekday: 'long' }),
+				status: status,
+				holiday_name: holidayName,
+				check_in_time: null,
+				check_out_time: null,
+				is_virtual: true
+			};
+		});
 	});
 
 	async function checkPermissions() {
@@ -71,6 +221,7 @@
 
 	// Check-in/out result
 	let checkResult = $state<{ success: boolean; message: string } | null>(null);
+	let locationWarning = $state<string | null>(null);
 
 	function openDetail(item: any) {
 		if (item?.id) {
@@ -105,7 +256,7 @@
 	async function loadHistory() {
 		loadingHistory = true;
 		try {
-			const res = await attendance.myHistory(pageNum, perPage);
+			const res = await attendance.myHistory(pageNum, perPage, filterDateFrom, filterDateTo);
 			if (res?.success) {
 				items = res.data || [];
 				total = (res.meta as any)?.total || 0;
@@ -293,11 +444,13 @@
 			const res = await attendance.checkIn(payload);
 			if (res?.success) {
 				checkResult = { success: true, message: 'Check-in berhasil!' };
+				locationWarning = res?.data?.location_warning || null;
 				stopCamera();
 				loadTodayStatus();
 				loadHistory();
 			} else {
 				checkResult = { success: false, message: res?.error || 'Check-in gagal' };
+				locationWarning = null;
 			}
 		} catch (e: any) {
 			checkResult = { success: false, message: e?.message || 'Check-in gagal' };
@@ -332,11 +485,13 @@
 			const res = await attendance.checkOut(payload);
 			if (res?.success) {
 				checkResult = { success: true, message: 'Check-out berhasil!' };
+				locationWarning = res?.data?.location_warning || null;
 				stopCamera();
 				loadTodayStatus();
 				loadHistory();
 			} else {
 				checkResult = { success: false, message: res?.error || 'Check-out gagal' };
+				locationWarning = null;
 			}
 		} catch (e: any) {
 			checkResult = { success: false, message: e?.message || 'Check-out gagal' };
@@ -448,7 +603,8 @@
 			late: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 			absent: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 			leave: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-			holiday: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+			holiday: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+			scheduled: 'bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400',
 		};
 		return map[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
 	}
@@ -457,9 +613,10 @@
 		const map: Record<string, string> = {
 			present: 'Hadir',
 			late: 'Terlambat',
-			absent: 'Absen',
+			absent: 'Alpa / Tidak Hadir',
 			leave: 'Cuti',
 			holiday: 'Libur',
+			scheduled: 'Belum Absen',
 		};
 		return map[status] || status;
 	}
@@ -524,6 +681,18 @@
 			<div class="flex items-center gap-2.5">
 				<svg class="w-5 h-5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 				<p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">Wajah berhasil diregistrasi!</p>
+			</div>
+		</div>
+	{/if}
+
+	{#if locationWarning}
+		<div class="mb-4 px-5 py-3.5 rounded-xl border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+			<div class="flex items-start gap-2.5">
+				<svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+				<div>
+					<p class="text-sm font-medium text-amber-800 dark:text-amber-200">⚠️ Peringatan Lokasi</p>
+					<p class="text-xs text-amber-700 dark:text-amber-300 mt-1">{locationWarning}</p>
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -637,75 +806,88 @@
 
 	<canvas bind:this={photoCanvasEl} class="hidden"></canvas>
 
-	<!-- Status & Action Cards -->
-	<div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
-		<!-- Check-in Card -->
-		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md active:scale-[0.99] {todayStatus?.has_checked_in ? 'border-l-[3px] sm:border-l-4 border-l-emerald-500' : ''}">
-			<div class="flex items-center justify-between mb-2 sm:mb-3">
-				<div class="flex items-center gap-2.5 sm:gap-3">
-					<div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0 {todayStatus?.has_checked_in ? 'text-emerald-600' : 'text-blue-600'}">
-						<svg class="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
-					</div>
-					<div>
-						<h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Check In</h3>
-						<p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">Absensi Masuk</p>
-					</div>
-				</div>
-				<div class="text-right shrink-0">
-					<div class="text-base sm:text-lg font-bold {todayStatus?.has_checked_in ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}">
-						{todayStatus?.has_checked_in ? formatTime(todayStatus?.record?.check_in_time) : '--:--'}
-					</div>
-				</div>
+	<!-- Day Off / Attendance cards conditional display -->
+	{#if todayStatus?.is_day_off && !todayStatus?.has_checked_in}
+		<div class="bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30 p-8 text-center mb-4 sm:mb-6 flex flex-col items-center justify-center min-h-[160px] shadow-sm">
+			<div class="w-12 h-12 rounded-2xl bg-red-100/50 dark:bg-red-900/40 flex items-center justify-center text-red-600 dark:text-red-400 mb-3 shrink-0">
+				<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
 			</div>
-			{#if todayStatus?.has_checked_in && todayStatus?.record?.check_in_location_name}
-			<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
-				<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-					<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-					<span>{todayStatus.record.check_in_location_name}</span>
-				</div>
-			</div>
-			{/if}
-
-			<button onclick={handleCheckIn}
-				disabled={todayStatus?.has_checked_in || loadingStatus}
-				class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_in ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}">
-				{todayStatus?.has_checked_in ? 'Sudah Check In' : 'Check In'}
-			</button>
+			<p class="text-base font-bold text-red-800 dark:text-red-200">Hari ini adalah hari libur</p>
+			<p class="text-xs text-red-500/70 dark:text-red-400/60 mt-1 font-medium">Tidak perlu melakukan absensi.</p>
 		</div>
+	{:else}
+		<!-- Status & Action Cards -->
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+			<!-- Check-in Card -->
+			<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md active:scale-[0.99] {todayStatus?.has_checked_in ? 'border-l-[3px] sm:border-l-4 border-l-emerald-500' : ''}">
+				<div class="flex items-center justify-between mb-2 sm:mb-3">
+					<div class="flex items-center gap-2.5 sm:gap-3">
+						<div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0 {todayStatus?.has_checked_in ? 'text-emerald-600' : 'text-blue-600'}">
+							<svg class="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+						</div>
+						<div>
+							<h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Check In</h3>
+							<p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">Absensi Masuk</p>
+						</div>
+					</div>
+					<div class="text-right shrink-0">
+						<div class="text-base sm:text-lg font-bold {todayStatus?.has_checked_in ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}">
+							{todayStatus?.has_checked_in ? formatTime(todayStatus?.record?.check_in_time) : '--:--'}
+						</div>
+					</div>
+				</div>
+				{#if todayStatus?.has_checked_in && todayStatus?.record?.check_in_location_name}
+				<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
+					<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+						<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+						<span>{todayStatus.record.check_in_location_name}</span>
+					</div>
+				</div>
+				{/if}
 
-		<!-- Check-out Card -->
-		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md active:scale-[0.99] {todayStatus?.has_checked_out ? 'border-l-[3px] sm:border-l-4 border-l-amber-500' : ''}">
-			<div class="flex items-center justify-between mb-2 sm:mb-3">
-				<div class="flex items-center gap-2.5 sm:gap-3">
-					<div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-amber-600">
-						<svg class="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" /></svg>
-					</div>
-					<div>
-						<h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Check Out</h3>
-						<p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">Absensi Pulang</p>
-					</div>
-				</div>
-				<div class="text-right shrink-0">
-					<div class="text-base sm:text-lg font-bold {todayStatus?.has_checked_out ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}">
-						{todayStatus?.has_checked_out ? formatTime(todayStatus?.record?.check_out_time) : '--:--'}
-					</div>
-				</div>
+				<button onclick={handleCheckIn}
+					disabled={todayStatus?.has_checked_in || loadingStatus}
+					class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_in ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}">
+					{todayStatus?.has_checked_in ? 'Sudah Check In' : 'Check In'}
+				</button>
 			</div>
-			{#if todayStatus?.has_checked_out && todayStatus?.record?.check_out_location_name}
-			<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
-				<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-					<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-					<span>{todayStatus.record.check_out_location_name}</span>
+
+			<!-- Check-out Card -->
+			<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md active:scale-[0.99] {todayStatus?.has_checked_out ? 'border-l-[3px] sm:border-l-4 border-l-amber-500' : ''}">
+				<div class="flex items-center justify-between mb-2 sm:mb-3">
+					<div class="flex items-center gap-2.5 sm:gap-3">
+						<div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-amber-600">
+							<svg class="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" /></svg>
+						</div>
+						<div>
+							<h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Check Out</h3>
+							<p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">Absensi Pulang</p>
+						</div>
+					</div>
+					<div class="text-right shrink-0">
+						<div class="text-base sm:text-lg font-bold {todayStatus?.has_checked_out ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}">
+							{todayStatus?.has_checked_out ? formatTime(todayStatus?.record?.check_out_time) : '--:--'}
+						</div>
+					</div>
 				</div>
+				{#if todayStatus?.has_checked_out && todayStatus?.record?.check_out_location_name}
+				<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
+					<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+						<svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+						<span>{todayStatus.record.check_out_location_name}</span>
+					</div>
+				</div>
+				{/if}
+				<button onclick={handleCheckOut}
+					disabled={todayStatus?.has_checked_out || !todayStatus?.has_checked_in || loadingStatus || todayStatus?.has_checked_in === false}
+					class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_out ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-amber-600 text-white hover:bg-amber-700'}">
+					{todayStatus?.has_checked_out ? 'Sudah Check Out' : 'Check Out'}
+				</button>
 			</div>
-			{/if}
-			<button onclick={handleCheckOut}
-				disabled={todayStatus?.has_checked_out || !todayStatus?.has_checked_in || loadingStatus || todayStatus?.has_checked_in === false}
-				class="w-full py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-[0.97] {todayStatus?.has_checked_out ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-amber-600 text-white hover:bg-amber-700'}">
-				{todayStatus?.has_checked_out ? 'Sudah Check Out' : 'Check Out'}
-			</button>
 		</div>
-	</div>	<!-- Schedule Info -->
+	{/if}
+
+	<!-- Schedule Info -->
 	{#if todayStatus?.schedule_name}
 		<div class="mb-4 sm:mb-6 px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl">
 			<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 text-xs sm:text-sm">
@@ -721,27 +903,39 @@
 	{/if}
 
 	<!-- Attendance History -->
-	<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-		<div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center justify-between">
-			<h2 class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Riwayat Absensi</h2>
-			<span class="text-[10px] sm:text-xs text-gray-400">Total {total} record</span>
+	<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-y-auto max-h-[calc(100dvh-24rem)] sm:max-h-[calc(100dvh-20rem)]">
+		<div class="sticky top-0 z-10 bg-white dark:bg-gray-800 rounded-t-xl shadow-[0_1px_3px_-1px_rgba(0,0,0,0.08)]">
+			<div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center justify-between">
+				<h2 class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Riwayat Absensi</h2>
+				<span class="text-[10px] sm:text-xs text-gray-400">Total {total} record</span>
+			</div>
+
+			<!-- Date Filters (Read Only) -->
+			<div class="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/20 flex items-center gap-2">
+				<span class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Periode Aktif:</span>
+				{#if filterDateFrom && filterDateTo}
+					<span class="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2.5 py-1 rounded-lg">
+						📅 {new Date(filterDateFrom).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - {new Date(filterDateTo).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+					</span>
+				{/if}
+			</div>
 		</div>
 
 		{#if loadingHistory}
 			<div class="flex items-center justify-center py-8 sm:py-10">
 				<div class="animate-spin h-5 w-5 sm:h-6 sm:w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
 			</div>
-		{:else if items.length === 0}
+		{:else if timesheetItems.length === 0}
 			<div class="p-5 sm:p-6 text-center">
 				<svg class="w-8 h-8 sm:w-10 sm:h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
 				<p class="text-xs sm:text-sm text-gray-400">Belum ada riwayat absensi</p>
 			</div>
 		{:else}
 			<div class="p-3 sm:p-4 space-y-2.5">
-				{#each items as item (item)}
-					<div onclick={() => openDetail(item)} class="group bg-white dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-md active:shadow-sm transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]">
+				{#each timesheetItems as item (item)}
+					<div onclick={() => openDetail(item)} class="group bg-white dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden {item.is_virtual ? 'opacity-80' : 'hover:shadow-md active:shadow-sm cursor-pointer active:scale-[0.99]'}">
 						<!-- Colored top bar based on status -->
-						<div class="h-1 {item.status === 'late' || item.status === 'terlambat' ? 'bg-red-500' : item.status === 'present' || item.status === 'hadir' ? 'bg-emerald-500' : item.status === 'leave' || item.status === 'cuti' ? 'bg-blue-500' : item.status === 'sick' || item.status === 'sakit' ? 'bg-purple-500' : item.status === 'holiday' || item.status === 'libur' ? 'bg-amber-400' : 'bg-gray-400'}"></div>
+						<div class="h-1 {item.status === 'late' || item.status === 'terlambat' ? 'bg-red-500' : item.status === 'present' || item.status === 'hadir' ? 'bg-emerald-500' : item.status === 'leave' || item.status === 'cuti' ? 'bg-blue-500' : item.status === 'sick' || item.status === 'sakit' ? 'bg-purple-500' : item.status === 'holiday' || item.status === 'libur' ? 'bg-red-500' : item.status === 'scheduled' ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-400'}"></div>
 						
 						<div class="p-3.5 sm:p-4">
 							<!-- Top row: Date + Status -->
@@ -753,7 +947,12 @@
 									<div>
 										<p class="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(item.date)}</p>
 										{#if item.day_name}
-											<p class="text-[10px] text-gray-400 dark:text-gray-500">{item.day_name.trim()}</p>
+											<p class="text-[10px] text-gray-400 dark:text-gray-500">
+												{item.day_name.trim()}
+												{#if item.holiday_name}
+													<span class="text-red-500 dark:text-red-400 font-semibold ml-1">({item.holiday_name})</span>
+												{/if}
+											</p>
 										{/if}
 									</div>
 								</div>
@@ -764,7 +963,9 @@
 										</span>
 									{/if}
 									<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {getStatusBadge(item.status)}">{getStatusText(item.status)}</span>
-									<svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+									{#if !item.is_virtual}
+										<svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+									{/if}
 								</div>
 							</div>
 

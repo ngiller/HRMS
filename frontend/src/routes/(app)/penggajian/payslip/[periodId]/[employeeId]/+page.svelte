@@ -66,84 +66,94 @@
 	});
 
 	async function downloadPDF() {
-		if (!payslipRef || !payslip) return;
+		if (!payslip) return;
 		isDownloading = true;
-		let forceLightStyle: HTMLStyleElement | null = null;
 		try {
-			// Force light mode before capture (fix dark mode in PDF)
-			const isDarkMode = document.documentElement.classList.contains('dark');
-			if (isDarkMode) {
-				forceLightStyle = document.createElement('style');
-				forceLightStyle.textContent = `
-					.force-light-pdf { background: #ffffff !important; color: #111827 !important; }
-					.force-light-pdf * { background: transparent !important; }
-					.force-light-pdf .bg-gradient-to-br { background: #f8fafc !important; }
-					.force-light-pdf .bg-gradient-to-r { background: #f9fafb !important; }
-					.force-light-pdf .bg-white { background: #ffffff !important; }
-					.force-light-pdf .bg-gray-50,
-					.force-light-pdf .bg-gray-50\\/50,
-					.force-light-pdf .bg-gray-50\\/80 { background: #f9fafb !important; }
-					.force-light-pdf .bg-emerald-50\\/80 { background: #ecfdf5 !important; }
-					.force-light-pdf .bg-red-50\\/80 { background: #fef2f2 !important; }
-					.force-light-pdf .bg-emerald-50\\/50 { background: #ecfdf5 !important; }
-					.force-light-pdf .bg-red-50\\/50 { background: #fef2f2 !important; }
-					.force-light-pdf .text-gray-900,
-					.force-light-pdf .text-gray-800,
-					.force-light-pdf .text-gray-700,
-					.force-light-pdf .text-gray-600,
-					.force-light-pdf .text-gray-500,
-					.force-light-pdf .text-gray-400 { color: #111827 !important; }
-					.force-light-pdf .text-emerald-600,
-					.force-light-pdf .text-emerald-700,
-					.force-light-pdf .text-emerald-800 { color: #059669 !important; }
-					.force-light-pdf .text-red-600,
-					.force-light-pdf .text-red-700,
-					.force-light-pdf .text-red-800 { color: #dc2626 !important; }
-					.force-light-pdf .text-blue-600,
-					.force-light-pdf .text-blue-700,
-					.force-light-pdf .text-blue-500,
-					.force-light-pdf .text-blue-400 { color: #2563eb !important; }
-					.force-light-pdf .text-amber-600 { color: #d97706 !important; }
-					.force-light-pdf .text-white { color: #ffffff !important; }
-					.force-light-pdf .border-white\\/10,
-					.force-light-pdf .border-white\\/20 { border-color: #e5e7eb !important; }
-					.force-light-pdf .shadow-xl,
-					.force-light-pdf .shadow-2xl,
-					.force-light-pdf .shadow-sm,
-					.force-light-pdf .shadow-inner { box-shadow: none !important; }
-				`;
-				document.head.appendChild(forceLightStyle);
-				payslipRef.classList.add('force-light-pdf');
-			}
-
 			const { toPng } = await import('html-to-image');
 			const { jsPDF } = await import('jspdf');
 
-			const dataUrl = await toPng(payslipRef, {
-				pixelRatio: 2,
-				quality: 1,
-				cacheBust: true,
-			});
+			const div = document.createElement('div');
+			div.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:#ffffff;padding:40px;font-family:Arial,sans-serif;color:#000000;z-index:99999;box-sizing:border-box;';
+			
+			const incHtml = (payslip.allowances || []).map(a => `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>${a.name}</span><span>${formatCurrency(a.amount)}</span></div>`).join('');
+			let dedHtml = '';
+			if (payslip.bpjs_kesehatan > 0) dedHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>BPJS Kesehatan</span><span>${formatCurrency(payslip.bpjs_kesehatan)}</span></div>`;
+			if (payslip.bpjs_jht > 0) dedHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>BPJS JHT</span><span>${formatCurrency(payslip.bpjs_jht)}</span></div>`;
+			if (payslip.bpjs_jp > 0) dedHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>BPJS JP</span><span>${formatCurrency(payslip.bpjs_jp)}</span></div>`;
+			if (payslip.pph21_amount > 0) dedHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>PPh 21</span><span>${formatCurrency(payslip.pph21_amount)}</span></div>`;
+			if (payslip.loan_deduction > 0) dedHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>Pinjaman</span><span>${formatCurrency(payslip.loan_deduction)}</span></div>`;
+			const otherDeds = (payslip.deductions || []).filter(d => !['BPJS Kesehatan','BPJS JHT','BPJS JP','PPh 21','Pinjaman','Lain-lain'].includes(d.name));
+			dedHtml += otherDeds.map(d => `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>${d.name}</span><span>${formatCurrency(d.amount)}</span></div>`).join('');
+			if (payslip.other_deductions > 0) dedHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>Lain-lain</span><span>${formatCurrency(payslip.other_deductions)}</span></div>`;
 
+			div.innerHTML = `
+				<div style="border-bottom:2px solid #000;padding-bottom:15px;margin-bottom:25px;display:flex;justify-content:space-between;align-items:flex-end;">
+					<div>
+						<h1 style="font-size:24px;font-weight:bold;margin:0;letter-spacing:1px;text-transform:uppercase;">SLIP GAJI</h1>
+						<p style="font-size:14px;color:#444;margin:5px 0 0 0;">Periode: ${payslip.period_name}</p>
+					</div>
+					<div style="text-align:right;">
+						<p style="font-size:16px;font-weight:bold;margin:0;">${payslip.employee_name}</p>
+						<p style="font-size:14px;color:#444;margin:3px 0 0 0;">NIP: ${payslip.employee_id_code} &bull; ${payslip.position_name}</p>
+						<p style="font-size:14px;color:#444;margin:3px 0 0 0;">Departemen: ${payslip.department_name}</p>
+					</div>
+				</div>
+
+				<div style="display:flex;gap:30px;margin-bottom:30px;">
+					<!-- PENDAPATAN -->
+					<div style="flex:1;">
+						<h3 style="font-size:14px;font-weight:bold;border-bottom:1px solid #ccc;padding-bottom:5px;margin-bottom:10px;text-transform:uppercase;">Pendapatan</h3>
+						<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;">
+							<span>Gaji Pokok</span>
+							<span>${payslip.base_salary > 0 ? formatCurrency(payslip.base_salary) : '-'}</span>
+						</div>
+						${payslip.daily_wage > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>Upah Harian</span><span>${formatCurrency(payslip.daily_wage)}</span></div>` : ''}
+						${incHtml}
+						${payslip.overtime_pay > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>Lembur</span><span>${formatCurrency(payslip.overtime_pay)}</span></div>` : ''}
+						${payslip.thr_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>THR</span><span>${formatCurrency(payslip.thr_amount)}</span></div>` : ''}
+						${payslip.bonus_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;"><span>Bonus</span><span>${formatCurrency(payslip.bonus_amount)}</span></div>` : ''}
+						<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:10px;border-top:1px dashed #000;font-size:14px;font-weight:bold;">
+							<span>Total Pendapatan</span>
+							<span>${formatCurrency(payslip.gross_salary)}</span>
+						</div>
+					</div>
+
+					<!-- POTONGAN -->
+					<div style="flex:1;">
+						<h3 style="font-size:14px;font-weight:bold;border-bottom:1px solid #ccc;padding-bottom:5px;margin-bottom:10px;text-transform:uppercase;">Potongan</h3>
+						${dedHtml}
+						<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:10px;border-top:1px dashed #000;font-size:14px;font-weight:bold;">
+							<span>Total Potongan</span>
+							<span>${formatCurrency(payslip.total_deductions)}</span>
+						</div>
+					</div>
+				</div>
+
+				<div style="border:2px solid #000;padding:20px;text-align:center;background:#fafafa;">
+					<p style="font-size:14px;margin:0 0 5px 0;text-transform:uppercase;font-weight:bold;color:#444;">Take Home Pay</p>
+					<p style="font-size:28px;font-weight:bold;margin:0;">${formatCurrency(payslip.net_salary)}</p>
+				</div>
+			`;
+			document.body.appendChild(div);
+			
+			// Wait for the browser to render the div
+			await new Promise(r => setTimeout(r, 100));
+
+			const dataUrl = await toPng(div, { pixelRatio: 2, quality: 1, cacheBust: true });
+			
 			const pdf = new jsPDF('portrait', 'mm', 'a4');
 			const pdfWidth = pdf.internal.pageSize.getWidth();
-
-			const margin = 10;
+			const margin = 15;
 			const imgWidth = pdfWidth - margin * 2;
-			const imgHeight = (payslipRef.offsetHeight / payslipRef.offsetWidth) * imgWidth;
+			const imgHeight = (div.offsetHeight / div.offsetWidth) * imgWidth;
 
 			pdf.addImage(dataUrl, 'PNG', margin, margin, imgWidth, imgHeight);
-			pdf.save(`Slip Gaji - ${payslip.employee_name} - ${payslip.period_name}.pdf`);
+			pdf.save(`Slip_Gaji_${payslip.employee_name.replace(/\\s+/g, '_')}_${payslip.period_name.replace(/\\s+/g, '_')}.pdf`);
+			
+			if (div.parentNode) div.parentNode.removeChild(div);
 		} catch (err) {
 			console.error('Failed to generate PDF:', err);
 		} finally {
-			// Restore dark mode state
-			if (payslipRef) {
-				payslipRef.classList.remove('force-light-pdf');
-			}
-			if (forceLightStyle) {
-				forceLightStyle.remove();
-			}
 			isDownloading = false;
 		}
 	}
@@ -207,8 +217,8 @@
 			<p class="text-sm text-gray-500">{errorMessage}</p>
 		</div>
 	{:else if payslip}
-		<!-- ===== PAYSLIP CONTENT FOR PDF / PRINT ===== -->
-		<div bind:this={payslipRef} class="print-area">
+		<!-- ===== MAIN SCREEN UI ===== -->
+		<div bind:this={payslipRef} class="no-print">
 			<!-- ===== HEADER ===== -->
 			<div class="border-b border-gray-200 px-6 py-5 bg-gradient-to-r from-gray-50 to-white">
 				<div class="flex items-center justify-between">
@@ -327,7 +337,7 @@
 
 							<!-- Overtime -->
 							{#if payslip.overtime_pay > 0}
-								{@const overtimeRate = payslip.overtime_pay / payslip.overtime_hours}
+								{@const overtimeRate = payslip.overtime_hours > 0 ? (payslip.overtime_pay / payslip.overtime_hours) : 0}
 								<div class="flex justify-between items-center py-2.5">
 									<div class="flex flex-col">
 										<span class="text-sm text-gray-600">Lembur</span>
@@ -453,38 +463,35 @@
 				</div>
 
 				<!-- ===== TAKE HOME PAY ===== -->
-				<div class="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between shadow-xl shadow-indigo-900/20 text-white gap-6 group hover:shadow-2xl hover:shadow-indigo-900/30 transition-all duration-300 border border-white/10">
-					<!-- decorative shapes -->
-					<div class="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full bg-white/10 blur-3xl group-hover:bg-white/20 transition-all duration-500"></div>
-					<div class="absolute bottom-0 left-0 -ml-8 -mb-8 w-32 h-32 rounded-full bg-white/10 blur-2xl"></div>
+				<div class="rounded-xl border border-gray-900 bg-gray-900 text-white p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between shadow-lg gap-6">
 					
-					<div class="relative z-10 flex flex-col gap-2 w-full">
-						<div class="flex items-center gap-2 text-blue-100 mb-1">
+					<div class="flex flex-col gap-2 w-full">
+						<div class="flex items-center gap-2 text-gray-400 mb-1">
 							<svg class="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 							</svg>
 							<span class="text-sm font-semibold tracking-widest uppercase opacity-90">Take Home Pay</span>
 						</div>
 						<div class="flex items-baseline">
-							<span class="text-4xl md:text-5xl font-extrabold tabular-nums tracking-tight drop-shadow-md">{formatCurrency(payslip.net_salary)}</span>
+							<span class="text-4xl md:text-5xl font-extrabold tabular-nums tracking-tight">{formatCurrency(payslip.net_salary)}</span>
 						</div>
 						
 						<!-- Calculation Breakdown -->
-						<div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs sm:text-sm text-blue-50 font-medium bg-white/10 w-fit px-3.5 py-2 rounded-xl backdrop-blur-md border border-white/10 shadow-inner">
+						<div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs sm:text-sm text-gray-300 font-medium bg-gray-800 w-fit px-3.5 py-2 rounded-lg border border-gray-700">
 							<div class="flex items-center gap-1.5 opacity-90">
 								<span>Kotor:</span>
 								<span>{formatCurrency(payslip.gross_salary)}</span>
 							</div>
-							<span class="hidden sm:inline text-white/40 px-1">&bull;</span>
+							<span class="hidden sm:inline text-gray-500 px-1">&bull;</span>
 							<div class="flex items-center gap-1.5 opacity-90">
 								<span>Potongan:</span>
-								<span class="text-red-200">-{formatCurrency(payslip.total_deductions)}</span>
+								<span class="text-red-400">-{formatCurrency(payslip.total_deductions)}</span>
 							</div>
 						</div>
 					</div>
 					
-					<div class="relative z-10 hidden md:flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-						<span class="text-3xl drop-shadow-sm">&#x1F4B0;</span>
+					<div class="hidden md:flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 shrink-0">
+						<span class="text-3xl">&#x1F4B0;</span>
 					</div>
 				</div>
 
@@ -502,136 +509,128 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- ===== PRINT ONLY UI ===== -->
+		<div class="print-only">
+			<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; background: white; padding: 20px;">
+			<div style="border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: flex-end;">
+				<div>
+					<h1 style="font-size: 24px; font-weight: bold; margin: 0; letter-spacing: 1px; text-transform: uppercase;">SLIP GAJI</h1>
+					<p style="font-size: 14px; color: #444; margin: 5px 0 0 0;">Periode: {payslip.period_name}</p>
+				</div>
+				<div style="text-align: right;">
+					<p style="font-size: 16px; font-weight: bold; margin: 0;">{payslip.employee_name}</p>
+					<p style="font-size: 14px; color: #444; margin: 3px 0 0 0;">NIP: {payslip.employee_id_code} &bull; {payslip.position_name}</p>
+					<p style="font-size: 14px; color: #444; margin: 3px 0 0 0;">Departemen: {payslip.department_name}</p>
+				</div>
+			</div>
+
+			<div style="display: flex; gap: 30px; margin-bottom: 30px;">
+				<div style="flex: 1;">
+					<h3 style="font-size: 14px; font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 10px; text-transform: uppercase;">Pendapatan</h3>
+					<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;">
+						<span>Gaji Pokok</span>
+						<span>{payslip.base_salary > 0 ? formatCurrency(payslip.base_salary) : '-'}</span>
+					</div>
+					{#if payslip.daily_wage > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>Upah Harian</span><span>{formatCurrency(payslip.daily_wage)}</span></div>
+					{/if}
+					{#each payslip.allowances || [] as allowance}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>{allowance.name}</span><span>{formatCurrency(allowance.amount)}</span></div>
+					{/each}
+					{#if payslip.overtime_pay > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>Lembur</span><span>{formatCurrency(payslip.overtime_pay)}</span></div>
+					{/if}
+					{#if payslip.thr_amount > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>THR</span><span>{formatCurrency(payslip.thr_amount)}</span></div>
+					{/if}
+					{#if payslip.bonus_amount > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>Bonus</span><span>{formatCurrency(payslip.bonus_amount)}</span></div>
+					{/if}
+					<div style="display: flex; justify-content: space-between; padding: 8px 0; margin-top: 10px; border-top: 1px dashed #000; font-size: 14px; font-weight: bold;">
+						<span>Total Pendapatan</span>
+						<span>{formatCurrency(payslip.gross_salary)}</span>
+					</div>
+				</div>
+
+				<div style="flex: 1;">
+					<h3 style="font-size: 14px; font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 10px; text-transform: uppercase;">Potongan</h3>
+					{#if payslip.bpjs_kesehatan > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>BPJS Kesehatan</span><span>{formatCurrency(payslip.bpjs_kesehatan)}</span></div>
+					{/if}
+					{#if payslip.bpjs_jht > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>BPJS JHT</span><span>{formatCurrency(payslip.bpjs_jht)}</span></div>
+					{/if}
+					{#if payslip.bpjs_jp > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>BPJS JP</span><span>{formatCurrency(payslip.bpjs_jp)}</span></div>
+					{/if}
+					{#if payslip.pph21_amount > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>PPh 21</span><span>{formatCurrency(payslip.pph21_amount)}</span></div>
+					{/if}
+					{#if payslip.loan_deduction > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>Pinjaman</span><span>{formatCurrency(payslip.loan_deduction)}</span></div>
+					{/if}
+					{#each (payslip.deductions || []).filter(d => !['BPJS Kesehatan','BPJS JHT','BPJS JP','PPh 21','Pinjaman','Lain-lain'].includes(d.name)) as deduction}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>{deduction.name}</span><span>{formatCurrency(deduction.amount)}</span></div>
+					{/each}
+					{#if payslip.other_deductions > 0}
+						<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;"><span>Lain-lain</span><span>{formatCurrency(payslip.other_deductions)}</span></div>
+					{/if}
+					<div style="display: flex; justify-content: space-between; padding: 8px 0; margin-top: 10px; border-top: 1px dashed #000; font-size: 14px; font-weight: bold;">
+						<span>Total Potongan</span>
+						<span>{formatCurrency(payslip.total_deductions)}</span>
+					</div>
+				</div>
+			</div>
+
+			<div style="border: 2px solid #000; padding: 20px; text-align: center; background: #fafafa; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+				<p style="font-size: 14px; margin: 0 0 5px 0; text-transform: uppercase; font-weight: bold; color: #444;">Take Home Pay</p>
+				<p style="font-size: 28px; font-weight: bold; margin: 0;">{formatCurrency(payslip.net_salary)}</p>
+			</div>
+			</div>
+		</div>
 	{/if}
 </div>
 
-
 <style>
+	.print-only {
+		display: none;
+	}
+
 	@media print {
 		@page {
 			size: A4;
-			margin: 0;
+			margin: 15mm;
 		}
 
-		/* Reset body for clean print */
+		/* Reset global layouts that hide overflow */
+		:global(body), :global(html), :global(#app), :global(#app > div), :global(main) {
+			height: auto !important;
+			min-height: auto !important;
+			max-height: none !important;
+			overflow: visible !important;
+			display: block !important;
+			position: static !important;
+		}
+
+		/* Hide normal UI */
 		:global(body) {
 			background: #ffffff !important;
-			overflow: hidden !important;
 			-webkit-print-color-adjust: exact !important;
 			print-color-adjust: exact !important;
 		}
-
-		/* Hide sidebar, topbar, bottom nav, and other chrome */
+		
 		:global(aside),
 		:global(header),
 		:global(.bottom-tab-bar),
 		:global(.BottomTabBar),
 		:global(nav),
-		:global(.no-print),
-		:global(button),
-		button, .no-print {
+		.no-print {
 			display: none !important;
 		}
-
-		/* Position print-area to fill the entire page */
-		:global(.print-area) {
-			position: fixed !important;
-			top: 0 !important;
-			left: 0 !important;
-			width: 100% !important;
-			height: auto !important;
-			min-height: 100vh !important;
-			z-index: 99999 !important;
-			background: #ffffff !important;
-			max-width: 100% !important;
-			padding: 12mm !important;
-			margin: 0 !important;
-			overflow: visible !important;
-			-webkit-print-color-adjust: exact !important;
-			print-color-adjust: exact !important;
+		
+		.print-only {
+			display: block !important;
 		}
-
-		/* Remove ALL shadows, filters, rounded corners */
-		:global(*),
-		* {
-			box-shadow: none !important;
-			filter: none !important;
-			-webkit-filter: none !important;
-			backdrop-filter: none !important;
-			-webkit-backdrop-filter: none !important;
-		}
-		.rounded-xl, .rounded-lg, .rounded-2xl, .rounded-full {
-			border-radius: 0 !important;
-		}
-
-		/* Force ALL text to dark readable */
-		:global(.print-area),
-		:global(.print-area *),
-		.print-area, .print-area * {
-			color: #111827 !important;
-			background: transparent !important;
-		}
-
-		/* Force ALL backgrounds to light */
-		[class*="bg-white"] { background: #ffffff !important; }
-		[class*="bg-gray"] { background: #f9fafb !important; }
-		[class*="bg-emerald"] { background: #ecfdf5 !important; }
-		[class*="bg-red"] { background: #fef2f2 !important; }
-		[class*="bg-gradient"] { background: #f9fafb !important; }
-		[class*="bg-blue"] { background: #eff6ff !important; }
-		[class*="bg-purple"] { background: #f5f3ff !important; }
-
-		/* Take-home-pay: solid white */
-		[class*="from-blue-"][class*="via-indigo-"][class*="to-purple-"] {
-			background: #ffffff !important;
-			border-color: #e5e7eb !important;
-		}
-
-		/* Preserve semantic colors */
-		[class*="text-emerald"] { color: #059669 !important; }
-		[class*="text-red"] { color: #dc2626 !important; }
-		[class*="text-blue"] { color: #2563eb !important; }
-		[class*="text-amber"] { color: #d97706 !important; }
-
-		/* Hide decorative elements */
-		svg { display: none !important; }
-		[class*="blur-"] { display: none !important; }
-		[class*="w-12"], [class*="h-12"], [class*="w-10"], [class*="h-10"],
-		[class*="w-7"], [class*="h-7"], [class*="w-16"], [class*="h-16"] { display: none !important; }
-
-		/* Two-column layout */
-		[class*="grid-cols-1"][class*="lg:grid-cols-2"] {
-			display: grid !important;
-			grid-template-columns: 1fr 1fr !important;
-			gap: 8px !important;
-		}
-
-		/* Compact font sizes */
-		.text-sm { font-size: 10px !important; }
-		.text-xs { font-size: 9px !important; }
-		.text-xl { font-size: 14px !important; }
-		[class*="text-4xl"], [class*="text-5xl"] { font-size: 16px !important; }
-		.text-3xl { font-size: 14px !important; }
-
-		/* Compact spacing */
-		.p-6 { padding: 8px !important; }
-		.px-6 { padding-left: 8px !important; padding-right: 8px !important; }
-		.py-5 { padding-top: 6px !important; padding-bottom: 6px !important; }
-		.px-5 { padding-left: 8px !important; padding-right: 8px !important; }
-		.py-4 { padding-top: 5px !important; padding-bottom: 5px !important; }
-		.px-4 { padding-left: 6px !important; padding-right: 6px !important; }
-		.py-3 { padding-top: 4px !important; padding-bottom: 4px !important; }
-		[class*="py-2"][class*="5"] { padding-top: 3px !important; padding-bottom: 3px !important; }
-		.gap-6 { gap: 6px !important; }
-		.gap-4 { gap: 5px !important; }
-		.gap-3 { gap: 4px !important; }
-		.gap-2 { gap: 3px !important; }
-
-		/* Border colors */
-		.border { border-width: 1px !important; }
-		[class*="border-gray"] { border-color: #d1d5db !important; }
-		[class*="border-emerald"] { border-color: #a7f3d0 !important; }
-		[class*="border-red"] { border-color: #fecaca !important; }
-		[class*="border-blue"] { border-color: #bfdbfe !important; }
 	}
 </style>

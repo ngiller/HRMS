@@ -15,10 +15,25 @@ type BPJSConfig struct {
 }
 
 type BPJSComponentConfig struct {
-	Enabled      *bool    `json:"enabled,omitempty"`
-	EmployeeRate *float64 `json:"employee_rate,omitempty"`
-	CompanyRate  *float64 `json:"company_rate,omitempty"`
-	Ceiling      *float64 `json:"ceiling,omitempty"`
+	Enabled         *bool    `json:"enabled,omitempty"`
+	EmployeeRate    *float64 `json:"employee_rate,omitempty"`
+	CompanyRate     *float64 `json:"company_rate,omitempty"`
+	Ceiling         *float64 `json:"ceiling,omitempty"`
+	EmployeeNominal *float64 `json:"employee_nominal,omitempty"`
+	CompanyNominal  *float64 `json:"company_nominal,omitempty"`
+}
+
+type TaxConfig struct {
+	OverrideType    string   `json:"override_type"`              // "rate" | "nominal" | "none" | "free"
+	OverrideRate    *float64 `json:"override_rate,omitempty"`    // e.g. 0.05 (5%)
+	OverrideNominal *float64 `json:"override_nominal,omitempty"` // e.g. 150000
+}
+
+type OvertimeConfig struct {
+	OverrideType   string   `json:"override_type"`             // "hourly_rate" | "divisor" | "percentage" | "none"
+	HourlyRate     *float64 `json:"hourly_rate,omitempty"`      // e.g. 50000.00
+	Divisor        *float64 `json:"divisor,omitempty"`         // e.g. 150
+	RatePercentage *float64 `json:"rate_percentage,omitempty"`  // e.g. 0.01 (1% from Base Salary)
 }
 
 type Company struct {
@@ -47,6 +62,8 @@ type Company struct {
 type HRSettings struct {
 	BPJS               *BPJSConfig `json:"bpjs,omitempty"`
 	FaceMatchThreshold *float64    `json:"face_match_threshold,omitempty"`
+	CutoffStartDay     *int        `json:"cutoff_start_day,omitempty"`
+	CutoffEndDay       *int        `json:"cutoff_end_day,omitempty"`
 }
 
 type UpdateCompanySettingsRequest struct {

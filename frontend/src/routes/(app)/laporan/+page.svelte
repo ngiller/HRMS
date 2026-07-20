@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { reports, departments, employees, ApiError, attendance as attendanceApi } from '$lib/api.js';
+	import { reports, departments, employees, ApiError, attendance as attendanceApi, company as companyApi } from '$lib/api.js';
 	import config from '$lib/config.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 
@@ -49,6 +49,10 @@
 	let selectedEmployeeId = $state('');
 	let deptOptions = $state<{ id: string; name: string }[]>([]);
 	let employeeOptions = $state<{ id: string; full_name: string }[]>([]);
+
+	// Cutoff Period Settings
+	let cutoffStartDay = $state(26);
+	let cutoffEndDay = $state(25);
 
 	// Data
 	let headcount = $state<HeadcountReport | null>(null);
@@ -105,20 +109,36 @@
 		return `${config.API_BASE_URL}${url}`;
 	}
 
+	function calculateCutoffRange(year: number, month: number, startDay: number, endDay: number) {
+		if (month === 0) {
+			return {
+				start: `${year}-01-01`,
+				end: `${year}-12-31`
+			};
+		}
+		
+		const fromDate = new Date(year, month - 2, startDay);
+		const toDate = new Date(year, month - 1, endDay);
+
+		const formatYYYYMMDD = (d: Date) => {
+			const y = d.getFullYear();
+			const m = String(d.getMonth() + 1).padStart(2, '0');
+			const dayStr = String(d.getDate()).padStart(2, '0');
+			return `${y}-${m}-${dayStr}`;
+		};
+
+		return {
+			start: formatYYYYMMDD(fromDate),
+			end: formatYYYYMMDD(toDate)
+		};
+	}
+
 	async function exportAttendance() {
 		exportLoading = true;
 		try {
-			let dateFrom = '';
-			let dateTo = '';
-			if (selectedMonth > 0) {
-				const monthStr = String(selectedMonth).padStart(2, '0');
-				dateFrom = `${selectedYear}-${monthStr}-01`;
-				const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
-				dateTo = `${selectedYear}-${monthStr}-${lastDay}`;
-			} else {
-				dateFrom = `${selectedYear}-01-01`;
-				dateTo = `${selectedYear}-12-31`;
-			}
+			const range = calculateCutoffRange(selectedYear, selectedMonth, cutoffStartDay, cutoffEndDay);
+			const dateFrom = range.start;
+			const dateTo = range.end;
 			const blob = await attendanceApi.exportReport(selectedDept, selectedEmployeeId, '', dateFrom, dateTo);
 			const url = window.URL.createObjectURL(blob);
 			const a = document.createElement('a');
@@ -140,12 +160,18 @@
 
 	async function loadDepts() {
 		try {
-			const [deptRes, empRes] = await Promise.all([
+			const [deptRes, empRes, settingsRes] = await Promise.all([
 				departments.getAll(),
 				employees.list(1, 1000),
+				companyApi.getSettings()
 			]);
 			if (deptRes?.success) deptOptions = deptRes.data;
 			if (empRes?.success) employeeOptions = empRes.data || [];
+			if (settingsRes?.success && settingsRes?.data?.hr_settings) {
+				const hrs = settingsRes.data.hr_settings;
+				cutoffStartDay = hrs.cutoff_start_day || 26;
+				cutoffEndDay = hrs.cutoff_end_day || 25;
+			}
 		} catch { /* noop */ }
 	}
 
@@ -174,17 +200,9 @@
 					if (res?.success) attendance = res.data;
 
 					// Build date filters for the detailed list
-					let dateFrom = '';
-					let dateTo = '';
-					if (selectedMonth > 0) {
-						const monthStr = String(selectedMonth).padStart(2, '0');
-						dateFrom = `${selectedYear}-${monthStr}-01`;
-						const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
-						dateTo = `${selectedYear}-${monthStr}-${lastDay}`;
-					} else {
-						dateFrom = `${selectedYear}-01-01`;
-						dateTo = `${selectedYear}-12-31`;
-					}
+					const range = calculateCutoffRange(selectedYear, selectedMonth, cutoffStartDay, cutoffEndDay);
+					const dateFrom = range.start;
+					const dateTo = range.end;
 
 					const listRes: any = await attendanceApi.report(attendancePage, attendancePerPage, selectedDept, selectedEmployeeId, '', dateFrom, dateTo);
 					if (listRes?.success) {
@@ -224,7 +242,7 @@
 	</div>
 
 	<!-- Tabs -->
-	<div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
+	<div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-800 overflow-x-auto hide-scrollbar">
 		{#each ['headcount', 'payroll', 'attendance', 'leave', 'overtime'] as tab (tab)}				<button onclick={() => { activeTab = tab as typeof activeTab; loadCurrentTab(); }}
 				class="px-5 py-3 text-sm font-medium whitespace-nowrap transition border-b-2 -mb-px cursor-pointer
 					{activeTab === tab ? 'border-[#1A56DB] text-[#1A56DB]' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}">

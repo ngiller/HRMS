@@ -28,13 +28,40 @@ func GetTodayAttendanceByEmployee(ctx context.Context, employeeID string) (*mode
 	`
 	row := database.Pool.QueryRow(ctx, query, employeeID)
 	record, err := scanAttendanceRecord(row)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
+	if err == nil {
+		return record, nil
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-	return record, nil
+
+	// For night shifts, if they checked in yesterday (CURRENT_DATE - 1) and have not checked out yet,
+	// retrieve yesterday's active record so they can check out today.
+	queryYesterday := `
+		SELECT ar.id, ar.employee_id, ar.date, ar.check_in_time, ar.check_out_time,
+			ar.check_in_photo_url, ar.check_in_lat, ar.check_in_lng,
+			ar.check_in_location_id, COALESCE(ar.check_in_location_name, ''),
+			ar.check_out_photo_url, ar.check_out_lat, ar.check_out_lng,
+			ar.check_out_location_id, COALESCE(ar.check_out_location_name, ''),
+			ar.status, ar.is_late, ar.late_minutes, ar.is_early_leave, ar.early_leave_minutes,
+			ar.total_work_hours, ar.is_manual_entry, ar.manual_entry_reason,
+			ar.created_at, ar.updated_at
+		FROM attendance_records ar
+		WHERE ar.employee_id::text = $1 
+			AND ar.date = CURRENT_DATE - 1
+			AND ar.check_in_time IS NOT NULL 
+			AND ar.check_out_time IS NULL
+	`
+	rowYes := database.Pool.QueryRow(ctx, queryYesterday, employeeID)
+	recordYes, errYes := scanAttendanceRecord(rowYes)
+	if errYes == nil {
+		return recordYes, nil
+	}
+	if errYes != nil && !errors.Is(errYes, pgx.ErrNoRows) {
+		return nil, errYes
+	}
+
+	return nil, nil
 }
 
 func CreateCheckIn(ctx context.Context, employeeID string, scheduleID string, lat, lng *float64, locationID, locationName *string, isLate bool, lateMinutes int, photoURL *string) (*models.AttendanceRecord, error) {
@@ -104,15 +131,32 @@ func UpdateCheckOut(ctx context.Context, recordID string, lat, lng *float64, loc
 	return scanAttendanceRecord(row)
 }
 
-func ListMyAttendance(ctx context.Context, employeeID string, page, perPage int) ([]models.AttendanceRecordSummary, int, error) {
+func ListMyAttendance(ctx context.Context, employeeID string, page, perPage int, dateFrom, dateTo string) ([]models.AttendanceRecordSummary, int, error) {
 	offset := (page - 1) * perPage
 
-	countQuery := `
-		SELECT COUNT(*) FROM attendance_records ar
-		WHERE ar.employee_id::text = $1
-	`
+	conditions := []string{"ar.employee_id::text = $1"}
+	args := []interface{}{employeeID}
+	argIdx := 1
+
+	if dateFrom != "" {
+		argIdx++
+		conditions = append(conditions, fmt.Sprintf("ar.date >= $%d", argIdx))
+		args = append(args, dateFrom)
+	}
+	if dateTo != "" {
+		argIdx++
+		conditions = append(conditions, fmt.Sprintf("ar.date <= $%d", argIdx))
+		args = append(args, dateTo)
+	}
+
+	whereClause := "WHERE " + conditions[0]
+	for i := 1; i < len(conditions); i++ {
+		whereClause += " AND " + conditions[i]
+	}
+
+	countQuery := `SELECT COUNT(*) FROM attendance_records ar ` + whereClause
 	var total int
-	err := database.Pool.QueryRow(ctx, countQuery, employeeID).Scan(&total)
+	err := database.Pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -125,11 +169,10 @@ func ListMyAttendance(ctx context.Context, employeeID string, page, perPage int)
 			ar.check_in_lat, ar.check_in_lng, COALESCE(ar.check_out_location_name, ''),
 			ar.check_out_photo_url, ar.check_out_lat, ar.check_out_lng
 		FROM attendance_records ar
-		WHERE ar.employee_id::text = $1
-		ORDER BY ar.date DESC
-		LIMIT $2 OFFSET $3
-	`
-	rows, err := database.Pool.Query(ctx, query, employeeID, perPage, offset)
+	` + whereClause + ` ORDER BY ar.date DESC LIMIT ` + fmt.Sprintf("$%d", argIdx+1) + ` OFFSET ` + fmt.Sprintf("$%d", argIdx+2)
+
+	args = append(args, perPage, offset)
+	rows, err := database.Pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -152,7 +195,7 @@ func ListMyAttendance(ctx context.Context, employeeID string, page, perPage int)
 	return records, total, nil
 }
 
-func ListAttendanceReport(ctx context.Context, page, perPage int, deptID, status, dateFrom, dateTo string) ([]models.AttendanceRecordSummary, int, error) {
+func ListAttendanceReport(ctx context.Context, page, perPage int, deptID, employeeID, status, dateFrom, dateTo string) ([]models.AttendanceRecordSummary, int, error) {
 	args := []interface{}{}
 	argIdx := 0
 	conditions := []string{}
@@ -161,6 +204,11 @@ func ListAttendanceReport(ctx context.Context, page, perPage int, deptID, status
 		argIdx++
 		conditions = append(conditions, fmt.Sprintf("e.department_id::text = $%d", argIdx))
 		args = append(args, deptID)
+	}
+	if employeeID != "" {
+		argIdx++
+		conditions = append(conditions, fmt.Sprintf("ar.employee_id::text = $%d", argIdx))
+		args = append(args, employeeID)
 	}
 	if status != "" {
 		argIdx++
@@ -241,6 +289,41 @@ func ListAttendanceReport(ctx context.Context, page, perPage int, deptID, status
 	return records, total, nil
 }
 
+// GetAttendanceRecordByID returns a single attendance record with employee info
+func GetAttendanceRecordByID(ctx context.Context, id string) (*models.AttendanceRecordSummary, error) {
+	query := `
+		SELECT ar.id, ar.date, TO_CHAR(ar.date, 'Day') AS day_name,
+			ar.check_in_time, ar.check_out_time,
+			ar.status, ar.is_late, ar.late_minutes, ar.is_early_leave, ar.total_work_hours,
+			COALESCE(ar.check_in_location_name, ''), ar.check_in_photo_url,
+			ar.check_in_lat, ar.check_in_lng, COALESCE(ar.check_out_location_name, ''),
+			ar.check_out_photo_url, ar.check_out_lat, ar.check_out_lng,
+			COALESCE(e.full_name, ''), COALESCE(d.name, ''),
+			e.id::text
+		FROM attendance_records ar
+		JOIN employees e ON e.id = ar.employee_id
+		LEFT JOIN departments d ON d.id = e.department_id
+		WHERE ar.id::text = $1
+	`
+	var r models.AttendanceRecordSummary
+	err := database.Pool.QueryRow(ctx, query, id).Scan(
+		&r.ID, &r.Date, &r.DayName, &r.CheckInTime, &r.CheckOutTime,
+		&r.Status, &r.IsLate, &r.LateMinutes, &r.IsEarlyLeave, &r.TotalWorkHours,
+		&r.CheckInLocationName, &r.CheckInPhotoURL,
+		&r.CheckInLat, &r.CheckInLng, &r.CheckOutLocationName,
+		&r.CheckOutPhotoURL, &r.CheckOutLat, &r.CheckOutLng,
+		&r.EmployeeName, &r.DepartmentName,
+		&r.EmployeeID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &r, nil
+}
+
 func GetActiveAttendanceLocations(ctx context.Context) ([]models.AttendanceLocationSummary, error) {
 	query := `
 		SELECT al.id, al.name, COALESCE(al.address, ''), al.latitude, al.longitude,
@@ -269,9 +352,12 @@ func GetActiveAttendanceLocations(ctx context.Context) ([]models.AttendanceLocat
 	return locations, nil
 }
 
-func GetEmployeeScheduleInfo(ctx context.Context, employeeID string) (scheduleID *string, scheduleName string, startTime string, endTime string, err error) {
+func GetEmployeeScheduleInfo(ctx context.Context, employeeID string, dateStr string) (scheduleID *string, scheduleName string, startTime string, endTime string, err error) {
 	// Step 1: Try the new flexible schedule system (employee_schedules + schedule_templates)
-	date := time.Now().Format("2006-01-02")
+	date := dateStr
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
 	rs, resolveErr := ResolveEmployeeScheduleForDate(ctx, employeeID, date)
 	if resolveErr == nil && rs != nil {
 		sid := rs.ScheduleID.String()
@@ -315,7 +401,7 @@ func GetEmployeeScheduleInfo(ctx context.Context, employeeID string) (scheduleID
 				WHEN EXTRACT(DOW FROM CURRENT_DATE) = 2 THEN COALESCE(ws.tuesday_start::text, '')
 				WHEN EXTRACT(DOW FROM CURRENT_DATE) = 3 THEN COALESCE(ws.wednesday_start::text, '')
 				WHEN EXTRACT(DOW FROM CURRENT_DATE) = 4 THEN COALESCE(ws.thursday_start::text, '')
-				WHEN EXTRACT(DOW FROM CURRENT_DATE) = 5 THEN COALESCE(ws.friday_end::text, '')
+				WHEN EXTRACT(DOW FROM CURRENT_DATE) = 5 THEN COALESCE(ws.friday_start::text, '')
 				WHEN EXTRACT(DOW FROM CURRENT_DATE) = 6 THEN COALESCE(ws.saturday_start::text, '')
 			END AS start_time,
 			CASE

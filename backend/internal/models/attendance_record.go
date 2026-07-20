@@ -31,6 +31,7 @@ type AttendanceRecord struct {
 	TotalWorkHours       *float64   `json:"total_work_hours"`
 	IsManualEntry        bool       `json:"is_manual_entry"`
 	ManualEntryReason    *string    `json:"manual_entry_reason"`
+	LocationWarning      *string    `json:"location_warning,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
 	DeletedAt            *time.Time `json:"deleted_at,omitempty"`
@@ -52,12 +53,12 @@ type AttendanceRecordSummary struct {
 	CheckInLat           *float64   `json:"check_in_lat"`
 	CheckInLng           *float64   `json:"check_in_lng"`
 	CheckOutLocationName *string    `json:"check_out_location_name"`
-	Photo        *string  `json:"photo"`
 	CheckOutPhotoURL     *string    `json:"check_out_photo_url"`
 	CheckOutLat          *float64   `json:"check_out_lat"`
 	CheckOutLng          *float64   `json:"check_out_lng"`
 	EmployeeName         string     `json:"employee_name,omitempty"`
 	DepartmentName       string     `json:"department_name,omitempty"`
+	EmployeeID           string     `json:"employee_id,omitempty"`
 }
 
 type CheckInRequest struct {
@@ -90,6 +91,7 @@ type TodayAttendanceStatus struct {
 	ScheduleName  string                   `json:"schedule_name"`
 	ScheduleStart string                   `json:"schedule_start"`
 	ScheduleEnd   string                   `json:"schedule_end"`
+	IsDayOff      bool                     `json:"is_day_off"`
 }
 
 type AttendanceListResponse struct {

@@ -50,6 +50,12 @@ func (h *ManualAttendanceHandler) ListManualAttendance(c *fiber.Ctx) error {
 	status := c.Query("status", "")
 	employeeID := c.Query("employee_id", "")
 
+	// Regular employees can only see their own data
+	roleSlug, _ := c.Locals("role_slug").(string)
+	if roleSlug == "employee" {
+		employeeID = database.UserIDFromContext(c.Locals("user_id"))
+	}
+
 	resp, err := h.manualAttendanceService.List(c.Context(), page, perPage, status, employeeID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse(err.Error()))
@@ -67,6 +73,8 @@ func (h *ManualAttendanceHandler) ListManualAttendance(c *fiber.Ctx) error {
 func (h *ManualAttendanceHandler) GetManualAttendance(c *fiber.Ctx) error {
 	id := c.Params("id")
 
+	roleSlug, _ := c.Locals("role_slug").(string)
+
 	r, err := h.manualAttendanceService.Get(c.Context(), id)
 	if err != nil {
 		code := fiber.StatusInternalServerError
@@ -74,6 +82,14 @@ func (h *ManualAttendanceHandler) GetManualAttendance(c *fiber.Ctx) error {
 			code = fiber.StatusNotFound
 		}
 		return c.Status(code).JSON(ErrorResponse(err.Error()))
+	}
+
+	// Regular employees can only see their own requests
+	if roleSlug == "employee" {
+		userID := database.UserIDFromContext(c.Locals("user_id"))
+		if r.EmployeeID.String() != userID {
+			return c.Status(fiber.StatusForbidden).JSON(ErrorResponse("Anda tidak memiliki akses untuk melihat pengajuan ini"))
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(SuccessResponse(r, "Berhasil memuat pengajuan absensi manual"))

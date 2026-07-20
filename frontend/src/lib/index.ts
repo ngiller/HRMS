@@ -1,1 +1,4 @@
-// place files you want to import through the `$lib` alias in this folder.
+// Barrel exports for shared components
+import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+
+export { AnimatedPresence };

@@ -1,4 +1,5 @@
-// @ts-nocheck
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck - Test file using JS mock classes, TypeScript checking not applicable
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock EventSource before importing the module
@@ -53,7 +54,7 @@ class MockEventSource {
 
 let mockEventSourceInstance = null;
 
-// @ts-ignore
+// @ts-expect-error EventSource mock for testing
 globalThis.EventSource = vi.fn(function(url) {
 	mockEventSourceInstance = new MockEventSource(url);
 	return mockEventSourceInstance;

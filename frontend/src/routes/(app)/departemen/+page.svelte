@@ -4,7 +4,7 @@
 	import { hasPermission } from '$lib/permissions.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
 import MobileCard from '$lib/components/MobileCard.svelte';
 import EmptyState from '$lib/components/EmptyState.svelte';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
@@ -602,7 +602,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900"
 						>
 							<option value="">Tidak ada (departemen utama)</option>
-							{#each allDepts as d}
+							{#each allDepts as d (d)}
 								{#if d.id !== editingId}
 									<option value={d.id}>{d.name} ({d.code})</option>
 								{/if}
@@ -617,7 +617,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900"
 						>
 							<option value="">Pilih jadwal (opsional)</option>
-							{#each workSchedules as ws}
+							{#each workSchedules as ws (ws)}
 								<option value={ws.id}>{ws.name}</option>
 							{/each}
 						</select>
@@ -703,7 +703,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			<!-- Mobile Cards -->
 			<div class="md:hidden space-y-3">
 				<PullToRefresh onRefresh={loadDepartments}>
-				{#each departments as dept}
+				{#each departments as dept (dept)}
 					<MobileCard
 						title={dept.name}
 						subtitle={dept.code}
@@ -711,19 +711,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						avatarColor={getAvatarTheme('department').gradientClasses}
 						badges={[{ label: dept.is_active ? 'Aktif' : 'Nonaktif', color: dept.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800' }]}
 					>
-						{#snippet children()}
-							<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-								{#if dept.head_name}
-									<span class="truncate">Kepala: {dept.head_name}</span>
-									<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
-								{/if}
-								{#if dept.parent_name}
-									<span class="truncate">Induk: {dept.parent_name}</span>
-									<span class="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full shrink-0"></span>
-								{/if}
-								<span>{dept.employee_count} karyawan</span>
-							</div>
-						{/snippet}
 						{#snippet footer()}
 							<div class="flex items-center gap-2">
 								{#if hasPermission('department', 'update')}
@@ -752,7 +739,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						>
 							Sebelumnya
 						</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button
@@ -779,7 +766,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 
 <!-- Delete Confirmation Modal (tetap modal, cuma buat konfirmasi) -->
 <AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
 		onclick={cancelDelete}

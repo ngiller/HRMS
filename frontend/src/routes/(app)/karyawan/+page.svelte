@@ -41,6 +41,8 @@
 		bank_name: string;
 		bank_account: string;
 		address_ktp: string;
+		approval_line_id: string;
+		approval_line_name: string;
 	};
 
 	type EmployeeForm = {
@@ -65,6 +67,7 @@
 		role_id: string;
 		position_id: string;
 		department_id: string;
+		approval_line_id: string;
 	};
 
 	type Department = {
@@ -82,7 +85,7 @@
 	let employees = $state<Employee[]>([]);
 	let total = $state(0);
 	let page = $state(1);
-	let perPage = $state(25);
+	let perPage = $state(10);
 	let totalPages = $state(0);
 	let searchQuery = $state('');
 	let filterDepartment = $state('');
@@ -107,6 +110,7 @@
 		phone: '', address: '',
 		nik: '', npwp: '', bank_name: '', bank_account: '', address_ktp: '',
 		role_id: '', position_id: '', department_id: '',
+		approval_line_id: '',
 	});
 	let formError = $state('');
 	let isSaving = $state(false);
@@ -121,6 +125,7 @@
 	let roles = $state<Role[]>([]);
 	let positions = $state<Position[]>([]);
 	let positionGrades = $state<PositionGrade[]>([]);
+	let allEmployees = $state<{ id: string; full_name: string; department_name: string }[]>([]);
 
 	let selectedPositionGradeInfo = $derived.by(() => {
 		if (!form.position_id || positionGrades.length === 0) return null;
@@ -136,17 +141,20 @@
 
 	async function loadDropdowns() {
 		try {
-			const [deptResp, roleResp, posResp, gradeResp] = await Promise.all([
+			const [deptResp, roleResp, posResp, gradeResp, empResp] = await Promise.all([
 				deptApi.getAll().catch(() => ({ data: [] })),
 				rolesApi.list(1, 100).catch(() => ({ data: { roles: [] } })),
 				positionsApi.getAll().catch(() => ({ data: [] })),
 				gradesApi.getAll().catch(() => ({ data: [] })),
+				employeesApi.list(1, 500).catch(() => ({ data: [] })),
 			]);
 			departments = deptResp.data || [];
 			const rolesData = roleResp.data?.roles || roleResp.data || [];
 			roles = (Array.isArray(rolesData) ? rolesData : []).filter((r: any) => r.slug !== 'super_admin');
 			positions = posResp.data || [];
 			positionGrades = gradeResp.data || [];
+			const empList = empResp.data || [];
+			allEmployees = empList.map((e: any) => ({ id: e.id, full_name: e.full_name, department_name: e.department_name || '' }));
 		} catch {
 			// silent
 		}
@@ -163,7 +171,7 @@
 			employees = data;
 			total = response.meta?.total || 0;
 			page = response.meta?.page || 1;
-			perPage = response.meta?.per_page || 25;
+			perPage = response.meta?.per_page || 10;
 			totalPages = Math.ceil(total / perPage);
 
 			totalActive = data.filter((e: Employee) => e.is_active && !e.deleted_at).length;
@@ -198,6 +206,7 @@
 			employment_status: 'percobaan', phone: '', address: '',
 			nik: '', npwp: '', bank_name: '', bank_account: '', address_ktp: '',
 			role_id: '', position_id: '', department_id: '',
+			approval_line_id: '',
 		};
 		formError = '';
 		showForm = true;
@@ -214,6 +223,7 @@
 			employment_status: emp.employment_status, phone: emp.phone,
 			address: '', nik: '', npwp: '', bank_name: '', bank_account: '', address_ktp: '',
 			role_id: '', position_id: '', department_id: '',
+			approval_line_id: emp.approval_line_id || '',
 		};
 		formError = '';
 		showForm = true;
@@ -239,6 +249,7 @@
 				form.role_id = d.role_id || '';
 				form.position_id = d.position_id || '';
 				form.department_id = d.department_id || '';
+				form.approval_line_id = d.approval_line_id || '';
 			}
 		}).catch((err: unknown) => {
 			console.error('Gagal memuat detail karyawan:', err);
@@ -281,6 +292,7 @@
 				if (form.role_id) payload.role_id = form.role_id;
 				if (form.position_id) payload.position_id = form.position_id;
 				if (form.department_id) payload.department_id = form.department_id;
+				payload.approval_line_id = form.approval_line_id || '';
 				await employeesApi.update(editingId, payload);
 			} else {
 				await employeesApi.create({
@@ -386,6 +398,7 @@ function getStatusBadge(status: string): string {
 
 	// Export/Import
 	let isExporting = $state(false);
+	let isDownloadingTemplate = $state(false);
 	let isImporting = $state(false);
 	let importResult = $state<{ success: number; errors: string[]; message: string } | null>(null);
 
@@ -405,6 +418,25 @@ function getStatusBadge(status: string): string {
 			errorMessage = (err as { message?: string }).message || 'Gagal export data';
 		} finally {
 			isExporting = false;
+		}
+	}
+
+	async function handleDownloadTemplate() {
+		isDownloadingTemplate = true;
+		try {
+			const blob = await employeesApi.downloadTemplate();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'template_import_karyawan.xlsx';
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		} catch (err: unknown) {
+			errorMessage = (err as { message?: string }).message || 'Gagal download template';
+		} finally {
+			isDownloadingTemplate = false;
 		}
 	}
 
@@ -643,6 +675,15 @@ function getStatusBadge(status: string): string {
 						{/if}
 						{isExporting ? 'Mengexport...' : 'Export Excel'}
 					</button>
+					<button onclick={handleDownloadTemplate} disabled={isDownloadingTemplate}
+						class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:bg-gray-800 transition shadow-sm cursor-pointer disabled:opacity-50">
+						{#if isDownloadingTemplate}
+							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+						{:else}
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+						{/if}
+						{isDownloadingTemplate ? 'Download...' : 'Download Template'}
+					</button>
 					<label class="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:bg-gray-800 transition shadow-sm cursor-pointer disabled:opacity-50">
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
 						<span>{isImporting ? 'Mengimport...' : 'Import Excel'}</span>
@@ -682,42 +723,42 @@ function getStatusBadge(status: string): string {
 	{/if}
 
 	<!-- Summary Stats (sembunyikan saat form aktif) -->
-	<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" class:hidden={showForm}>
-			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+	<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3" class:hidden={showForm}>
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Total</span>
-					<div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-						<svg class="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+					<span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total</span>
+					<div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
+						<svg class="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : total}</p>
+				<p class="text-lg font-bold text-gray-900 dark:text-white mt-0.5 tabular-nums">{isLoading ? '-' : total}</p>
 			</div>
-			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Aktif</span>
-					<div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
-						<svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+					<span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Aktif</span>
+					<div class="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center">
+						<svg class="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : totalActive}</p>
+				<p class="text-lg font-bold text-gray-900 dark:text-white mt-0.5 tabular-nums">{isLoading ? '-' : totalActive}</p>
 			</div>
-			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Kontrak</span>
-					<div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-						<svg class="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+					<span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Kontrak</span>
+					<div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
+						<svg class="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : totalKontrak}</p>
+				<p class="text-lg font-bold text-gray-900 dark:text-white mt-0.5 tabular-nums">{isLoading ? '-' : totalKontrak}</p>
 			</div>
-			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3.5">
+			<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2.5">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Percobaan</span>
-					<div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-						<svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+					<span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Percobaan</span>
+					<div class="w-6 h-6 rounded-md bg-amber-50 flex items-center justify-center">
+						<svg class="w-3 h-3 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 					</div>
 				</div>
-				<p class="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{isLoading ? '-' : totalPercobaan}</p>
+				<p class="text-lg font-bold text-gray-900 dark:text-white mt-0.5 tabular-nums">{isLoading ? '-' : totalPercobaan}</p>
 			</div>
 		</div>
 
@@ -970,9 +1011,7 @@ function getStatusBadge(status: string): string {
 									</span>
 								</div>
 							</div>
-						{/if}
-
-						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						{/if}							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
 								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 									Role Sistem
@@ -985,7 +1024,18 @@ function getStatusBadge(status: string): string {
 									</select>
 								</label>
 							</div>
-							<div></div>
+							<div>
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+									Atasan (Approval Line)
+									<select bind:value={form.approval_line_id}
+										class="mt-1.5 w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
+										<option value="">Tidak ada atasan</option>
+										{#each allEmployees.filter(e => e.id !== editingId) as emp (emp.id)}
+											<option value={emp.id}>{emp.full_name}{emp.department_name ? ` (${emp.department_name})` : ''}</option>
+										{/each}
+									</select>
+								</label>
+							</div>
 						</div>
 					</div>
 				</section>

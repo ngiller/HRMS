@@ -202,7 +202,7 @@
 				</button>
 			</div>
 			<div class="space-y-2">
-				{#each subs as sub}
+				{#each subs as sub (sub)}
 					<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-800">
 						<div class="flex items-center gap-2">
 							<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

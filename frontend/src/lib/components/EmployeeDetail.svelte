@@ -1,10 +1,39 @@
 <script lang="ts">
-	import { employees as employeesApi, salaryComponents as scApi, workSchedules as wsApi, company as companyApi } from '$lib/api.js';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+	import { employees as employeesApi, salaryComponents as scApi, workSchedules as wsApi, company as companyApi, auth } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 
-	let { employeeId, onclose }: { employeeId: string; onclose: () => void } = $props();
+	let { 
+		employeeId, 
+		initialTab = 'profile', 
+		onclose 
+	}: { 
+		employeeId: string; 
+		initialTab?: 'profile' | 'salary' | 'bpjs' | 'tax' | 'overtime'; 
+		onclose: () => void 
+	} = $props();
+
+	// --------------- is_pregnant toggle state ---------------
+	let isPregnant = $state(false);
+	let isSavingPregnant = $state(false);
+	
+	async function handleTogglePregnant() {
+		const emp = employee;
+		if (!emp) return;
+		isSavingPregnant = true;
+		try {
+			const newVal = !isPregnant;
+			await employeesApi.update(emp.id, { is_pregnant: newVal });
+			isPregnant = newVal;
+			employee!.is_pregnant = newVal;
+		} catch (err: any) {
+			errorMessage = err.message || 'Gagal menyimpan status kehamilan';
+		} finally {
+			isSavingPregnant = false;
+		}
+	}
 
 	// --------------- Salary editing state ---------------
 	let salaryBase = $state('');
@@ -66,6 +95,12 @@
 	let scTotal = $state(0);
 	let scPage = $state(1);
 	let scPerPage = $state(25);
+
+	// --------------- Approval Line State ---------------
+	let allEmployees = $state<{ id: string; full_name: string; position_name: string; department_name: string; }[]>([]);
+	let approvalLinePickerOpen = $state(false);
+	let selectedApprovalLineId = $state('');
+	let isSavingApprovalLine = $state(false);
 
 	// --------------- Schedule Override State ---------------
 	let allWorkSchedules = $state<{ id: string; name: string; schedule_type: string; }[]>([]);
@@ -158,14 +193,23 @@
 		daily_wage: number;
 		work_schedule_id: string | null;
 		work_schedule_name: string;
+		approval_line_id: string | null;
+		approval_line_name: string;
+		is_pregnant: boolean;
 		last_login_at: string | null;
 		is_locked: boolean;
 		locked_until: string | null;
+		ptkp_status: string;
 		created_at: string;
 		updated_at: string;
 	};
 
 	let employee = $state<EmployeeDetail | null>(null);
+
+	const currentUser = $derived(auth.getUser() as any);
+	const isEmployeeRole = $derived(currentUser?.role_slug === 'employee');
+	const isViewingOther = $derived(currentUser && employee && currentUser.id !== employee.id);
+	const shouldRestrict = $derived(isEmployeeRole && isViewingOther);
 	let isLoading = $state(true);
 	let errorMessage = $state('');
 
@@ -215,12 +259,58 @@
 		if (employeeId) {
 			loadEmployee(employeeId);
 			loadWorkSchedules();
+			loadAllEmployees();
+		}
+	});
+
+	$effect(() => {
+		if (employee) {
+			isPregnant = employee.is_pregnant;
 		}
 	});
 
 	function retryLoad() {
 		const id = employeeId;
 		if (id) loadEmployee(id);
+	}
+
+	// --------------- Approval Line Functions ---------------
+
+	async function loadAllEmployees() {
+		try {
+			const res: any = await employeesApi.list(1, 1000, '', '', '', true);
+			allEmployees = (res.data || []).filter((e: any) => e.id !== employeeId && e.is_active !== false);
+		} catch { /* ignore */ }
+	}
+
+	function openApprovalLinePicker() {
+		selectedApprovalLineId = employee?.approval_line_id || '';
+		approvalLinePickerOpen = true;
+	}
+
+	function closeApprovalLinePicker() {
+		approvalLinePickerOpen = false;
+		selectedApprovalLineId = '';
+	}
+
+	async function handleSaveApprovalLine() {
+		const emp = employee;
+		if (!emp) return;
+		isSavingApprovalLine = true;
+		try {
+			// Send empty string to clear approval_line_id (backend NULLIF('', '')::uuid handles it)
+			await employeesApi.update(emp.id, { approval_line_id: selectedApprovalLineId || '' });
+			// Refresh employee data
+			const empRes: any = await employeesApi.get(emp.id);
+			if (empRes.data) {
+				employee = empRes.data;
+			}
+			closeApprovalLinePicker();
+		} catch (err: any) {
+			errorMessage = err.message || 'Gagal menyimpan atasan';
+		} finally {
+			isSavingApprovalLine = false;
+		}
 	}
 
 	// --------------- Schedule Override Functions ---------------
@@ -466,8 +556,10 @@
 
 	type BPJSComponentConfig = {
 		enabled: boolean;
-		rate_employee?: number;
-		rate_company?: number;
+		employee_rate?: number;
+		company_rate?: number;
+		employee_nominal?: number;
+		company_nominal?: number;
 	};
 
 	type EmployeeBPJSConfig = {
@@ -492,6 +584,15 @@
 	let bpjsError = $state('');
 	let bpjsSuccess = $state('');
 
+	// Helper to track override methods in Svelte
+	let bpjsOverrideMethods = $state<Record<string, { emp: 'default'|'rate'|'nominal', comp: 'default'|'rate'|'nominal' }>>({
+		kesehatan: { emp: 'default', comp: 'default' },
+		jht: { emp: 'default', comp: 'default' },
+		jp: { emp: 'default', comp: 'default' },
+		jkk: { emp: 'default', comp: 'default' },
+		jkm: { emp: 'default', comp: 'default' },
+	});
+
 	async function loadEmployeeBPJSConfig() {
 		const emp = employee;
 		if (!emp) return;
@@ -500,16 +601,52 @@
 		try {
 			const res: any = await companyApi.getEmployeeBPJSConfig(emp.id);
 			const config = res?.data?.bpjs_config || {};
-			// Initialize all components with defaults if not set
+			
 			employeeBPJSConfig = {
-				kesehatan: { enabled: config.kesehatan?.enabled ?? true },
-				jht: { enabled: config.jht?.enabled ?? true },
-				jp: { enabled: config.jp?.enabled ?? true },
-				jkk: { enabled: config.jkk?.enabled ?? true },
-				jkm: { enabled: config.jkm?.enabled ?? true },
+				kesehatan: {
+					enabled: config.kesehatan?.enabled ?? true,
+					employee_rate: config.kesehatan?.employee_rate !== undefined ? config.kesehatan.employee_rate * 100 : undefined,
+					company_rate: config.kesehatan?.company_rate !== undefined ? config.kesehatan.company_rate * 100 : undefined,
+					employee_nominal: config.kesehatan?.employee_nominal,
+					company_nominal: config.kesehatan?.company_nominal,
+				},
+				jht: {
+					enabled: config.jht?.enabled ?? true,
+					employee_rate: config.jht?.employee_rate !== undefined ? config.jht.employee_rate * 100 : undefined,
+					company_rate: config.jht?.company_rate !== undefined ? config.jht.company_rate * 100 : undefined,
+					employee_nominal: config.jht?.employee_nominal,
+					company_nominal: config.jht?.company_nominal,
+				},
+				jp: {
+					enabled: config.jp?.enabled ?? true,
+					employee_rate: config.jp?.employee_rate !== undefined ? config.jp.employee_rate * 100 : undefined,
+					company_rate: config.jp?.company_rate !== undefined ? config.jp.company_rate * 100 : undefined,
+					employee_nominal: config.jp?.employee_nominal,
+					company_nominal: config.jp?.company_nominal,
+				},
+				jkk: {
+					enabled: config.jkk?.enabled ?? true,
+					company_rate: config.jkk?.company_rate !== undefined ? config.jkk.company_rate * 100 : undefined,
+					company_nominal: config.jkk?.company_nominal,
+				},
+				jkm: {
+					enabled: config.jkm?.enabled ?? true,
+					company_rate: config.jkm?.company_rate !== undefined ? config.jkm.company_rate * 100 : undefined,
+					company_nominal: config.jkm?.company_nominal,
+				},
 			};
+
+			// Determine override methods
+			for (const key of ['kesehatan', 'jht', 'jp', 'jkk', 'jkm'] as const) {
+				const c = employeeBPJSConfig[key];
+				if (c) {
+					bpjsOverrideMethods[key] = {
+						emp: c.employee_nominal !== undefined ? 'nominal' : (c.employee_rate !== undefined ? 'rate' : 'default'),
+						comp: c.company_nominal !== undefined ? 'nominal' : (c.company_rate !== undefined ? 'rate' : 'default'),
+					};
+				}
+			}
 		} catch {
-			// Default to all enabled if error
 			employeeBPJSConfig = {
 				kesehatan: { enabled: true },
 				jht: { enabled: true },
@@ -529,7 +666,21 @@
 		bpjsError = '';
 		bpjsSuccess = '';
 		try {
-			await companyApi.updateEmployeeBPJSConfig(emp.id, employeeBPJSConfig);
+			const payload: any = {};
+			for (const key of ['kesehatan', 'jht', 'jp', 'jkk', 'jkm'] as const) {
+				const comp = employeeBPJSConfig[key];
+				const method = bpjsOverrideMethods[key];
+				if (comp && method) {
+					payload[key] = {
+						enabled: comp.enabled,
+						employee_rate: comp.enabled && method.emp === 'rate' && comp.employee_rate !== undefined ? comp.employee_rate / 100 : null,
+						company_rate: comp.enabled && method.comp === 'rate' && comp.company_rate !== undefined ? comp.company_rate / 100 : null,
+						employee_nominal: comp.enabled && method.emp === 'nominal' && comp.employee_nominal !== undefined ? comp.employee_nominal : null,
+						company_nominal: comp.enabled && method.comp === 'nominal' && comp.company_nominal !== undefined ? comp.company_nominal : null,
+					};
+				}
+			}
+			await companyApi.updateEmployeeBPJSConfig(emp.id, payload);
 			bpjsSuccess = 'Konfigurasi BPJS berhasil disimpan';
 			setTimeout(() => { bpjsSuccess = ''; }, 3000);
 		} catch (err: any) {
@@ -539,11 +690,133 @@
 		}
 	}
 
+	// ======================= Tax (PPh 21) Config =======================
+	type EmployeeTaxConfig = {
+		override_type: 'rate' | 'nominal' | 'none' | 'free';
+		override_rate?: number;
+		override_nominal?: number;
+	};
+
+	let employeeTaxConfig = $state<EmployeeTaxConfig>({ override_type: 'none' });
+	let isLoadingTax = $state(false);
+	let isSavingTax = $state(false);
+	let taxError = $state('');
+	let taxSuccess = $state('');
+
+	async function loadEmployeeTaxConfig() {
+		const emp = employee;
+		if (!emp) return;
+		isLoadingTax = true;
+		taxError = '';
+		try {
+			const res: any = await companyApi.getEmployeeTaxConfig(emp.id);
+			const config = res?.data?.tax_config || { override_type: 'none' };
+			employeeTaxConfig = {
+				override_type: config.override_type || 'none',
+				override_rate: config.override_rate !== undefined ? config.override_rate * 100 : undefined,
+				override_nominal: config.override_nominal,
+			};
+		} catch {
+			employeeTaxConfig = { override_type: 'none' };
+		} finally {
+			isLoadingTax = false;
+		}
+	}
+
+	async function handleSaveTaxConfig() {
+		const emp = employee;
+		if (!emp) return;
+		isSavingTax = true;
+		taxError = '';
+		taxSuccess = '';
+		try {
+			const payload: any = {
+				override_type: employeeTaxConfig.override_type,
+				override_rate: employeeTaxConfig.override_type === 'rate' && employeeTaxConfig.override_rate !== undefined ? employeeTaxConfig.override_rate / 100 : null,
+				override_nominal: employeeTaxConfig.override_type === 'nominal' && employeeTaxConfig.override_nominal !== undefined ? employeeTaxConfig.override_nominal : null,
+			};
+			await companyApi.updateEmployeeTaxConfig(emp.id, payload);
+			taxSuccess = 'Konfigurasi pajak berhasil disimpan';
+			setTimeout(() => { taxSuccess = ''; }, 3000);
+		} catch (err: any) {
+			taxError = err.message || 'Gagal menyimpan konfigurasi pajak';
+		} finally {
+			isSavingTax = false;
+		}
+	}
+
+	// ======================= Overtime Config =======================
+	type EmployeeOvertimeConfig = {
+		override_type: 'hourly_rate' | 'divisor' | 'percentage' | 'none';
+		hourly_rate?: number;
+		divisor?: number;
+		rate_percentage?: number;
+	};
+
+	let employeeOvertimeConfig = $state<EmployeeOvertimeConfig>({ override_type: 'none' });
+	let isLoadingOvertime = $state(false);
+	let isSavingOvertime = $state(false);
+	let overtimeError = $state('');
+	let overtimeSuccess = $state('');
+	let activeDetailTab = $state<'profile' | 'salary' | 'bpjs' | 'tax' | 'overtime'>(initialTab);
+
+	$effect(() => {
+		if (initialTab) {
+			activeDetailTab = initialTab;
+		}
+	});
+
+	async function loadEmployeeOvertimeConfig() {
+		const emp = employee;
+		if (!emp) return;
+		isLoadingOvertime = true;
+		overtimeError = '';
+		try {
+			const res: any = await companyApi.getEmployeeOvertimeConfig(emp.id);
+			const config = res?.data?.overtime_config || { override_type: 'none' };
+			employeeOvertimeConfig = {
+				override_type: config.override_type || 'none',
+				hourly_rate: config.hourly_rate,
+				divisor: config.divisor,
+				rate_percentage: config.rate_percentage !== undefined ? config.rate_percentage * 100 : undefined,
+			};
+		} catch {
+			employeeOvertimeConfig = { override_type: 'none' };
+		} finally {
+			isLoadingOvertime = false;
+		}
+	}
+
+	async function handleSaveOvertimeConfig() {
+		const emp = employee;
+		if (!emp) return;
+		isSavingOvertime = true;
+		overtimeError = '';
+		overtimeSuccess = '';
+		try {
+			const payload: any = {
+				override_type: employeeOvertimeConfig.override_type,
+				hourly_rate: employeeOvertimeConfig.override_type === 'hourly_rate' && employeeOvertimeConfig.hourly_rate !== undefined ? employeeOvertimeConfig.hourly_rate : null,
+				divisor: employeeOvertimeConfig.override_type === 'divisor' && employeeOvertimeConfig.divisor !== undefined ? employeeOvertimeConfig.divisor : null,
+				rate_percentage: employeeOvertimeConfig.override_type === 'percentage' && employeeOvertimeConfig.rate_percentage !== undefined ? employeeOvertimeConfig.rate_percentage / 100 : null,
+			};
+			await companyApi.updateEmployeeOvertimeConfig(emp.id, payload);
+			overtimeSuccess = 'Konfigurasi lembur berhasil disimpan';
+			setTimeout(() => { overtimeSuccess = ''; }, 3000);
+		} catch (err: any) {
+			overtimeError = err.message || 'Gagal menyimpan konfigurasi lembur';
+		} finally {
+			isSavingOvertime = false;
+		}
+	}
+
 	$effect(() => {
 		const emp = employee;
 		if (emp && !isLoading && hasPermission('payroll', 'read')) {
 			loadSalaryComponents();
 			loadEmployeeBPJSConfig();
+			loadEmployeeTaxConfig();
+			loadEmployeeOvertimeConfig();
 		}
 	});
 </script>
@@ -612,14 +885,43 @@
 						<span>{employee.department_name || '-'}</span>
 					</div>
 				</div>
+				{#if !shouldRestrict}
 				<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ring-1 ring-inset capitalize shrink-0 {getStatusBadge()}">
 					{employee.employment_status}
 				</span>
+				{/if}
 			</div>
 		</div>
 
-		<!-- Info Grid -->
-		<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+		<!-- Main Navigation Tabs -->
+		<div class="flex border-b border-gray-200 mb-6 gap-1 overflow-x-auto pb-1.5">
+			<button onclick={() => activeDetailTab = 'profile'} 
+				class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer {activeDetailTab === 'profile' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50' }">
+				👤 Profil & Pekerjaan
+			</button>
+			{#if hasPermission('payroll', 'read')}
+				<button onclick={() => activeDetailTab = 'salary'} 
+					class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer {activeDetailTab === 'salary' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50' }">
+					💼 Komponen Gaji
+				</button>
+				<button onclick={() => activeDetailTab = 'bpjs'} 
+					class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer {activeDetailTab === 'bpjs' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50' }">
+					🛡️ BPJS Karyawan
+				</button>
+				<button onclick={() => activeDetailTab = 'tax'} 
+					class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer {activeDetailTab === 'tax' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50' }">
+					📄 Pajak PPh 21
+				</button>
+				<button onclick={() => activeDetailTab = 'overtime'} 
+					class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer {activeDetailTab === 'overtime' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50' }">
+					⏰ Upah Lembur
+				</button>
+			{/if}
+		</div>
+
+		{#if activeDetailTab === 'profile'}
+			<!-- Info Grid -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 			<!-- Personal Info -->
 			<div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
 				<div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-gray-100">
@@ -630,22 +932,33 @@
 					</div>
 					<h2 class="text-sm font-semibold text-gray-900">Informasi Pribadi</h2>
 				</div>
-				<div class="space-y-3.5">
-				{#each [
-					{label:'Email',val:employee.email},
-					{label:'NIK',val:employee.nik||'-'},
-					{label:'NPWP',val:employee.npwp||'-'},
-					{label:'Jenis Kelamin',val:getGenderLabel(employee.gender)},
-					{label:'Tempat, Tgl Lahir',val:`${employee.place_of_birth || '-'}${employee.date_of_birth ? `, ${formatDate(employee.date_of_birth)}` : ''}`},
-					{label:'Agama',val:employee.religion||'-'},
-					{label:'Status Pernikahan',val:getMaritalStatusLabel(employee.marital_status)},
-					{label:'No. Telepon',val:employee.phone||'-'},
-				] as item}
+				<div class="space-y-3.5">				{#each [
+					{label:'Email',val:employee.email, show: true},
+					{label:'NIK',val:employee.nik||'-', show: !shouldRestrict},
+					{label:'NPWP',val:employee.npwp||'-', show: !shouldRestrict},
+					{label:'Jenis Kelamin',val:getGenderLabel(employee.gender), show: true},
+					{label:'Tempat, Tgl Lahir',val:`${employee.place_of_birth || '-'}${employee.date_of_birth ? `, ${formatDate(employee.date_of_birth)}` : ''}`, show: !shouldRestrict},
+					{label:'Agama',val:employee.religion||'-', show: !shouldRestrict},
+					{label:'Status Pernikahan',val:getMaritalStatusLabel(employee.marital_status), show: !shouldRestrict},
+					{label:'No. Telepon',val:employee.phone||'-', show: true},
+				].filter(i => i.show) as item (item.label)}
 					<div class="flex justify-between items-start">
 						<span class="text-xs text-gray-400 shrink-0 w-32">{item.label}</span>
 						<span class="text-sm text-gray-900 text-right">{item.val}</span>
 					</div>
 				{/each}
+				{#if !shouldRestrict && employee.gender === 'perempuan' && employee.marital_status === 'menikah'}
+					<div class="flex justify-between items-center pt-2 border-t border-gray-100 mt-3">
+						<span class="text-xs text-gray-400 shrink-0 w-32">Sedang Hamil</span>
+						<label class="relative inline-flex items-center cursor-pointer">
+							<input type="checkbox" checked={isPregnant} onchange={handleTogglePregnant} disabled={isSavingPregnant} class="sr-only peer" />
+							<div class="w-10 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500"></div>
+							{#if isSavingPregnant}
+								<svg class="w-4 h-4 ml-2 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+							{/if}
+						</label>
+					</div>
+				{/if}
 				</div>
 			</div>
 
@@ -661,21 +974,56 @@
 				</div>
 				<div class="space-y-3.5">
 					{#each [
-						{label:'Posisi',val:employee.position_name||'-'},
-						{label:'Departemen',val:employee.department_name||'-'},
-						{label:'Role',val:employee.role_name||'-'},
-						{label:'Status',val:employee.employment_status||'-'},
-						{label:'Bergabung',val:formatDate(employee.join_date)},
-						{label:'Terakhir Login',val:formatDateTime(employee.last_login_at)},
-					] as item}
+						{label:'Posisi',val:employee.position_name||'-', show: true},
+						{label:'Departemen',val:employee.department_name||'-', show: true},
+						{label:'Role',val:employee.role_name||'-', show: true},
+						{label:'Atasan',val:employee.approval_line_name||'-', show: true},
+						{label:'Status',val:employee.employment_status||'-', show: !shouldRestrict},
+						{label:'Bergabung',val:formatDate(employee.join_date), show: !shouldRestrict},
+						{label:'Terakhir Login',val:formatDateTime(employee.last_login_at), show: !shouldRestrict}
+					].filter(i => i.show) as item (item.label)}
 						<div class="flex justify-between items-start">
 							<span class="text-xs text-gray-400 shrink-0 w-32">{item.label}</span>
 							<span class="text-sm text-gray-900 text-right capitalize">{item.val}</span>
 						</div>
 					{/each}
+								<!-- Approval Line Picker -->
+				{#if approvalLinePickerOpen}
+					<div class="bg-gray-50/50 border border-gray-200 rounded-xl p-4 mt-3">
+						<div class="mb-3">
+							<label for="approval-line-select" class="block text-xs font-medium text-gray-600 mb-1.5">Pilih Atasan</label>
+							<select id="approval-line-select" bind:value={selectedApprovalLineId}
+								class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
+								<option value="">— Tanpa Atasan —</option>
+								{#each allEmployees as emp (emp.id)}
+									<option value={emp.id}>{emp.full_name} {emp.department_name ? `(${emp.department_name})` : ''}</option>
+								{/each}
+							</select>
+						</div>
+						<div class="flex items-center justify-end gap-2">
+							<button onclick={closeApprovalLinePicker} class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition cursor-pointer">Batal</button>
+							<button onclick={handleSaveApprovalLine} disabled={isSavingApprovalLine}
+								class="px-4 py-1.5 bg-[#1A56DB] text-white rounded-lg text-xs font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer">
+								{#if isSavingApprovalLine}
+									<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+								{/if}
+								Simpan
+							</button>
+						</div>
+					</div>
+				{:else if !shouldRestrict}
+					<button onclick={openApprovalLinePicker}
+						class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition cursor-pointer">
+						<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+						</svg>
+						{employee.approval_line_name ? 'Ubah Atasan' : 'Atur Atasan'}
+					</button>
+				{/if}
 				</div>
 			</div>
 
+			{#if !shouldRestrict}
 			<!-- Bank Info -->
 			<div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
 				<div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-gray-100">
@@ -690,7 +1038,7 @@
 					{#each [
 						{label:'Nama Bank',val:employee.bank_name||'-'},
 						{label:'No. Rekening',val:employee.bank_account||'-'},
-					] as item}
+					] as item (item)}
 						<div class="flex justify-between items-start">
 							<span class="text-xs text-gray-400 shrink-0 w-32">{item.label}</span>
 							<span class="text-sm text-gray-900 text-right">{item.val}</span>
@@ -698,7 +1046,9 @@
 					{/each}
 				</div>
 			</div>
+			{/if}
 
+			{#if !shouldRestrict}
 			<!-- Address -->
 			<div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
 				<div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-gray-100">
@@ -721,7 +1071,9 @@
 					</div>
 				</div>
 			</div>
+			{/if}
 
+			{#if !shouldRestrict}
 			<!-- Schedule Info -->
 			<div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
 				<div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-gray-100">
@@ -740,7 +1092,7 @@
 							<select id="schedule-select" bind:value={selectedScheduleId}
 								class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 								<option value="">— Ikuti Jadwal Departemen —</option>
-								{#each allWorkSchedules as ws}
+								{#each allWorkSchedules as ws (ws.id)}
 									<option value={ws.id}>{ws.name} ({getScheduleTypeLabel(ws.schedule_type)})</option>
 								{/each}
 							</select>
@@ -784,7 +1136,9 @@
 					</div>
 				{/if}
 			</div>
+			{/if}
 
+			{#if !shouldRestrict}
 			<!-- System Info -->
 			<div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
 				<div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-gray-100">
@@ -800,7 +1154,7 @@
 						{label:'Dibuat Pada',val:formatDateTime(employee.created_at)},
 						{label:'Diperbarui Pada',val:formatDateTime(employee.updated_at)},
 						{label:'Akun Terkunci',val:employee.is_locked ? 'Ya' : 'Tidak'},
-					] as item}
+					] as item (item)}
 						<div class="flex justify-between items-start">
 							<span class="text-xs text-gray-400 shrink-0 w-32">{item.label}</span>
 							<span class="text-sm text-gray-900 text-right">{item.val}</span>
@@ -808,8 +1162,10 @@
 					{/each}
 				</div>
 			</div>
+			{/if}
 		</div>
 
+		{#if !shouldRestrict}
 		<!-- Riwayat Karyawan -->
 		<div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
 			<div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-gray-100">
@@ -830,7 +1186,7 @@
 				<div class="relative">
 					<div class="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-100"></div>
 					<div class="space-y-0">
-						{#each history as item}
+						{#each history as item (item)}
 							<div class="relative pl-10 pb-4">
 								<div class="absolute left-2.5 top-1.5 w-3 h-3 rounded-full ring-2 ring-white {changeTypeColor(item.change_type).split(' ')[0]}"></div>
 								<div class="flex items-start justify-between gap-2">
@@ -865,9 +1221,11 @@
 				{/if}
 			{/if}
 		</div>
+		{/if}
+		{/if}
 
 		<!-- Komponen Gaji — hanya tampil untuk user dengan akses payroll -->
-		{#if hasPermission('payroll', 'read')}
+		{#if hasPermission('payroll', 'read') && activeDetailTab === 'salary'}
 		<div class="bg-white border border-gray-200 rounded-xl shadow-sm mt-4 overflow-hidden">
 			<!-- Header dengan gradient -->
 			<div class="bg-gradient-to-r from-[#1A56DB]/5 to-[#1e3a8a]/5 px-6 py-4 border-b border-gray-200">
@@ -897,76 +1255,64 @@
 
 			<div class="px-6 py-5">
 			<!-- Gaji Pokok & Upah Harian — Salary Breakdown Card -->
-			<div class="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl p-5 mb-5">
-				<div class="flex items-center gap-2 mb-4">
-					<svg class="w-4 h-4 text-[#1A56DB]" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
-					</svg>
-					<h3 class="text-sm font-semibold text-gray-800">Gaji Pokok & Upah Harian</h3>
-					<span class="ml-auto text-[10px] text-gray-400">Nilai dalam Rupiah (Rp)</span>
+			<div class="bg-white border border-gray-200 rounded-2xl shadow-sm mb-6 overflow-hidden">
+				<div class="bg-white border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+					<div class="flex items-center gap-3.5">
+						<div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+							</svg>
+						</div>
+						<div>
+							<h3 class="text-[15px] font-bold text-gray-900">Gaji Pokok & Upah Harian</h3>
+							<p class="text-[13px] text-gray-500 mt-0.5">Atur nominal gaji dasar yang akan diterima karyawan.</p>
+						</div>
+					</div>
 				</div>
-				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-					<div class="sm:col-span-1">
-						<label for="salary-base" class="block text-xs font-semibold text-gray-600 mb-1.5">Gaji Pokok Bulanan</label>
-						<div class="relative">
-							<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-								<span class="text-gray-400 text-sm font-medium">Rp</span>
-							</div>
-							<input id="salary-base" type="number" min="0" step="100000" bind:value={salaryBase}
-								class="w-full pl-11 pr-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-300"
-								placeholder="0" />
-						</div>
-					</div>
-					<div class="sm:col-span-1">
-						<label for="salary-daily" class="block text-xs font-semibold text-gray-600 mb-1.5">Upah Harian</label>
-						<div class="relative">
-							<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-								<span class="text-gray-400 text-sm font-medium">Rp</span>
-							</div>
-							<input id="salary-daily" type="number" min="0" step="1000" bind:value={salaryDaily}
-								class="w-full pl-11 pr-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition placeholder:text-gray-300"
-								placeholder="0" />
-						</div>
-						<p class="text-[11px] text-gray-400 mt-1.5">Untuk status karyawan <span class="font-medium text-gray-500">Harian</span></p>
-					</div>
-					<div class="flex items-end sm:col-span-2 lg:col-span-2">
-						<div class="w-full">
-							<div class="flex items-center justify-between mb-2">
-								<span class="text-xs font-semibold text-gray-600">Ringkasan Gaji</span>
-								<button onclick={handleSaveSalary} disabled={isSavingSalary}
-									class="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#1A56DB] to-[#1e40af] text-white rounded-lg text-xs font-semibold hover:from-[#1e40af] hover:to-[#1e3a8a] transition-all active:scale-[0.97] disabled:opacity-50 shadow-sm shadow-blue-200 cursor-pointer">
-									{#if isSavingSalary}
-										<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-									{:else}
-										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-									{/if}
-									Simpan Gaji
-								</button>
-							</div>
-							<div class="bg-white border border-gray-200 rounded-lg p-3 grid grid-cols-2 gap-3">
-								<div>
-									<span class="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Gaji Pokok</span>
-									<p class="text-sm font-bold text-gray-900 tabular-nums mt-0.5">
-								{#if Number(salaryBase) > 0}
-									{formatCurrency(Number(salaryBase))}
-								{:else}
-									<span class="text-gray-300 font-normal">Belum diatur</span>
-								{/if}
-							</p>
+
+				<div class="p-6">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+						<div>
+							<label for="salary-base" class="block text-[13px] font-semibold text-gray-700 mb-2">Gaji Pokok Bulanan</label>
+							<div class="relative group">
+								<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+									<span class="text-gray-500 font-medium group-focus-within:text-blue-600 transition-colors">Rp</span>
 								</div>
-								<div>
-									<span class="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Upah Harian</span>
-									<p class="text-sm font-bold text-gray-900 tabular-nums mt-0.5">
-								{#if Number(salaryDaily) > 0}
-									{formatCurrency(Number(salaryDaily))}/hari
-								{:else}
-									<span class="text-gray-300 font-normal">Belum diatur</span>
-								{/if}
-							</p>
-								</div>
+								<input id="salary-base" type="number" min="0" step="100000" bind:value={salaryBase}
+									class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-4 focus:ring-blue-500/15 focus:border-blue-500 focus:bg-white transition-all placeholder:text-gray-400"
+									placeholder="0" />
 							</div>
 						</div>
+
+						<div>
+							<label for="salary-daily" class="block text-[13px] font-semibold text-gray-700 mb-2">Upah Harian</label>
+							<div class="relative group">
+								<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+									<span class="text-gray-500 font-medium group-focus-within:text-blue-600 transition-colors">Rp</span>
+								</div>
+								<input id="salary-daily" type="number" min="0" step="1000" bind:value={salaryDaily}
+									class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-4 focus:ring-blue-500/15 focus:border-blue-500 focus:bg-white transition-all placeholder:text-gray-400"
+									placeholder="0" />
+							</div>
+							<p class="text-[12px] text-gray-500 mt-2 flex items-center gap-1.5">
+								<svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
+								Hanya berlaku untuk tipe karyawan harian.
+							</p>
+						</div>
 					</div>
+				</div>
+
+				<div class="bg-gray-50/50 px-6 py-4 flex items-center justify-between border-t border-gray-100">
+					<p class="text-[13px] text-gray-500">Pastikan nominal sudah sesuai sebelum menyimpan.</p>
+					<button onclick={handleSaveSalary} disabled={isSavingSalary}
+						class="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm shadow-blue-200 cursor-pointer">
+						{#if isSavingSalary}
+							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+						{:else}
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+						{/if}
+						Simpan Perubahan
+					</button>
 				</div>
 			</div>
 
@@ -1105,7 +1451,7 @@
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-50">
-								{#each salaryComps as comp, i}
+								{#each salaryComps as comp, i (comp.id)}
 									<tr class="{i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/40 transition-colors group">
 										<td class="px-5 py-3.5">
 											<div class="flex items-center gap-3">
@@ -1159,7 +1505,7 @@
 
 				<!-- Mobile Cards -->
 				<div class="md:hidden divide-y divide-gray-100">
-					{#each salaryComps as comp}
+					{#each salaryComps as comp (comp)}
 						<div class="py-3.5 px-1 flex items-center justify-between gap-3 hover:bg-blue-50/20 transition-colors rounded-lg">
 							<div class="min-w-0 flex-1">
 								<div class="text-sm font-medium text-gray-900 truncate">{comp.component_name}</div>
@@ -1198,13 +1544,283 @@
 			{/if}
 		</div>
 	</div>
-		{/if}
+	{/if}
+
+			<!-- STANDALONE: Konfigurasi BPJS Karyawan -->
+			{#if hasPermission('payroll', 'read') && activeDetailTab === 'bpjs'}
+			<div class="bg-white border border-gray-200 rounded-xl shadow-sm mt-6 overflow-hidden">
+				<!-- Header dengan gradient -->
+				<div class="bg-gradient-to-r from-indigo-50 to-indigo-100/30 px-6 py-4 border-b border-gray-200">
+					<div class="flex items-center gap-3">
+						<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center shadow-lg shadow-indigo-100">
+							<svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24a.75.75 0 0 1-.75.75H7.217a.75.75 0 0 1-.75-.75 48.887 48.887 0 0 0-1.123-.08M3.181 12.008a9.75 9.75 0 1 1 19.338 0 9.75 9.75 0 0 1-19.338 0Z" />
+							</svg>
+						</div>
+						<div>
+							<h2 class="text-base font-bold text-gray-900">Konfigurasi BPJS</h2>
+							<p class="text-xs text-gray-500 mt-0.5">Kelola override iuran BPJS Kesehatan dan Ketenagakerjaan karyawan ini</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="p-6 space-y-6">
+					<h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+						<span>🛡️ Iuran BPJS Karyawan</span>
+						{#if bpjsSuccess}<span class="text-xs font-normal text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">{bpjsSuccess}</span>{/if}
+						{#if bpjsError}<span class="text-xs font-normal text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">{bpjsError}</span>{/if}
+					</h3>
+
+					{#if isLoadingBPJS}
+						<div class="py-4"><PulseLoader variant="text" count={2} /></div>
+					{:else}
+						<div class="space-y-4">
+							{#each ['kesehatan', 'jht', 'jp', 'jkk', 'jkm'] as key (key)}
+								{@const compKey = key as keyof EmployeeBPJSConfig}
+								{#if employeeBPJSConfig[compKey]}
+									<div class="border border-gray-100 rounded-xl p-4 bg-gray-50/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-2">
+												<input type="checkbox" id="bpjs-chk-{key}" bind:checked={employeeBPJSConfig[compKey]!.enabled}
+													class="w-4.5 h-4.5 text-indigo-600 border-indigo-500 rounded focus:ring-indigo-500 cursor-pointer" />
+												<label for="bpjs-chk-{key}" class="text-sm font-semibold text-gray-900 cursor-pointer">{BPJS_LABELS[key].label}</label>
+											</div>
+											<p class="text-xs text-gray-400 mt-1 pl-6.5">{BPJS_LABELS[key].description}</p>
+										</div>
+
+										{#if employeeBPJSConfig[compKey]!.enabled}
+											<div class="flex flex-wrap items-center gap-4 pl-6.5 md:pl-0">
+												<!-- Pekerja Override (jika ada) -->
+												{#if key === 'kesehatan' || key === 'jht' || key === 'jp'}
+													<div class="flex flex-col gap-1">
+														<span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Potongan Pekerja</span>
+														<div class="flex items-center gap-1.5">
+															<select bind:value={bpjsOverrideMethods[key].emp}
+																class="px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-medium">
+																<option value="default">Default</option>
+																<option value="rate">Kustom %</option>
+																<option value="nominal">Kustom Rp</option>
+															</select>
+															{#if bpjsOverrideMethods[key].emp === 'rate'}
+																<div class="relative w-20">
+																	<input type="number" step="0.1" min="0" max="100" bind:value={employeeBPJSConfig[compKey]!.employee_rate}
+																		class="w-full pl-2 pr-5 py-1 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+																	<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">%</span>
+																</div>
+															{:else if bpjsOverrideMethods[key].emp === 'nominal'}
+																<div class="relative w-28">
+																	<span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">Rp</span>
+																	<input type="number" step="1000" min="0" bind:value={employeeBPJSConfig[compKey]!.employee_nominal}
+																		class="w-full pl-6 pr-2 py-1 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+																</div>
+															{/if}
+														</div>
+													</div>
+												{/if}
+
+												<!-- Perusahaan Override -->
+												<div class="flex flex-col gap-1">
+													<span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Beban Perusahaan</span>
+													<div class="flex items-center gap-1.5">
+														<select bind:value={bpjsOverrideMethods[key].comp}
+															class="px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-medium">
+															<option value="default">Default</option>
+															<option value="rate">Kustom %</option>
+															<option value="nominal">Kustom Rp</option>
+														</select>
+														{#if bpjsOverrideMethods[key].comp === 'rate'}
+															<div class="relative w-20">
+																<input type="number" step="0.1" min="0" max="100" bind:value={employeeBPJSConfig[compKey]!.company_rate}
+																	class="w-full pl-2 pr-5 py-1 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+																<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">%</span>
+															</div>
+														{:else if bpjsOverrideMethods[key].comp === 'nominal'}
+															<div class="relative w-28">
+																<span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">Rp</span>
+																<input type="number" step="1000" min="0" bind:value={employeeBPJSConfig[compKey]!.company_nominal}
+																	class="w-full pl-6 pr-2 py-1 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+															</div>
+														{/if}
+													</div>
+												</div>
+											</div>
+										{/if}
+									</div>
+								{/if}
+							{/each}
+							<div class="flex justify-end pt-2">
+								<button onclick={handleSaveBPJSConfig} disabled={isSavingBPJS}
+									class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer">
+									{#if isSavingBPJS}
+										<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+									{/if}
+									Simpan Override BPJS
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+			{/if}
+
+			<!-- STANDALONE: Konfigurasi Pajak PPh 21 Karyawan -->
+			{#if hasPermission('payroll', 'read') && activeDetailTab === 'tax'}
+			<div class="bg-white border border-gray-200 rounded-xl shadow-sm mt-6 overflow-hidden">
+				<!-- Header dengan gradient -->
+				<div class="bg-gradient-to-r from-indigo-50 to-indigo-100/30 px-6 py-4 border-b border-gray-200">
+					<div class="flex items-center gap-3">
+						<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center shadow-lg shadow-indigo-100">
+							<svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24a.75.75 0 0 1-.75.75H7.217a.75.75 0 0 1-.75-.75 48.887 48.887 0 0 0-1.123-.08M3.181 12.008a9.75 9.75 0 1 1 19.338 0 9.75 9.75 0 0 1-19.338 0Z" />
+							</svg>
+						</div>
+						<div>
+							<h2 class="text-base font-bold text-gray-900">Konfigurasi Pajak PPh 21</h2>
+							<p class="text-xs text-gray-500 mt-0.5">Kelola override potongan Pajak Penghasilan (PPh 21) karyawan ini</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="p-6 space-y-6">
+					<h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+						<span>📄 Potongan Pajak PPh 21</span>
+						{#if taxSuccess}<span class="text-xs font-normal text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">{taxSuccess}</span>{/if}
+						{#if taxError}<span class="text-xs font-normal text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">{taxError}</span>{/if}
+					</h3>
+
+					{#if isLoadingTax}
+						<div class="py-4"><PulseLoader variant="text" count={1} /></div>
+					{:else}
+						<div class="space-y-4">
+							<div class="border border-gray-100 rounded-xl p-4 bg-gray-50/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+								<div class="min-w-0 flex-1">
+									<span class="text-sm font-semibold text-gray-900">Metode Pengenaan Pajak</span>
+									<p class="text-xs text-gray-400 mt-1">Secara default, pajak dihitung otomatis menggunakan Kategori TER berdasarkan status PTKP ({employee.ptkp_status || 'TK0'}). Anda dapat memaksa rate persen tertentu atau nilai nominal tetap.</p>
+								</div>
+
+								<div class="flex items-center gap-3 self-start md:self-center">
+									<select bind:value={employeeTaxConfig.override_type}
+										class="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-medium cursor-pointer font-semibold">
+										<option value="none">Otomatis TER (PTKP)</option>
+										<option value="rate">Kustom Persentase (%)</option>
+										<option value="nominal">Kustom Nominal Tetap (Rp)</option>
+										<option value="free">Bebas Pajak (0%)</option>
+									</select>
+
+									{#if employeeTaxConfig.override_type === 'rate'}
+										<div class="relative w-24">
+											<input type="number" step="0.1" min="0" max="100" bind:value={employeeTaxConfig.override_rate}
+												class="w-full pl-3 pr-6 py-1.5 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+											<span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+										</div>
+									{:else if employeeTaxConfig.override_type === 'nominal'}
+										<div class="relative w-36">
+											<span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">Rp</span>
+											<input type="number" step="5000" min="0" bind:value={employeeTaxConfig.override_nominal}
+												class="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+										</div>
+									{/if}
+								</div>
+							</div>
+							<div class="flex justify-end pt-3">
+								<button onclick={handleSaveTaxConfig} disabled={isSavingTax}
+									class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer">
+									{#if isSavingTax}
+										<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+									{/if}
+									Simpan Override Pajak
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+			{/if}
+
+			<!-- STANDALONE: Konfigurasi Upah Lembur Karyawan -->
+			{#if hasPermission('payroll', 'read') && activeDetailTab === 'overtime'}
+			<div class="bg-white border border-gray-200 rounded-xl shadow-sm mt-6 overflow-hidden">
+				<!-- Header dengan gradient -->
+				<div class="bg-gradient-to-r from-indigo-50 to-indigo-100/30 px-6 py-4 border-b border-gray-200">
+					<div class="flex items-center gap-3">
+						<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center shadow-lg shadow-indigo-100">
+							<svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24a.75.75 0 0 1-.75.75H7.217a.75.75 0 0 1-.75-.75 48.887 48.887 0 0 0-1.123-.08M3.181 12.008a9.75 9.75 0 1 1 19.338 0 9.75 9.75 0 0 1-19.338 0Z" />
+							</svg>
+						</div>
+						<div>
+							<h2 class="text-base font-bold text-gray-900">Konfigurasi Upah Lembur</h2>
+							<p class="text-xs text-gray-500 mt-0.5">Kelola rate upah lembur dasar per jam karyawan ini</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="p-6 space-y-6">
+					<h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+						<span>⏰ Konfigurasi Upah Lembur</span>
+						{#if overtimeSuccess}<span class="text-xs font-normal text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">{overtimeSuccess}</span>{/if}
+						{#if overtimeError}<span class="text-xs font-normal text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">{overtimeError}</span>{/if}
+					</h3>
+
+					{#if isLoadingOvertime}
+						<div class="py-4"><PulseLoader variant="text" count={1} /></div>
+					{:else}
+						<div class="space-y-4">
+							<div class="border border-gray-100 rounded-xl p-4 bg-gray-50/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+								<div class="min-w-0 flex-1">
+									<span class="text-sm font-semibold text-gray-900">Perhitungan Rate per Jam</span>
+									<p class="text-xs text-gray-400 mt-1">
+										Secara default, upah lembur per jam dihitung dengan formula <strong>Gaji Pokok / 173</strong>. Anda dapat menetapkan nominal tetap langsung per jam, mengubah pembagi (divisor) gaji pokok, atau menetapkan persentase dari gaji pokok.
+									</p>
+								</div>
+
+								<div class="flex items-center gap-3 self-start md:self-center">
+									<select bind:value={employeeOvertimeConfig.override_type}
+										class="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-medium cursor-pointer font-semibold">
+										<option value="none">Default (Gaji Pokok / 173)</option>
+										<option value="hourly_rate">Kustom Nominal per Jam (Rp)</option>
+										<option value="divisor">Kustom Pembagi Gaji Pokok (Divisor)</option>
+										<option value="percentage">Kustom Persentase Gaji Pokok (%)</option>
+									</select>
+
+									{#if employeeOvertimeConfig.override_type === 'hourly_rate'}
+										<div class="relative w-36">
+											<span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">Rp</span>
+											<input type="number" step="1000" min="0" bind:value={employeeOvertimeConfig.hourly_rate}
+												class="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+										</div>
+									{:else if employeeOvertimeConfig.override_type === 'divisor'}
+										<div class="relative w-24">
+											<input type="number" step="1" min="1" bind:value={employeeOvertimeConfig.divisor}
+												class="w-full pl-3 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+										</div>
+									{:else if employeeOvertimeConfig.override_type === 'percentage'}
+										<div class="relative w-24">
+											<input type="number" step="0.01" min="0" max="100" bind:value={employeeOvertimeConfig.rate_percentage}
+												class="w-full pl-3 pr-6 py-1.5 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-semibold" />
+											<span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+										</div>
+									{/if}
+								</div>
+							</div>
+							<div class="flex justify-end pt-3">
+								<button onclick={handleSaveOvertimeConfig} disabled={isSavingOvertime}
+									class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer">
+									{#if isSavingOvertime}
+										<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+									{/if}
+									Simpan Override Lembur
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+			{/if}
 
 		<!-- Delete Confirmation Modal for Salary Component -->
 		<AnimatedPresence show={showSCDelete} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<div onclick={cancelSCDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelSCDelete(); }}
+							<div onclick={cancelSCDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelSCDelete(); }}
 				role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 				<div onclick={(e) => e.stopPropagation()} class="bg-white rounded-2xl shadow-2xl w-full max-w-sm" role="dialog" tabindex="-1" aria-modal="true" aria-label="Konfirmasi hapus">
 					<div class="px-6 py-6 text-center">

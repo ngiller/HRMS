@@ -3,7 +3,7 @@
 	import { kpi, employees, positions, departments, ApiError } from '$lib/api.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 	import StaggerList from '$lib/components/StaggerList.svelte';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
 	import MobileCard from '$lib/components/MobileCard.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
@@ -57,6 +57,9 @@
 	let reviewPage = $state(1);
 	let reviewPerPage = $state(25);
 	let reviewLoading = $state(true);
+	let reviewSearchQuery = $state('');
+	let templateSearchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
 	let reviewStatusFilter = $state('');
 	let reviewError = $state('');
 
@@ -67,6 +70,36 @@
 	let templateOptions = $state<TemplateOption[]>([]);
 
 	let showReviewDetail = $state(false);
+	let filteredReviews = $derived.by(() => {
+		if (!reviewSearchQuery.trim()) return reviewData;
+		const q = reviewSearchQuery.toLowerCase();
+		return reviewData.filter(i =>
+			i.employee_name?.toLowerCase().includes(q) ||
+			i.template_title?.toLowerCase().includes(q)
+		);
+	});
+
+	let filteredTemplates = $derived.by(() => {
+		if (!templateSearchQuery.trim()) return templateData;
+		const q = templateSearchQuery.toLowerCase();
+		return templateData.filter(i =>
+			i.title?.toLowerCase().includes(q) ||
+			i.position_name?.toLowerCase().includes(q) ||
+			i.dept_name?.toLowerCase().includes(q)
+		);
+	});
+
+	function onReviewSearch(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { reviewSearchQuery = target.value; }, 400);
+	}
+
+	function onTemplateSearch(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { templateSearchQuery = target.value; }, 400);
+	}
 	let reviewDetail = $state<KpiReview | null>(null);
 	let reviewDetailLoading = $state(false);
 
@@ -116,7 +149,7 @@
 			]);
 			if (empRes?.success) employeeOptions = empRes.data;
 			if (tmplRes?.success) templateOptions = tmplRes.data;
-		} catch {}
+		} catch { /* noop */ }
 	}
 
 	async function loadTemplateOptions() {
@@ -127,7 +160,7 @@
 			]);
 			if (posRes?.success) positionOptions = posRes.data;
 			if (deptRes?.success) departmentAllOptions = deptRes.data;
-		} catch {}
+		} catch { /* noop */ }
 	}
 
 	function formatDate(dateStr: string): string {
@@ -478,14 +511,14 @@
 							<label for="review-employee" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Karyawan <span class="text-red-500">*</span></label>
 							<select id="review-employee" bind:value={reviewForm.employee_id} required class="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-[#1A56DB]/20">
 								<option value="">Pilih Karyawan</option>
-								{#each employeeOptions as emp}<option value={emp.id}>{emp.full_name}</option>{/each}
+								{#each employeeOptions as emp (emp)}<option value={emp.id}>{emp.full_name}</option>{/each}
 							</select>
 						</div>
 						<div>
 							<label for="review-template" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Template KPI <span class="text-red-500">*</span></label>
 							<select id="review-template" bind:value={reviewForm.kpi_template_id} required class="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-[#1A56DB]/20">
 								<option value="">Pilih Template</option>
-								{#each templateOptions as tmpl}<option value={tmpl.id}>{tmpl.title} ({tmpl.year})</option>{/each}
+								{#each templateOptions as tmpl (tmpl)}<option value={tmpl.id}>{tmpl.title} ({tmpl.year})</option>{/each}
 							</select>
 						</div>
 					</div>
@@ -531,6 +564,7 @@
 									<div><span class="text-xs text-gray-400">Karyawan</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{reviewDetail.employee_name}</p></div>
 									<div><span class="text-xs text-gray-400">Template</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{reviewDetail.template_title}</p></div>
 									<div><span class="text-xs text-gray-400">Periode</span><p class="text-sm font-medium text-gray-900 dark:text-gray-100">{reviewDetail.period} {reviewDetail.year}</p></div>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<div><span class="text-xs text-gray-400">Status</span><p>{@html getReviewStatusBadge(reviewDetail.status)}</p></div>
 								</div>
 							</div>
@@ -538,6 +572,7 @@
 								<h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Hasil Penilaian</h3>
 								<div class="space-y-3">
 									<div><span class="text-xs text-gray-400">Skor Akhir</span><p class="text-2xl font-bold text-[#1A56DB]">{reviewDetail.final_score ?? '-'}</p></div>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<div><span class="text-xs text-gray-400">Kategori</span><p>{@html getReviewCategoryBadge(reviewDetail.final_category)}</p></div>
 									{#if reviewDetail.salary_increase}<div><span class="text-xs text-gray-400">Kenaikan Gaji</span><p class="text-sm font-semibold text-green-600">{reviewDetail.salary_increase}%</p></div>{/if}
 									{#if reviewDetail.bonus_amount}<div><span class="text-xs text-gray-400">Bonus</span><p class="text-sm font-semibold text-green-600">{reviewDetail.bonus_amount.toLocaleString('id-ID')}</p></div>{/if}
@@ -549,7 +584,12 @@
 			</div>
 		{:else}
 			<!-- Filter -->
-			<div class="flex gap-3 mb-4">
+						<div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+			<div class="relative flex-1 max-w-md">
+				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+				<input type="search" value={reviewSearchQuery} placeholder="Cari review..." oninput={onReviewSearch} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+			</div>
+						<div class="flex gap-3 mb-4">
 				<select bind:value={reviewStatusFilter} onchange={() => { reviewPage = 1; loadReviews(); }}
 					class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
 					<option value="">Semua Status</option>
@@ -558,6 +598,7 @@
 					<option value="completed">Selesai</option>
 				</select>
 			</div>
+		</div>
 
 			{#if reviewError}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg px-4 py-3 mb-4">{reviewError}</div>{/if}
 
@@ -582,13 +623,15 @@
 							{:else if reviewData.length === 0}
 								<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada review KPI</td></tr>
 							{:else}
-								{#each reviewData as item}
+								{#each filteredReviews as item (item)}
 									<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition {reviewDetail?.id === item.id && showReviewDetail ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}">
 										<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.employee_name}</td>
 										<td class="px-4 py-3 text-gray-600 dark:text-gray-400">{item.template_title}</td>
 										<td class="px-4 py-3 text-gray-600 dark:text-gray-400">{item.period} {item.year}</td>
 										<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.final_score ?? '-'}</td>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 										<td class="px-4 py-3">{@html getReviewCategoryBadge(item.final_category)}</td>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 										<td class="px-4 py-3">{@html getReviewStatusBadge(item.status)}</td>
 										<td class="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{new Date(item.created_at).toLocaleDateString('id-ID')}</td>
 										<td class="px-4 py-3"><button onclick={() => loadReviewDetail(item.id)} class="text-xs text-[#1A56DB] hover:underline font-medium cursor-pointer">Detail</button></td>
@@ -605,7 +648,7 @@
 					{:else if reviewData.length === 0}
 						<EmptyState variant="empty" title="Belum ada review KPI" description="Belum ada review KPI untuk periode ini." />
 					{:else}
-						<StaggerList items={reviewData} stagger={60}>
+						<StaggerList items={filteredReviews} stagger={60}>
 					{#snippet children(item)}
 						<MobileCard
 							title={item.employee_name}
@@ -615,16 +658,9 @@
 							badges={[{ label: ({ draft: 'Draft', self_review: 'Self Review', manager_review: 'Manager Review', hr_review: 'HR Review', completed: 'Selesai' })[item.status as string] || item.status as string, color: reviewStatusColors[item.status as string] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' }]}
 							onclick={() => loadReviewDetail(item.id)}
 						>
-							{#snippet children()}
-								<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-									<span>{item.period} {item.year}</span>
-									{#if item.final_score != null}
-										<span class="font-semibold text-blue-600 dark:text-blue-400">Skor: {item.final_score}</span>
-									{/if}
-								</div>
-							{/snippet}
 							{#snippet footer()}
 								<div class="flex items-center justify-between">
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									{@html getReviewCategoryBadge(item.final_category)}
 									<span class="text-xs text-gray-400">{new Date(item.created_at).toLocaleDateString('id-ID')}</span>
 								</div>
@@ -650,13 +686,19 @@
 		<!--  TEMPLATES TAB -->
 		<!-- ════════════════════════════════════════ -->
 		<div class="flex items-center justify-between mb-4">
-			<div class="flex gap-3">
+						<div class="flex flex-col sm:flex-row sm:items-center gap-3">
+			<div class="relative flex-1 max-w-md">
+				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+				<input type="search" value={templateSearchQuery} placeholder="Cari template..." oninput={onTemplateSearch} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+			</div>
+						<div class="flex gap-3">
 				<select bind:value={templateYearFilter} onchange={() => { templatePage = 1; loadTemplates(); }}
 					class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
 					<option value={0}>Semua Tahun</option>
-					{#each [2024,2025,2026,2027,2028] as y}<option value={y}>{y}</option>{/each}
+					{#each [2024,2025,2026,2027,2028] as y (y)}<option value={y}>{y}</option>{/each}
 				</select>
 			</div>
+		</div>
 			{#if !showTemplateForm}
 				<button onclick={openCreateTemplate} class="px-4 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition cursor-pointer flex items-center gap-2">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -697,14 +739,14 @@
 							<label for="tmpl-pos" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Posisi Jabatan</label>
 							<select id="tmpl-pos" bind:value={templateForm.position_id} class="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
 								<option value="">Semua Posisi</option>
-								{#each positionOptions as pos}<option value={pos.id}>{pos.name}</option>{/each}
+								{#each positionOptions as pos (pos)}<option value={pos.id}>{pos.name}</option>{/each}
 							</select>
 						</div>
 						<div>
 							<label for="tmpl-dept" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Departemen</label>
 							<select id="tmpl-dept" bind:value={templateForm.department_id} class="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
 								<option value="">Semua Departemen</option>
-								{#each departmentAllOptions as dept}<option value={dept.id}>{dept.name}</option>{/each}
+								{#each departmentAllOptions as dept (dept)}<option value={dept.id}>{dept.name}</option>{/each}
 							</select>
 						</div>
 					</div>
@@ -732,7 +774,7 @@
 							</div>
 						</div>
 						<div class="space-y-3">
-							{#each templateForm.indicators as indicator, i}
+							{#each templateForm.indicators as indicator, i (i)}
 								<div class="p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/30">
 									<div class="flex items-center justify-between mb-2">
 										<span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Indikator #{i + 1}</span>
@@ -813,7 +855,7 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-										{#each td.indicators || [] as ind, i}
+										{#each td.indicators || [] as ind, i (i)}
 											<tr>
 												<td class="px-3 py-2 text-gray-500">{i + 1}</td>
 												<td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{ind.name}</td>
@@ -866,7 +908,7 @@
 							{:else if templateData.length === 0}
 								<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada template KPI. Klik "Buat Template" untuk membuat baru.</td></tr>
 							{:else}
-								{#each templateData as item}
+								{#each filteredTemplates as item (item)}
 									<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition">
 										<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.title}</td>
 										<td class="px-4 py-3 text-gray-600 dark:text-gray-400">{templatePeriodLabels[item.period_type] || item.period_type} {item.year}</td>
@@ -891,7 +933,7 @@
 					{:else if templateData.length === 0}
 						<EmptyState variant="empty" title="Belum ada template KPI" description="Klik 'Buat Template' untuk membuat template baru." />
 					{:else}
-						<StaggerList items={templateData} stagger={60}>
+						<StaggerList items={filteredTemplates} stagger={60}>
 					{#snippet children(item)}
 						<MobileCard
 							title={item.title}
@@ -900,12 +942,6 @@
 							avatarColor={getAvatarTheme('kpi').gradientClasses}
 							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-green-50 text-green-700 ring-green-200 dark:bg-green-900 dark:text-green-200 dark:ring-green-800' : 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700' }]}
 						>
-							{#snippet children()}
-								<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-									<span>{item.position_name || 'Semua Posisi'}</span>
-									<span>· {item.dept_name || 'Semua Dept'}</span>
-								</div>
-							{/snippet}
 							{#snippet footer()}
 								<div class="flex items-center gap-2">
 									<button onclick={() => loadTemplateDetail(item.id)} class="flex-1 py-2 text-xs font-medium text-[#1A56DB] bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer active:scale-95">Detail</button>
@@ -932,7 +968,6 @@
 
 <!-- ─── Delete Confirm Modal ─── -->
 <AnimatedPresence show={showDeleteModal} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

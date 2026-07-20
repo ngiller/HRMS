@@ -54,6 +54,20 @@ func (h *ApprovalWorkflowHandler) CreateWorkflow(c *fiber.Ctx) error {
 	return c.JSON(SuccessResponse(workflow, "Workflow berhasil dibuat"))
 }
 
+// UpdateWorkflow PUT /api/approval-workflows/:id
+func (h *ApprovalWorkflowHandler) UpdateWorkflow(c *fiber.Ctx) error {
+	id := c.Params("id")
+	var req models.UpdateApprovalWorkflowReq
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(ErrorResponse("Format request tidak valid"))
+	}
+	workflow, err := h.svc.UpdateWorkflow(c.Context(), id, &req)
+	if err != nil {
+		return c.Status(400).JSON(ErrorResponse(err.Error()))
+	}
+	return c.JSON(SuccessResponse(workflow, "Workflow berhasil diperbarui"))
+}
+
 // DeleteWorkflow DELETE /api/approval-workflows/:id
 func (h *ApprovalWorkflowHandler) DeleteWorkflow(c *fiber.Ctx) error {
 	id := c.Params("id")
@@ -183,18 +197,7 @@ func (h *ApprovalWorkflowHandler) InitializeTracking(c *fiber.Ctx) error {
 		return c.Status(400).JSON(ErrorResponse("Entity atau karyawan tidak ditemukan"))
 	}
 
-	// Get condition value (0 if not applicable)
-	var conditionValue float64
-	switch entityType {
-	case "leave":
-		database.Pool.QueryRow(c.Context(),
-			`SELECT total_days FROM leave_requests WHERE id::text = $1`, entityID).Scan(&conditionValue)
-	case "reimbursement", "loan":
-		database.Pool.QueryRow(c.Context(),
-			`SELECT amount FROM `+entityType+`s WHERE id::text = $1`, entityID).Scan(&conditionValue)
-	}
-
-	result, err := h.svc.ResolveWorkflowForRequest(c.Context(), entityType, entityID, employeeID, conditionValue)
+	result, err := h.svc.ResolveWorkflowForRequest(c.Context(), entityType, entityID, employeeID)
 	if err != nil {
 		return c.Status(400).JSON(ErrorResponse(err.Error()))
 	}

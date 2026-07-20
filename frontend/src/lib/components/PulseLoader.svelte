@@ -8,17 +8,16 @@
 		containerClass?: string;
 	}
 
-	let {
-		variant = 'text',
-		count = 1,
-		height = 'h-4',
-		width = 'w-full',
-		rounded = 'rounded-lg',
-		containerClass = '',
-	}: Props = $props();
+	let props: Props = $props();
+	let variant = $derived(props.variant ?? 'text');
+	let count = $derived(props.count ?? 1);
+	let height = $derived(props.height ?? 'h-4');
+	let width = $derived(props.width ?? 'w-full');
+	let rounded = $derived(props.rounded ?? 'rounded-lg');
+	let containerClass = $derived(props.containerClass ?? '');
 </script>
 
-{#each Array(count) as _}
+{#each {length: count} as _, i (i)}
 	{#if variant === 'card'}
 		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 overflow-hidden {containerClass}">
 			<div class="flex items-center gap-3 mb-4">
@@ -58,35 +57,4 @@
 	{/if}
 {/each}
 
-<style>
-	.shimmer {
-		background: linear-gradient(
-			90deg,
-			#e5e7eb 25%,
-			#f3f4f6 37%,
-			#e5e7eb 63%
-		);
-		background-size: 200% 100%;
-		animation: shimmer-slide 1.6s ease-in-out infinite;
-	}
 
-	:global(.dark) .shimmer {
-		background: linear-gradient(
-			90deg,
-			#374151 25%,
-			#4b5563 37%,
-			#374151 63%
-		);
-		background-size: 200% 100%;
-		animation: shimmer-slide 1.6s ease-in-out infinite;
-	}
-
-	@keyframes shimmer-slide {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-</style>

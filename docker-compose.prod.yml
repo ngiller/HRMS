@@ -1,0 +1,123 @@
+# ============================================================
+# Docker Compose — HRMS Production Deployment
+# Stack: PostgreSQL 16 + Redis 7 + Go/Fiber (backend serves frontend)
+# ============================================================
+#
+# Usage:
+#   1. docker compose -f docker-compose.prod.yml up -d
+#   2. Verify: curl http://localhost:8080/api/health
+#
+# Environment: Copy .env.example to .env and adjust values.
+# ============================================================
+
+services:
+  # ---------- PostgreSQL 16 ----------
+  db:
+    image: postgres:16-alpine
+    container_name: hrms-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${DB_USER:-hrms}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-hrms}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hrms} -d ${DB_NAME:-hrms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------- Redis 7 (Cache & Rate Limiting) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: hrms-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ---------- Database Migration (one-shot) ----------
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    container_name: hrms-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-hrms}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_NAME: ${DB_NAME:-hrms}
+      DB_SSLMODE: disable
+    volumes:
+      - ./database/migrations:/app/database/migrations
+    command: |
+      sh -c '
+        PASSWORD="${DB_PASSWORD:-changeme}"
+        PASSWORD_ENCODED=$$(echo "$$PASSWORD" | sed "s|/|%2F|g")
+        goose -dir /app/database/migrations postgres "postgres://${DB_USER:-hrms}:$${PASSWORD_ENCODED}@db:5432/${DB_NAME:-hrms}?sslmode=disable" up
+      '
+
+  # ---------- Backend API (serves frontend + API) ----------
+  api:
+    image: hrms-api:latest
+    container_name: hrms-api
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-hrms}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_NAME: ${DB_NAME:-hrms}
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET wajib diisi}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-168h}
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY wajib diisi}
+      UPLOAD_DIR: /app/uploads
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:

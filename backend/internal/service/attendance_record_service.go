@@ -1,14 +1,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/png"
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -37,7 +42,7 @@ func NewAttendanceRecordService(companyService *CompanyService) *AttendanceRecor
 	}
 }
 
-func saveBase64Photo(b64data *string, prefix string) (*string, error) {
+func saveBase64Photo(b64data *string, prefix string, employeeName string) (*string, error) {
 	if b64data == nil || *b64data == "" {
 		return nil, nil
 	}
@@ -52,18 +57,40 @@ func saveBase64Photo(b64data *string, prefix string) (*string, error) {
 		return nil, fmt.Errorf("gagal decode foto: %w", err)
 	}
 
-	filename := fmt.Sprintf("%s_%d_%s.jpg", prefix, time.Now().Unix(), uuid.New().String()[:8])
-	dir := filepath.Join("uploads", "attendance")
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("gagal decode format image: %w", err)
+	}
+
+	var buf bytes.Buffer
+	err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 60})
+	if err != nil {
+		return nil, fmt.Errorf("gagal compress image: %w", err)
+	}
+	compressedData := buf.Bytes()
+
+	cleanName := regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(strings.ToLower(employeeName), "_")
+	cleanName = strings.Trim(cleanName, "_")
+	if cleanName == "" {
+		cleanName = "user"
+	}
+
+	now := time.Now()
+	filename := fmt.Sprintf("%s_%s_%d_%s.jpg", prefix, cleanName, now.Unix(), uuid.New().String()[:4])
+	monthStr := now.Format("2006-01")
+	dateStr := now.Format("02")
+
+	dir := filepath.Join("uploads", "attendance", monthStr, dateStr)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("gagal membuat direktori upload: %w", err)
 	}
 
 	path := filepath.Join(dir, filename)
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, compressedData, 0644); err != nil {
 		return nil, fmt.Errorf("gagal menyimpan foto: %w", err)
 	}
 
-	url := "/uploads/attendance/" + filename
+	url := fmt.Sprintf("/uploads/attendance/%s/%s/%s", monthStr, dateStr, filename)
 	return &url, nil
 }
 
@@ -73,10 +100,27 @@ func (s *AttendanceRecordService) GetTodayStatus(ctx context.Context, employeeID
 		return nil, errors.New("gagal memuat status absensi hari ini")
 	}
 
-	_, scheduleName, startTime, endTime, err := repository.GetEmployeeScheduleInfo(ctx, employeeID)
+	scheduleID, scheduleName, startTime, endTime, err := repository.GetEmployeeScheduleInfo(ctx, employeeID, "")
 	if err != nil {
 		scheduleName = "Tidak ada jadwal"
 	}
+
+	// Check if today is a company holiday (day off)
+	isHoliday, _ := repository.IsTodayHoliday(ctx)
+
+	// Check if today is a roster day off — employee has no roster entry today
+	// but their department has an active roster for this month
+	isRosterDayOff := false
+	hasRoster, _ := repository.CheckEmployeeRosterForToday(ctx, employeeID)
+	if !hasRoster {
+		deptHasRoster, _ := repository.DepartmentHasActiveRoster(ctx, employeeID)
+		if deptHasRoster {
+			isRosterDayOff = true
+		}
+	}
+
+	// Also check if they have no schedule start time for today (which means it's a weekend/off day in weekly work schedule)
+	isNoScheduleDay := scheduleID == nil || startTime == ""
 
 	status := &models.TodayAttendanceStatus{
 		ScheduleName:  scheduleName,
@@ -84,6 +128,7 @@ func (s *AttendanceRecordService) GetTodayStatus(ctx context.Context, employeeID
 		ScheduleEnd:   endTime,
 		HasCheckedIn:  false,
 		HasCheckedOut: false,
+		IsDayOff:      isHoliday || isRosterDayOff || isNoScheduleDay,
 	}
 
 	if record != nil {
@@ -194,34 +239,31 @@ func (s *AttendanceRecordService) getFaceMatchThreshold(ctx context.Context) flo
 	return s.cachedThreshold
 }
 
-func (s *AttendanceRecordService) autoSaveFaceDescriptor(ctx context.Context, employeeID string, descriptor *string) {
-	if descriptor == nil || *descriptor == "" {
-		return
-	}
-
-	// Only auto-save if employee doesn't have a stored descriptor yet
-	storedJSON, err := repository.GetFaceDescriptor(ctx, employeeID)
-	if err != nil {
-		return // Silently skip on error
-	}
-	if storedJSON != nil && *storedJSON != "" {
-		return // Already has a descriptor registered
-	}
-
-	// Validate the descriptor is valid JSON array before saving
-	var testDesc []float64
-	if err := json.Unmarshal([]byte(*descriptor), &testDesc); err != nil {
-		return // Invalid descriptor, skip
-	}
-	if len(testDesc) == 0 {
-		return
-	}
-
-	// Auto-save the face descriptor (use employeeID as userID for audit trail)
-	_ = repository.UpdateFaceDescriptor(ctx, employeeID, *descriptor, employeeID)
-}
-
 func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string, req *models.CheckInRequest) (*models.AttendanceRecord, error) {
+	emp, err := repository.GetEmployeeByIDRepo(ctx, employeeID)
+	if err != nil || emp == nil {
+		return nil, errors.New("karyawan tidak ditemukan")
+	}
+
+	scheduleID, _, startTime, _, err := repository.GetEmployeeScheduleInfo(ctx, employeeID, "")
+	if err != nil {
+		return nil, errors.New("gagal memuat jadwal kerja")
+	}
+
+	// Check if today is a company holiday, roster day off, or they have no scheduled shift today
+	isHoliday, _ := repository.IsTodayHoliday(ctx)
+	isRosterDayOff := false
+	hasRoster, _ := repository.CheckEmployeeRosterForToday(ctx, employeeID)
+	if !hasRoster {
+		deptHasRoster, _ := repository.DepartmentHasActiveRoster(ctx, employeeID)
+		if deptHasRoster {
+			isRosterDayOff = true
+		}
+	}
+	if isHoliday || isRosterDayOff || scheduleID == nil || startTime == "" {
+		return nil, errors.New("Hari ini adalah hari libur")
+	}
+
 	existing, err := repository.GetTodayAttendanceByEmployee(ctx, employeeID)
 	if err != nil {
 		return nil, errors.New("gagal memvalidasi absensi hari ini")
@@ -230,26 +272,13 @@ func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string
 		return nil, errors.New("sudah melakukan check-in hari ini")
 	}
 
-	scheduleID, _, startTime, _, err := repository.GetEmployeeScheduleInfo(ctx, employeeID)
-	if err != nil {
-		return nil, errors.New("gagal memuat jadwal kerja")
-	}
-	if scheduleID == nil {
-		return nil, errors.New("tidak memiliki jadwal kerja, hubungi HR")
-	}
-
 	// Verify face if descriptor is provided
 	if err := s.verifyFaceDescriptor(ctx, employeeID, req.FaceDescriptor); err != nil {
 		return nil, err
 	}
 
-	locID, locName := s.validateGPS(ctx, req.Lat, req.Lng)
-	if req.LocationName != nil && *req.LocationName != "" {
-		locName = *req.LocationName
-	}
-	if locID == nil && req.LocationID != nil && *req.LocationID != "" {
-		locID = req.LocationID
-	}
+	// Location is determined purely from GPS coordinates — no user override allowed
+	locID, locName, gpsWarning := s.validateGPS(ctx, req.Lat, req.Lng)
 	var locNamePtr *string
 	if locName != "" {
 		locNamePtr = &locName
@@ -257,21 +286,24 @@ func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string
 
 	isLate := false
 	lateMinutes := 0
-	if startTime != "" {
-		schedTime, parseErr := time.Parse("15:04", startTime)
-		if parseErr == nil {
-			now := time.Now()
-			checkTime := time.Date(now.Year(), now.Month(), now.Day(), schedTime.Hour(), schedTime.Minute(), 0, 0, now.Location())
-			if checkTime.Before(now) {
-				lateMinutes = int(now.Sub(checkTime).Minutes())
-				if lateMinutes > 0 {
-					isLate = true
-				}
+	// Default to 08:00 if schedule has no start time
+	scheduleStart := startTime
+	if scheduleStart == "" {
+		scheduleStart = "08:00"
+	}
+	schedTime, parseErr := time.Parse("15:04", scheduleStart)
+	if parseErr == nil {
+		now := time.Now()
+		checkTime := time.Date(now.Year(), now.Month(), now.Day(), schedTime.Hour(), schedTime.Minute(), 0, 0, now.Location())
+		if checkTime.Before(now) {
+			lateMinutes = int(now.Sub(checkTime).Minutes())
+			if lateMinutes > 0 {
+				isLate = true
 			}
 		}
 	}
 
-	photoURL, err := saveBase64Photo(req.Photo, "in")
+	photoURL, err := saveBase64Photo(req.Photo, "in", emp.FullName)
 	if err != nil {
 		return nil, err
 	}
@@ -281,13 +313,19 @@ func (s *AttendanceRecordService) CheckIn(ctx context.Context, employeeID string
 		return nil, fmt.Errorf("gagal melakukan check-in: %w", err)
 	}
 
-	// Auto-save face descriptor on first check-in if not yet registered
-	s.autoSaveFaceDescriptor(ctx, employeeID, req.FaceDescriptor)
+	if gpsWarning != "" {
+		record.LocationWarning = &gpsWarning
+	}
 
 	return record, nil
 }
 
 func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID string, req *models.CheckOutRequest) (*models.AttendanceRecord, error) {
+	emp, err := repository.GetEmployeeByIDRepo(ctx, employeeID)
+	if err != nil || emp == nil {
+		return nil, errors.New("karyawan tidak ditemukan")
+	}
+
 	record, err := repository.GetTodayAttendanceByEmployee(ctx, employeeID)
 	if err != nil {
 		return nil, errors.New("gagal memvalidasi absensi hari ini")
@@ -304,13 +342,8 @@ func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID strin
 		return nil, err
 	}
 
-	locID, locName := s.validateGPS(ctx, req.Lat, req.Lng)
-	if req.LocationName != nil && *req.LocationName != "" {
-		locName = *req.LocationName
-	}
-	if locID == nil && req.LocationID != nil && *req.LocationID != "" {
-		locID = req.LocationID
-	}
+	// Location is determined purely from GPS coordinates — no user override allowed
+	locID, locName, gpsWarning := s.validateGPS(ctx, req.Lat, req.Lng)
 	var locNamePtr *string
 	if locName != "" {
 		locNamePtr = &locName
@@ -324,7 +357,7 @@ func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID strin
 		totalWorkHours = &duration
 	}
 
-	photoURL, err := saveBase64Photo(req.Photo, "out")
+	photoURL, err := saveBase64Photo(req.Photo, "out", emp.FullName)
 	if err != nil {
 		return nil, err
 	}
@@ -334,13 +367,18 @@ func (s *AttendanceRecordService) CheckOut(ctx context.Context, employeeID strin
 		return nil, fmt.Errorf("gagal melakukan check-out: %w", err)
 	}
 
-	// Auto-save face descriptor on first check-out if not yet registered
-	s.autoSaveFaceDescriptor(ctx, employeeID, req.FaceDescriptor)
+	if gpsWarning != "" {
+		updated.LocationWarning = &gpsWarning
+	}
 
 	return updated, nil
 }
 
-func (s *AttendanceRecordService) ListMyHistory(ctx context.Context, employeeID string, page, perPage int) (*models.AttendanceListResponse, error) {
+func (s *AttendanceRecordService) GetAttendanceRecord(ctx context.Context, id string) (*models.AttendanceRecordSummary, error) {
+	return repository.GetAttendanceRecordByID(ctx, id)
+}
+
+func (s *AttendanceRecordService) ListMyHistory(ctx context.Context, employeeID string, page, perPage int, dateFrom, dateTo string) (*models.AttendanceListResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -348,7 +386,7 @@ func (s *AttendanceRecordService) ListMyHistory(ctx context.Context, employeeID 
 		perPage = 25
 	}
 
-	records, total, err := repository.ListMyAttendance(ctx, employeeID, page, perPage)
+	records, total, err := repository.ListMyAttendance(ctx, employeeID, page, perPage, dateFrom, dateTo)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memuat riwayat absensi: %w", err)
 	}
@@ -361,7 +399,7 @@ func (s *AttendanceRecordService) ListMyHistory(ctx context.Context, employeeID 
 	}, nil
 }
 
-func (s *AttendanceRecordService) ListReport(ctx context.Context, page, perPage int, deptID, status, dateFrom, dateTo string) (*models.AttendanceListResponse, error) {
+func (s *AttendanceRecordService) ListReport(ctx context.Context, page, perPage int, deptID, employeeID, status, dateFrom, dateTo string) (*models.AttendanceListResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -369,7 +407,7 @@ func (s *AttendanceRecordService) ListReport(ctx context.Context, page, perPage 
 		perPage = 25
 	}
 
-	records, total, err := repository.ListAttendanceReport(ctx, page, perPage, deptID, status, dateFrom, dateTo)
+	records, total, err := repository.ListAttendanceReport(ctx, page, perPage, deptID, employeeID, status, dateFrom, dateTo)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memuat laporan absensi: %w", err)
 	}
@@ -382,9 +420,9 @@ func (s *AttendanceRecordService) ListReport(ctx context.Context, page, perPage 
 	}, nil
 }
 
-func (s *AttendanceRecordService) ExportReport(ctx context.Context, deptID, status, dateFrom, dateTo string) ([]byte, error) {
+func (s *AttendanceRecordService) ExportReport(ctx context.Context, deptID, employeeID, status, dateFrom, dateTo string) ([]byte, error) {
 	// Get all records without pagination
-	records, _, err := repository.ListAttendanceReport(ctx, 1, 100000, deptID, status, dateFrom, dateTo)
+	records, _, err := repository.ListAttendanceReport(ctx, 1, 100000, deptID, employeeID, status, dateFrom, dateTo)
 	if err != nil {
 		return nil, fmt.Errorf("gagal mengambil data laporan absensi: %w", err)
 	}
@@ -461,14 +499,14 @@ func (s *AttendanceRecordService) ExportReport(ctx context.Context, deptID, stat
 	return buf.Bytes(), nil
 }
 
-func (s *AttendanceRecordService) validateGPS(ctx context.Context, lat, lng *float64) (locationID *string, locationName string) {
+func (s *AttendanceRecordService) validateGPS(ctx context.Context, lat, lng *float64) (locationID *string, locationName string, warning string) {
 	if lat == nil || lng == nil {
-		return nil, ""
+		return nil, "", ""
 	}
 
 	locations, err := repository.GetActiveAttendanceLocations(ctx)
 	if err != nil || len(locations) == 0 {
-		return nil, ""
+		return nil, "", ""
 	}
 
 	for _, loc := range locations {
@@ -476,11 +514,11 @@ func (s *AttendanceRecordService) validateGPS(ctx context.Context, lat, lng *flo
 		distanceMeters := distance * 1000
 		if distanceMeters <= float64(loc.RadiusMeters) {
 			id := loc.ID.String()
-			return &id, loc.Name
+			return &id, loc.Name, ""
 		}
 	}
 
-	return nil, "Luar area absensi"
+	return nil, "", "Lokasi Anda berada di luar radius area absensi yang diizinkan"
 }
 
 func haversine(lat1, lng1, lat2, lng2 float64) float64 {

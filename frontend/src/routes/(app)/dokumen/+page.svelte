@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { documents as api, employees } from '$lib/api.js';
+	import { documents as api, employees, auth } from '$lib/api.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import SwipeActions from '$lib/components/SwipeActions.svelte';
 import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
@@ -12,6 +12,9 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	import { getAgGrid } from '$lib/ag-grid.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { Document as DocType, DocumentForm, Employee, ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
+
+	const currentUser = $derived(auth.getUser() as any);
+	const isEmployeeRole = $derived(currentUser?.role_slug === 'employee');
 
 	const docTypes: Record<string, string> = {
 		ktp: 'KTP', kk: 'Kartu Keluarga', ijazah: 'Ijazah',
@@ -203,7 +206,7 @@ let deleteId: string | null = null;
 		try {
 			const empResp = await employees.list(1, 200) as ApiResponse<Employee[]>;
 			allEmployees = empResp.data || [];
-		} catch (_) {}
+		} catch (_) { /* silently fail */ }
 		load();
 	});
 
@@ -226,7 +229,7 @@ let deleteId: string | null = null;
 
 	function openCreateForm() {
 		formTitle = 'Tambah Dokumen';
-		form = { employee_id: '', doc_type: 'ktp', title: '', description: '', expiry_date: '', file: null, file_name: '', file_url: '' };
+		form = { employee_id: isEmployeeRole ? currentUser.id : '', doc_type: 'ktp', title: '', description: '', expiry_date: '', file: null, file_name: '', file_url: '' };
 		formError = '';
 		showForm = true;
 	}
@@ -310,6 +313,8 @@ function cancelDelete() {
 
 </script>
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
+
 <div class="w-full">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
@@ -328,14 +333,14 @@ function cancelDelete() {
 		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<div class="flex flex-wrap items-center gap-2">
 				<button onclick={() => { statusFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!statusFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">Semua</button>
-				{#each Object.entries(statusLabels) as [key, label]}
+				{#each Object.entries(statusLabels) as [key, label] (key)}
 					<button onclick={() => { statusFilter = key; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {statusFilter === key ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{label}</button>
 				{/each}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				<select bind:value={typeFilter} onchange={() => { page = 1; load(); }} class="px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-800 rounded-lg outline-none bg-white dark:bg-gray-900">
 					<option value="">Semua Tipe</option>
-					{#each Object.entries(docTypes) as [key, label]}
+					{#each Object.entries(docTypes) as [key, label] (key)}
 						<option value={key}>{label}</option>
 					{/each}
 				</select>
@@ -355,19 +360,26 @@ function cancelDelete() {
 			<div class="px-6 py-5 space-y-4">
 				{#if formError}<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-2.5 rounded-lg">{formError}</div>{/if}
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-						<label for="doc-employee" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Karyawan <span class="text-red-500">*</span></label>
-						<select id="doc-employee" bind:value={form.employee_id} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
-							<option value="">Pilih Karyawan</option>
-							{#each allEmployees as emp}
-								<option value={emp.id}>{emp.full_name || emp.employee_name || '-'}</option>
-							{/each}
-						</select>
-					</div>
+					{#if !isEmployeeRole}
+						<div>
+							<label for="doc-employee" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Karyawan <span class="text-red-500">*</span></label>
+							<select id="doc-employee" bind:value={form.employee_id} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
+								<option value="">Pilih Karyawan</option>
+								{#each allEmployees as emp (emp.id)}
+									<option value={emp.id}>{emp.full_name || emp.employee_name || '-'}</option>
+								{/each}
+							</select>
+						</div>
+					{:else}
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Karyawan</label>
+							<input type="text" value={currentUser.full_name} disabled class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-850 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed outline-none" />
+						</div>
+					{/if}
 					<div>
 						<label for="doc-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipe Dokumen <span class="text-red-500">*</span></label>
 						<select id="doc-type" bind:value={form.doc_type} class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-900">
-							{#each Object.entries(docTypes) as [key, label]}
+							{#each Object.entries(docTypes) as [key, label] (key)}
 								<option value={key}>{label}</option>
 							{/each}
 						</select>
@@ -451,7 +463,7 @@ function cancelDelete() {
 	{:else}
 		<div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div><div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div></div><div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-20"></div><div class="h-8 bg-gray-100 dark:bg-gray-800 rounded w-24"></div></div>{/each}</div></div>
+				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _, i (i)}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 dark:bg-gray-800 rounded w-44"></div><div class="h-3 bg-gray-50 dark:bg-gray-800 rounded w-28"></div></div><div class="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-20"></div><div class="h-8 bg-gray-100 dark:bg-gray-800 rounded w-24"></div></div>{/each}</div></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
@@ -471,7 +483,7 @@ function cancelDelete() {
 				</div>
 				<PullToRefresh onRefresh={load}>
 				<div class="md:hidden space-y-3">
-					{#each items as item}
+					{#each items as item (item)}
 						<SwipeActions
 							onApprove={item.status === 'pending' && hasPermission('document', 'update') ? () => handleVerify(item.id) : undefined}
 							onReject={item.status === 'pending' && hasPermission('document', 'update') ? () => openReject(item.id) : undefined}
@@ -505,7 +517,7 @@ function cancelDelete() {
 					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>
@@ -520,9 +532,7 @@ function cancelDelete() {
 </div>
 
 <AnimatedPresence show={showRejectModal} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
+			<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tolak dokumen" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
 			<div class="px-6 py-6">

@@ -24,6 +24,8 @@
 	let dateFrom = $state('');
 	let dateTo = $state('');
 	let errorMessage = $state('');
+	let searchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
 
 	let showForm = $state(false);
 	let createForm = $state({ journal_date: new Date().toISOString().split('T')[0], work_description: '', achievements: '', challenges: '', plan_tomorrow: '' });
@@ -31,6 +33,21 @@
 	let deptOptions = $state<DeptOption[]>([]);
 
 	let showDetail = $state(false);
+	let filteredData = $derived.by(() => {
+		if (!searchQuery.trim()) return data;
+		const q = searchQuery.toLowerCase();
+		return data.filter(i =>
+			i.employee_name?.toLowerCase().includes(q) ||
+			i.work_description?.toLowerCase().includes(q) ||
+			i.department_name?.toLowerCase().includes(q)
+		);
+	});
+
+	function onSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { searchQuery = target.value; }, 400);
+	}
 	let detailItem = $state<JournalItem | null>(null);
 	let detailLoading = $state(false);
 
@@ -39,7 +56,7 @@
 	onMount(() => { loadData(); loadDepts(); });
 
 	async function loadDepts() {
-		try { const res = await departments.getAll(); if (res?.success) deptOptions = res.data; } catch {}
+		try { const res = await departments.getAll(); if (res?.success) deptOptions = res.data; } catch { /* silent fail */ }
 	}
 
 	async function loadData() {
@@ -107,6 +124,10 @@
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 </script>
+
+<!-- eslint-disable svelte/no-useless-children-snippet -->
+
+<!-- eslint-disable svelte/no-at-html-tags -->
 
 <div class="w-full">
 	<div class="flex items-center justify-between mb-6">
@@ -230,11 +251,16 @@
 		</div>
 	{:else}
 		<div class="flex flex-wrap gap-3 mb-4" role="group" aria-label="Filter jurnal harian">
+		<div class="relative flex-1 max-w-md">
+			<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+			<input type="search" value={searchQuery} placeholder="Cari jurnal..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+		</div>
+		
 			<select name="dept_filter" bind:value={deptFilter} onchange={() => { currentPage = 1; loadData(); }}
 				class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none"
 				aria-label="Filter departemen">
 				<option value="">Semua Departemen</option>
-				{#each deptOptions as dept}<option value={dept.id}>{dept.name}</option>{/each}
+				{#each deptOptions as dept (dept.id)}<option value={dept.id}>{dept.name}</option>{/each}
 			</select>
 			<input name="date_from" type="date" bind:value={dateFrom} onchange={() => { currentPage = 1; loadData(); }} class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none" placeholder="Dari tanggal" aria-label="Dari tanggal" />
 			<input name="date_to" type="date" bind:value={dateTo} onchange={() => { currentPage = 1; loadData(); }} class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none" placeholder="Sampai tanggal" aria-label="Sampai tanggal" />
@@ -261,7 +287,7 @@
 							{:else if data.length === 0}
 								<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada jurnal harian</td></tr>
 							{:else}
-								{#each data as item}
+								{#each filteredData as item (item)}
 									<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition">
 										<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{formatDate(item.journal_date)}</td>
 										<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{item.employee_name}</td>
@@ -296,7 +322,7 @@
 						description="Belum ada jurnal harian yang dicatat."
 					/>
 				{:else}
-					{#each data as item}
+					{#each filteredData as item (item)}
 						{@const theme = getAvatarTheme('dailyJournal')}
 						<MobileCard
 							avatar={item.employee_name}

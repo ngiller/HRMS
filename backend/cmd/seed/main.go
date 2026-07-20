@@ -206,11 +206,18 @@ func main() {
 		DeptName string
 	}{
 		{"Staff IT", "Teknologi Informasi"},
+		{"Manager IT", "Teknologi Informasi"},
+		{"IT Director", "Teknologi Informasi"},
 		{"Finance Staff", "Keuangan"},
+		{"Manager Keuangan", "Keuangan"},
 		{"Sales Executive", "Penjualan"},
-		{"HR Staff", "Sumber Daya Manusia"},
 		{"Sales", "Penjualan"},
+		{"Sales Manager", "Penjualan"},
+		{"HR Staff", "Sumber Daya Manusia"},
+		{"HR Manager", "Sumber Daya Manusia"},
+		{"HR Director", "Sumber Daya Manusia"},
 		{"Marketing", "Pemasaran"},
+		{"Marketing Manager", "Pemasaran"},
 		{"Accounting", "Keuangan"},
 	}
 
@@ -251,62 +258,123 @@ func main() {
 		DailyWage       float64
 		Allowances      []componentSeed
 		Deductions      []componentSeed
+		RoleSlug        string // explicit role slug (empty = auto-detect from dept)
 	}{
 		{
 			"EMP-001", "Budi Hartono", "budi@company.com", "tetap", "laki_laki", "Staff IT", "Teknologi Informasi", nil,
 			8500000, 0,
 			[]componentSeed{{"Tunjangan Makan", 500000}, {"Tunjangan Transport", 300000}},
 			[]componentSeed{{"BPJS Tambahan", 100000}},
+			"",
 		},
 		{
 			"EMP-002", "Siti Rahayu", "siti@company.com", "tetap", "perempuan", "Finance Staff", "Keuangan", nil,
 			9000000, 0,
 			[]componentSeed{{"Tunjangan Jabatan", 1500000}, {"Tunjangan Komunikasi", 200000}},
 			nil,
+			"",
 		},
 		{
 			"EMP-003", "Andi Wijaya", "andi@company.com", "kontrak", "laki_laki", "Sales Executive", "Penjualan", timePtr(time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)),
 			6000000, 0,
 			[]componentSeed{{"Tunjangan Sales", 1000000}},
 			nil,
+			"",
 		},
 		{
-			"EMP-004", "Dewi Lestari", "dewi@company.com", "kontrak", "perempuan", "HR Staff", "Sumber Daya Manusia", timePtr(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)),
+			"EMP-004", "Dewi Lestari", "dewi@company.com", "tetap", "perempuan", "HR Manager", "Sumber Daya Manusia", nil,
 			7500000, 0,
 			[]componentSeed{{"Tunjangan Makan", 500000}},
 			nil,
+			"hr_manager",
 		},
 		{
 			"EMP-005", "Rudi Hartono", "rudi@company.com", "percobaan", "laki_laki", "Staff IT", "Teknologi Informasi", nil,
 			7000000, 0,
 			[]componentSeed{{"Tunjangan Makan", 500000}},
 			nil,
+			"",
 		},
 		{
 			"EMP-006", "Ahmad Fauzi", "ahmad@company.com", "percobaan", "laki_laki", "Sales", "Penjualan", nil,
 			0, 200000, // harian
 			[]componentSeed{{"Tunjangan Transport Harian", 25000}},
 			nil,
+			"",
 		},
 		{
 			"EMP-007", "Rina Marlina", "rina@company.com", "tetap", "perempuan", "Marketing", "Pemasaran", nil,
 			6500000, 0,
 			[]componentSeed{{"Tunjangan Makan", 500000}},
 			nil,
+			"",
 		},
 		{
 			"EMP-008", "Hendra Gunawan", "hendra@company.com", "tetap", "laki_laki", "Accounting", "Keuangan", nil,
 			8000000, 0,
 			[]componentSeed{{"Tunjangan Makan", 500000}, {"Tunjangan Transport", 300000}},
 			nil,
+			"",
+		},
+		{
+			"EMP-009", "Bambang Supriyadi", "bambang@company.com", "tetap", "laki_laki", "Manager IT", "Teknologi Informasi", nil,
+			12000000, 0,
+			[]componentSeed{{"Tunjangan Jabatan", 2000000}, {"Tunjangan Transport", 500000}},
+			nil,
+			"manager",
+		},
+		{
+			"EMP-010", "Dewi Sartika", "dewi.sartika@company.com", "kontrak", "perempuan", "HR Staff", "Sumber Daya Manusia", timePtr(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)),
+			6500000, 0,
+			[]componentSeed{{"Tunjangan Makan", 500000}},
+			nil,
+			"",
+		},
+		{
+			"EMP-011", "Tito Hardianto", "tito@company.com", "tetap", "laki_laki", "IT Director", "Teknologi Informasi", nil,
+			25000000, 0,
+			[]componentSeed{{"Tunjangan Jabatan", 5000000}, {"Tunjangan Transport", 1000000}, {"Tunjangan Kesehatan", 1500000}},
+			nil,
+			"director",
+		},
+		{
+			"EMP-012", "Sri Wahyuni", "sri@company.com", "tetap", "perempuan", "Manager Keuangan", "Keuangan", nil,
+			13000000, 0,
+			[]componentSeed{{"Tunjangan Jabatan", 2500000}, {"Tunjangan Transport", 500000}},
+			nil,
+			"manager",
+		},
+		{
+			"EMP-013", "Agus Prasetyo", "agus@company.com", "tetap", "laki_laki", "HR Director", "Sumber Daya Manusia", nil,
+			22000000, 0,
+			[]componentSeed{{"Tunjangan Jabatan", 4000000}, {"Tunjangan Transport", 1000000}},
+			nil,
+			"director",
+		},
+		{
+			"EMP-014", "Maya Sari", "maya@company.com", "tetap", "perempuan", "Sales Manager", "Penjualan", nil,
+			11000000, 0,
+			[]componentSeed{{"Tunjangan Jabatan", 2000000}, {"Tunjangan Sales", 1500000}},
+			nil,
+			"manager",
+		},
+		{
+			"EMP-015", "Dedi Kurniawan", "dedi@company.com", "tetap", "laki_laki", "Marketing Manager", "Pemasaran", nil,
+			10000000, 0,
+			[]componentSeed{{"Tunjangan Jabatan", 2000000}, {"Tunjangan Transport", 500000}},
+			nil,
+			"manager",
 		},
 	}
 
 	createdCount := 0
 	for _, emp := range testEmployees {
-		roleSlug := deptRoleMap[emp.DeptName]
+		roleSlug := emp.RoleSlug
 		if roleSlug == "" {
-			roleSlug = "employee"
+			roleSlug = deptRoleMap[emp.DeptName]
+			if roleSlug == "" {
+				roleSlug = "employee"
+			}
 		}
 		roleID := roleIDs[roleSlug]
 
@@ -641,6 +709,67 @@ func main() {
 	database.Pool.Exec(ctx, `ALTER TABLE overtime_requests ENABLE TRIGGER audit_overtime_requests`)
 	database.Pool.Exec(ctx, `ALTER TABLE reimbursements ENABLE TRIGGER audit_reimbursements`)
 	database.Pool.Exec(ctx, `ALTER TABLE employees ENABLE TRIGGER audit_employees`)
+
+	// ─────────────────────────────────────────────────────────
+	// 🔗 SET APPROVAL LINES (atasan) for employees
+	// ─────────────────────────────────────────────────────────
+	fmt.Println("\n🔗 Setting approval lines (atasan)...")
+	type approvalLine struct {
+		EmployeeID string
+		SuperiorID string
+	}
+	approvalLines := []approvalLine{
+		{"EMP-001", "EMP-009"}, // Budi Hartono → Bambang Supriyadi (Manager IT)
+		{"EMP-005", "EMP-009"}, // Rudi Hartono → Bambang Supriyadi (Manager IT)
+		{"EMP-009", "EMP-011"}, // Bambang Supriyadi → Tito Hardianto (IT Director)
+		{"EMP-010", "EMP-004"}, // Dewi Sartika → Dewi Lestari (HR Manager)
+		{"EMP-004", "EMP-013"}, // Dewi Lestari → Agus Prasetyo (HR Director)
+		{"EMP-002", "EMP-012"}, // Siti Rahayu → Sri Wahyuni (Manager Keuangan)
+		{"EMP-008", "EMP-012"}, // Hendra Gunawan → Sri Wahyuni (Manager Keuangan)
+		{"EMP-003", "EMP-014"}, // Andi Wijaya → Maya Sari (Sales Manager)
+		{"EMP-006", "EMP-014"}, // Ahmad Fauzi → Maya Sari (Sales Manager)
+		{"EMP-007", "EMP-015"}, // Rina Marlina → Dedi Kurniawan (Marketing Manager)
+	}
+	for _, al := range approvalLines {
+		_, err := database.Pool.Exec(ctx, `
+			UPDATE employees SET approval_line_id = (
+				SELECT id FROM employees WHERE employee_id = $1 LIMIT 1
+			)
+			WHERE employee_id = $2
+		`, al.SuperiorID, al.EmployeeID)
+		if err != nil {
+			log.Printf("⚠️ Failed to set approval line: %s → %s: %v", al.EmployeeID, al.SuperiorID, err)
+		} else {
+			fmt.Printf("🔗 %s → %s\n", al.EmployeeID, al.SuperiorID)
+		}
+	}
+
+	// Set department heads
+	fmt.Println("\n👤 Setting department heads...")
+	type deptHead struct {
+		Code    string
+		HeadEmpID string
+	}
+	deptHeads := []deptHead{
+		{"IT", "EMP-011"},    // IT Director
+		{"FIN", "EMP-012"},   // Manager Keuangan
+		{"HR", "EMP-013"},    // HR Director
+		{"SALES", "EMP-014"}, // Sales Manager
+		{"MKT", "EMP-015"},   // Marketing Manager
+	}
+	for _, dh := range deptHeads {
+		_, err := database.Pool.Exec(ctx, `
+			UPDATE departments SET head_id = (
+				SELECT id FROM employees WHERE employee_id = $1 LIMIT 1
+			)
+			WHERE code = $2
+		`, dh.HeadEmpID, dh.Code)
+		if err != nil {
+			log.Printf("⚠️ Failed to set department head for %s: %v", dh.Code, err)
+		} else {
+			fmt.Printf("👤 Dept %s → %s\n", dh.Code, dh.HeadEmpID)
+		}
+	}
 
 	// ──────────────────────────────────────────────────────────────
 	// Seed Loans (Pinjaman)
@@ -981,7 +1110,7 @@ func main() {
 	var schedTemplateID string
 	database.Pool.QueryRow(ctx, `SELECT id::text FROM schedule_templates LIMIT 1`).Scan(&schedTemplateID)
 	if schedTemplateID != "" {
-		empScheduleEmployees := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008"}
+		empScheduleEmployees := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008", "EMP-009", "EMP-010", "EMP-011", "EMP-012", "EMP-013", "EMP-014", "EMP-015"}
 		for _, eid := range empScheduleEmployees {
 			var count int
 			database.Pool.QueryRow(ctx, `
@@ -1061,7 +1190,7 @@ func main() {
 			fmt.Printf("💰 Payroll period created: %s [%s]\n", periodName, status)
 
 			// Seed payroll items for each employee
-			empIDs := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008"}
+			empIDs := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008", "EMP-009", "EMP-010", "EMP-011", "EMP-012", "EMP-013", "EMP-014", "EMP-015"}
 			for _, eid := range empIDs {
 				var itemCount int
 				database.Pool.QueryRow(ctx, `
@@ -1422,7 +1551,7 @@ func main() {
 	var lbCount int
 	database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM leave_balances WHERE year = 2026`).Scan(&lbCount)
 	if lbCount == 0 {
-		empList := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008"}
+		empList := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008", "EMP-009", "EMP-010", "EMP-011", "EMP-012", "EMP-013", "EMP-014", "EMP-015"}
 		for _, eid := range empList {
 			// Get leave types and create balances
 			rows, err := database.Pool.Query(ctx, `SELECT id::text, code FROM leave_types WHERE is_active = TRUE`)
@@ -1542,7 +1671,7 @@ func main() {
 	// ============================================================
 	fmt.Println("\n✅ Seeding attendance records...")
 	today := time.Now()
-	empIDs := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008"}
+	empIDs := []string{"EMP-001", "EMP-002", "EMP-003", "EMP-004", "EMP-005", "EMP-006", "EMP-007", "EMP-008", "EMP-009", "EMP-010", "EMP-011", "EMP-012", "EMP-013", "EMP-014", "EMP-015"}
 	totalAttend := 0
 	for i := 1; i <= 14; i++ { // 14 hari ke belakang
 		date := today.AddDate(0, 0, -i)

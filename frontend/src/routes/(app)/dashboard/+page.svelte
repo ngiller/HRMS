@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { dashboard as dashboardApi, auth, announcements as announcementsApi, attendance, leaveRequests } from '$lib/api.js';
+	import { dashboard as dashboardApi, auth, announcements as announcementsApi, attendance, leaveRequests, approvals as approvalsApi } from '$lib/api.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 
 	let Chart: any;
@@ -19,14 +19,29 @@
 		icon: string;
 	}
 
-	interface PendingItem {
-		initials: string;
-		name: string;
-		type: string;
-		detail: string;
-		bg: string;
-		text: string;
-	}
+	const ENTITY_LABELS: Record<string, string> = {
+		leave: 'Cuti',
+		overtime: 'Lembur',
+		reimbursement: 'Reimbursement',
+		shift_change: 'Permintaan Shift',
+		loan: 'Pinjaman',
+		mutation: 'Mutasi',
+		manual_attendance: 'Absensi Manual',
+		resign: 'Resign',
+	};
+
+	const ENTITY_COLORS: Record<string, string> = {
+		leave: 'bg-blue-100 text-blue-600',
+		overtime: 'bg-amber-100 text-amber-600',
+		reimbursement: 'bg-emerald-100 text-emerald-600',
+		shift_change: 'bg-purple-100 text-purple-600',
+		loan: 'bg-rose-100 text-rose-600',
+		mutation: 'bg-indigo-100 text-indigo-600',
+		manual_attendance: 'bg-cyan-100 text-cyan-600',
+		resign: 'bg-orange-100 text-orange-600',
+	};
+
+
 
 	interface NewEmployee {
 		initials: string;
@@ -55,6 +70,15 @@
 		gender_breakdown: GenderBreakdown[];
 		department_stats: DepartmentStat[];
 		recent_employees: NewEmployee[];
+		absent_today: AbsentEmployee[];
+	}
+
+	interface AbsentEmployee {
+		employee_id: string;
+		full_name: string;
+		department_name: string;
+		absence_reason: string;
+		leave_reason: string;
 	}
 
 	// ── User / Greeting ──
@@ -63,7 +87,9 @@
 
 	// ── State ──
 	let stats = $state<Stat[]>([]);
-	let pendingApprovals = $state<PendingItem[]>([]);
+	let realPendingApprovals = $state<any[]>([]);
+	let absentToday = $state<AbsentEmployee[]>([]);
+	let onLeaveToday = $derived(absentToday.filter(e => e.absence_reason !== 'tanpa_keterangan'));
 	let newEmployees = $state<NewEmployee[]>([]);
 	let isLoading = $state(true);
 	let errorMessage = $state('');
@@ -119,13 +145,9 @@
 			: name.substring(0, 2).toUpperCase();
 	}
 
-	function getTypeIcon(type: string): string {
-		const icons: Record<string, string> = {
-			'Cuti Sakit': '🤒', 'Reimbursement': '💰', 'Lembur': '⏰',
-			'Cuti Tahunan': '🏖️', 'Cuti': '🏖️',
-		};
-		return icons[type] || '📋';
-	}
+
+
+
 
 	const chartColors = ['#1A56DB', '#10B981', '#F59E0B', '#8B5CF6', '#0EA5E9', '#F43F5E', '#14B8A6', '#F97316'];
 	const genderLabels: Record<string, string> = { laki_laki: 'Laki-laki', perempuan: 'Perempuan' };
@@ -327,10 +349,11 @@
 			if (isEmployee) {
 				// Fetch data for employee dashboard
 				try {
-					const [annRes, attRes, leaveRes] = await Promise.all([
+					const [annRes, attRes, leaveRes, dashRes] = await Promise.all([
 						announcementsApi.list(1, 50, '').catch(() => ({ data: [] })),
 						attendance.getTodayStatus().catch(() => ({ data: null })),
-						leaveRequests.getMyBalances().catch(() => ({ data: [] }))
+						leaveRequests.getMyBalances().catch(() => ({ data: [] })),
+						dashboardApi.get().catch(() => ({ data: { absent_today: [] } }))
 					]);
 					
 					employeeAnnouncements = annRes.data || [];
@@ -338,6 +361,10 @@
 					
 					if (leaveRes.data && Array.isArray(leaveRes.data)) {
 						leaveBalance = leaveRes.data.find((b: any) => b.leave_type_name === 'Tahunan' || b.leave_type_name === 'Cuti Tahunan') || leaveRes.data[0];
+					}
+
+					if (dashRes?.data?.absent_today) {
+						absentToday = (dashRes.data.absent_today as AbsentEmployee[]) || [];
 					}
 				} catch (e) {
 					console.error("Error loading employee dashboard", e);
@@ -376,9 +403,22 @@
 				}
 			];
 
-			pendingApprovals = data.pending_approvals > 0
-				? [{ initials: '--', name: 'Data approval', type: 'Menunggu', detail: `${data.pending_approvals} permintaan`, bg: 'bg-amber-100', text: 'text-amber-600' }]
-				: [{ initials: '✓', name: 'Semua', type: 'Tidak ada', detail: 'Tidak ada pending approval', bg: 'bg-green-100', text: 'text-green-600' }];
+			// Fetch real pending approvals
+			try {
+				const pendingRes = await approvalsApi.getPending();
+				if (pendingRes.success && pendingRes.data) {
+					const d = pendingRes.data as { items: any[]; total: number };
+					realPendingApprovals = (d.items || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+				} else {
+					realPendingApprovals = [];
+				}
+			} catch {
+				realPendingApprovals = [];
+			}
+
+
+
+			absentToday = data.absent_today || [];
 
 			newEmployees = (data.recent_employees || []).slice(0, 5).map((e: any) => ({
 				initials: getInitials(e.full_name),
@@ -636,6 +676,47 @@
 						</div>
 					</div>
 					
+					<!-- Absent Today (Employee: show only those on leave, with empty state) -->
+					<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+						<div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50/50">
+							<h2 class="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+								<svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
+								Karyawan Tidak Hadir
+							</h2>
+							{#if onLeaveToday.length > 0}
+								<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+									{onLeaveToday.length} orang
+								</span>
+							{/if}
+						</div>
+						<div class="p-4 space-y-2">
+							{#if onLeaveToday.length > 0}
+								{#each onLeaveToday as emp (emp.employee_id)}
+									<div class="flex items-center gap-3 py-2">
+										<div class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-xs font-bold text-blue-600 shrink-0">
+											{emp.full_name?.charAt(0) || '?'}
+										</div>
+										<div class="min-w-0 flex-1">
+											<div class="text-sm font-medium text-gray-900 line-clamp-1">{emp.full_name}</div>
+											<div class="flex items-center gap-1.5 mt-0.5">
+												<span class="text-xs text-gray-500">{emp.department_name}</span>
+												<span class="text-gray-300">·</span>
+												<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">{emp.absence_reason}</span>
+											</div>
+										</div>
+									</div>
+								{/each}
+							{:else}
+								<div class="flex items-center gap-3 py-4 text-center justify-center">
+									<div class="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+										<svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+									</div>
+									<p class="text-sm text-gray-500">Tidak ada yang cuti/sakit hari ini</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+
 					<!-- Shortcuts -->
 					<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-5">
 						<h2 class="font-semibold text-gray-900 mb-4">Akses Cepat</h2>
@@ -846,6 +927,55 @@
 
 		<!-- OVERVIEW TAB -->
 		<div class:hidden={activeTab !== 'overview'}>
+			<!-- Attendance Summary Card -->
+			{#if stats.length > 0}
+				{@const hadirStat = stats[1]}
+				<div class="bg-gradient-to-br from-blue-50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-100 dark:border-blue-900/50 rounded-xl p-5 mb-6">
+					<div class="flex items-center justify-between mb-4">
+						<div class="flex items-center gap-2.5">
+							<div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+								<svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+							</div>
+							<div>
+								<h3 class="text-sm font-semibold text-blue-900 dark:text-blue-200">Ringkasan Kehadiran</h3>
+								<p class="text-xs text-blue-600/70 dark:text-blue-400/70">Data real-time hari ini</p>
+							</div>
+						</div>
+						<div class="text-right">
+							<div class="text-2xl font-bold text-blue-900 dark:text-blue-200">{hadirStat.value}</div>
+							<div class="text-xs font-medium text-emerald-600">{hadirStat.change}</div>
+						</div>
+					</div>
+					<div class="grid grid-cols-3 gap-3">
+						<div class="bg-white/80 dark:bg-gray-900/50 rounded-xl p-3 text-center">
+							<p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{stats[0]?.value || '0'}</p>
+							<p class="text-[10px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">Total Karyawan</p>
+						</div>
+						<div class="bg-white/80 dark:bg-gray-900/50 rounded-xl p-3 text-center">
+							<p class="text-lg font-bold text-blue-600 dark:text-blue-400 tabular-nums">{hadirStat.value}</p>
+							<p class="text-[10px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">Hadir Hari Ini</p>
+						</div>
+						<div class="bg-white/80 dark:bg-gray-900/50 rounded-xl p-3 text-center">
+							<p class="text-lg font-bold text-amber-600 dark:text-amber-400 tabular-nums">{stats[2]?.value || '0'}</p>
+							<p class="text-[10px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">Pending</p>
+						</div>
+					</div>
+					<!-- Attendance rate progress bar -->
+					{#if true}
+						{@const rate = parseInt(hadirStat.change) || 0}
+						<div class="mt-4 pt-4 border-t border-blue-100 dark:border-blue-900/50">
+							<div class="flex items-center justify-between text-xs mb-1.5">
+								<span class="font-medium text-blue-700 dark:text-blue-300">Tingkat Kehadiran</span>
+								<span class="font-bold text-blue-700 dark:text-blue-300">{rate}%</span>
+							</div>
+							<div class="w-full h-2.5 bg-blue-100 dark:bg-blue-900/50 rounded-full overflow-hidden">
+								<div class="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-700 ease-out" style="width: {Math.min(rate, 100)}%"></div>
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 				<div class="bg-white border border-gray-200 rounded-xl p-5 lg:col-span-2">
 					<div class="flex items-center justify-between mb-4">
@@ -872,25 +1002,104 @@
 					<div class="h-44 flex items-center justify-center"><canvas bind:this={overviewGenderCanvas}></canvas></div>
 				</div>
 			</div>
-			<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+				<!-- Absent Today -->
+				<div class="bg-white border border-gray-200 rounded-xl p-5">
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-sm font-semibold text-gray-900">Absen Hari Ini</h3>
+						{#if absentToday.length > 0}
+							<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+								<span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+								{absentToday.length} tidak hadir
+							</span>
+						{:else}
+							<span class="text-xs text-gray-400">Karyawan tidak hadir</span>
+						{/if}
+					</div>
+					<div class="space-y-1 max-h-[320px] overflow-y-auto">
+						{#if absentToday.length === 0}
+							<div class="text-center py-6">
+								<div class="w-10 h-10 mx-auto mb-2 rounded-full bg-green-50 flex items-center justify-center">
+									<svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+								</div>
+								<p class="text-xs text-gray-400">Semua karyawan hadir hari ini</p>
+							</div>
+						{:else}
+							{#each absentToday as emp (emp.employee_id)}
+								{@const reasonColor = emp.absence_reason !== 'tanpa_keterangan' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-red-50 text-red-700 border border-red-200'}
+								{@const reasonLabel = emp.absence_reason !== 'tanpa_keterangan' ? emp.absence_reason : 'Tanpa Ket.'}
+								<div class="flex items-start gap-2.5 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition cursor-pointer" onclick={() => goto('/karyawan/' + emp.employee_id)}>
+									<div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600 shrink-0 mt-0.5">
+										{emp.full_name?.charAt(0) || '?'}
+									</div>
+									<div class="min-w-0 flex-1">
+										<div class="text-xs font-semibold text-gray-900 line-clamp-1">{emp.full_name}</div>
+										<div class="flex items-center gap-1.5 mt-0.5">
+											<span class="text-[10px] text-gray-500">{emp.department_name || '-'}</span>
+										</div>
+										<div class="mt-1">
+											<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {reasonColor}">{reasonLabel}</span>
+										</div>
+									</div>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				</div>
+
 				<div class="bg-white border border-gray-200 rounded-xl p-5">
 					<div class="flex items-center justify-between mb-4">
 						<h3 class="text-sm font-semibold text-gray-900">Pending Approval</h3>
-						<span class="text-xs text-gray-400">Menunggu persetujuan</span>
+						{#if realPendingApprovals.length > 0}
+							<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+								<span class="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+								{realPendingApprovals.length} menunggu
+							</span>
+						{:else}
+							<span class="text-xs text-gray-400">Menunggu persetujuan</span>
+						{/if}
 					</div>
-					<div class="space-y-1">
-						{#each pendingApprovals as item (item)}
-							<div class="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-gray-50 transition">
-								<div class="flex items-center gap-3">
-									<div class="w-9 h-9 {item.bg} rounded-full flex items-center justify-center text-xs font-semibold {item.text}">{item.initials}</div>
-									<div>
-										<div class="text-sm font-medium text-gray-900"><span class="mr-1">{getTypeIcon(item.type)}</span>{item.type}</div>
-										<div class="text-xs text-gray-400">{item.name} &mdash; {item.detail}</div>
-									</div>
+					<div class="space-y-1 max-h-[320px] overflow-y-auto custom-scrollbar">
+						{#if realPendingApprovals.length === 0}
+							<div class="text-center py-6">
+								<div class="w-10 h-10 mx-auto mb-2 rounded-full bg-emerald-50 flex items-center justify-center">
+									<svg class="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 								</div>
-								<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {item.initials === '✓' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">{item.initials === '✓' ? 'Selesai' : 'Menunggu'}</span>
+								<p class="text-xs text-gray-400">Tidak ada pending approval</p>
 							</div>
-						{/each}
+						{:else}
+							{#each realPendingApprovals as item (item.tracking_id || item.entity_id)}
+								{@const entityColor = ENTITY_COLORS[item.entity_type] || 'bg-gray-100 text-gray-600'}
+								{@const entityLabel = ENTITY_LABELS[item.entity_type] || item.entity_type}
+											<div class="flex items-start justify-between py-2.5 px-2 rounded-lg hover:bg-gray-50 transition cursor-pointer active:scale-[0.99]" onclick={() => goto('/persetujuan')}>
+									<div class="flex items-start gap-2.5 min-w-0 flex-1">
+										<div class="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 {entityColor}">
+											{entityLabel.substring(0, 2).toUpperCase()}
+										</div>
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-1.5 flex-wrap">
+												<span class="text-xs font-semibold text-gray-900 line-clamp-1">{item.title || entityLabel}</span>
+												<span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">{entityLabel}</span>
+											</div>
+											<div class="flex items-center gap-1.5 text-[11px] text-gray-500 mt-1">
+												<span class="font-medium text-gray-700">{item.requestor_name || '-'}</span>
+												<span>&middot;</span>
+												<span>{new Date(item.created_at).toLocaleDateString('id-ID', {day:'numeric', month:'short'})}</span>
+											</div>
+											<div class="flex items-center gap-1.5 mt-1.5">
+												<div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden flex gap-0.5 max-w-[80px]">
+													{#each Array(item.total_steps) as _, i (i)}
+														<div class="h-full flex-1 rounded-full {i < item.current_step ? 'bg-blue-500' : 'bg-gray-200'}"></div>
+													{/each}
+												</div>
+												<span class="text-[10px] text-gray-400 font-medium">{item.current_step}/{item.total_steps}</span>
+											</div>
+										</div>
+									</div>
+									<svg class="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+								</div>
+							{/each}
+						{/if}
 					</div>
 				</div>
 				<div class="bg-white border border-gray-200 rounded-xl p-5">

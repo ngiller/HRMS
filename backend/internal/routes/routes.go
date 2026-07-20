@@ -47,6 +47,8 @@ func Setup(
 	approvalWorkflowHandler *handlers.ApprovalWorkflowHandler,
 	pushSubscriptionHandler *handlers.PushSubscriptionHandler,
 	mutationHandler *handlers.MutationHandler,
+	shiftHandler *handlers.ShiftHandler,
+	rosterHandler *handlers.RosterHandler,
 	sseHandler *handlers.SSEHandler,
 	authService *service.AuthService,
 ) {
@@ -83,6 +85,9 @@ func Setup(
 	// User info
 	protected.Get("/auth/me", authHandler.Me)
 
+	// Self photo upload (no RBAC — user uploads their own photo)
+	protected.Post("/auth/photo", employeeHandler.UploadMyPhoto)
+
 	// Logout & Change Password
 	protected.Post("/auth/logout", authHandler.Logout)
 	protected.Put("/auth/change-password", authHandler.ChangePassword)
@@ -110,6 +115,7 @@ func Setup(
 	employees.Put("/:id/salary-components/:componentId", middleware.RBAC("payroll", "update"), salaryComponentHandler.UpdateComponent)
 	employees.Delete("/:id/salary-components/:componentId", middleware.RBAC("payroll", "update"), salaryComponentHandler.DeleteComponent)
 	employees.Get("/export", middleware.RBAC("employee", "read"), employeeHandler.ExportEmployees)
+	employees.Get("/template", middleware.RBAC("employee", "read"), employeeHandler.DownloadTemplate)
 	employees.Post("/import", middleware.RBAC("employee", "create"), employeeHandler.ImportEmployees)
 	employees.Get("/:id", middleware.RBAC("employee", "read"), employeeHandler.GetEmployee)
 	employees.Post("/:id/photo", middleware.RBAC("employee", "update"), employeeHandler.UploadPhoto)
@@ -206,6 +212,7 @@ func Setup(
 	attendance.Get("/my-history", attendanceRecordHandler.ListMyAttendance)
 	attendance.Get("/report", middleware.RBAC("attendance", "read"), attendanceRecordHandler.ListAttendanceReport)
 	attendance.Get("/report/export", middleware.RBAC("attendance", "read"), attendanceRecordHandler.ExportAttendanceReport)
+	attendance.Get("/:id", attendanceRecordHandler.GetAttendanceRecord)
 
 	// ==================== Manual Attendance Routes ====================
 	manualAttendance := protected.Group("/manual-attendance")
@@ -307,6 +314,10 @@ func Setup(
 	// ==================== Per-Employee BPJS Config ====================
 	protected.Get("/employees/:id/bpjs-config", middleware.RBAC("employee", "read"), companyHandler.GetEmployeeBPJSConfig)
 	protected.Put("/employees/:id/bpjs-config", middleware.RBAC("employee", "update"), companyHandler.UpdateEmployeeBPJSConfig)
+	protected.Get("/employees/:id/tax-config", middleware.RBAC("employee", "read"), companyHandler.GetEmployeeTaxConfig)
+	protected.Put("/employees/:id/tax-config", middleware.RBAC("employee", "update"), companyHandler.UpdateEmployeeTaxConfig)
+	protected.Get("/employees/:id/overtime-config", middleware.RBAC("employee", "read"), companyHandler.GetEmployeeOvertimeConfig)
+	protected.Put("/employees/:id/overtime-config", middleware.RBAC("employee", "update"), companyHandler.UpdateEmployeeOvertimeConfig)
 
 	// ==================== Payroll THR Calculation ====================
 	payroll.Get("/periods/:id/calculate-thr", middleware.RBAC("payroll", "read"), payrollHandler.CalculateTHR)
@@ -376,6 +387,7 @@ func Setup(
 	approvalWorkflows.Get("/", middleware.RBAC("company_settings", "read"), approvalWorkflowHandler.ListWorkflows)
 	approvalWorkflows.Get("/:id", middleware.RBAC("company_settings", "read"), approvalWorkflowHandler.GetWorkflowDetail)
 	approvalWorkflows.Post("/", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.CreateWorkflow)
+	approvalWorkflows.Put("/:id", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.UpdateWorkflow)
 	approvalWorkflows.Delete("/:id", middleware.RBAC("company_settings", "update"), approvalWorkflowHandler.DeleteWorkflow)
 
 	// Workflow Steps (Admin)
@@ -406,4 +418,30 @@ func Setup(
 	mutations.Put("/:id/approve", middleware.RBAC("employee", "update"), mutationHandler.ApproveMutation)
 	mutations.Put("/:id/reject", middleware.RBAC("employee", "update"), mutationHandler.RejectMutation)
 	mutations.Put("/:id/cancel", middleware.RBAC("employee", "create"), mutationHandler.CancelMutation)
+
+	// ==================== Shift Routes ====================
+	shifts := protected.Group("/shifts")
+	shifts.Get("/all", middleware.RBAC("work_schedule", "read"), shiftHandler.GetAllShifts)
+	shifts.Get("/", middleware.RBAC("work_schedule", "read"), shiftHandler.ListShifts)
+	shifts.Get("/:id", middleware.RBAC("work_schedule", "read"), shiftHandler.GetShift)
+	shifts.Post("/", middleware.RBAC("work_schedule", "create"), shiftHandler.CreateShift)
+	shifts.Put("/:id", middleware.RBAC("work_schedule", "update"), shiftHandler.UpdateShift)
+	shifts.Delete("/:id", middleware.RBAC("work_schedule", "delete"), shiftHandler.DeleteShift)
+
+	// ==================== Department Roster Routes ====================
+	rosters := protected.Group("/rosters")
+	rosters.Get("/", middleware.RBAC("work_schedule", "read"), rosterHandler.ListRosters)
+	rosters.Get("/:id", middleware.RBAC("work_schedule", "read"), rosterHandler.GetRoster)
+	rosters.Post("/", middleware.RBAC("work_schedule", "create"), rosterHandler.CreateRoster)
+	rosters.Put("/:id", middleware.RBAC("work_schedule", "update"), rosterHandler.UpdateRoster)
+	rosters.Delete("/:id", middleware.RBAC("work_schedule", "delete"), rosterHandler.DeleteRoster)
+	rosters.Get("/:id/entries", middleware.RBAC("work_schedule", "read"), rosterHandler.ListRosterEntries)
+	rosters.Get("/:id/calendar", middleware.RBAC("work_schedule", "read"), rosterHandler.GetRosterCalendar)
+	rosters.Post("/:id/entries/bulk", middleware.RBAC("work_schedule", "create"), rosterHandler.BulkCreateRosterEntries)
+	rosters.Delete("/:id/employees/:employee_id", middleware.RBAC("work_schedule", "delete"), rosterHandler.DeleteEmployeeRosterEntries)
+
+	// Single roster entry routes
+	rosterEntries := protected.Group("/roster-entries")
+	rosterEntries.Post("/", middleware.RBAC("work_schedule", "create"), rosterHandler.CreateRosterEntry)
+	rosterEntries.Delete("/:id", middleware.RBAC("work_schedule", "delete"), rosterHandler.DeleteRosterEntry)
 }

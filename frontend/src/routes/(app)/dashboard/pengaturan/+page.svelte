@@ -99,7 +99,7 @@
 			<div>
 				<h3 class="text-sm font-bold text-blue-900 dark:text-blue-200">Pengaturan Master Perusahaan</h3>
 				<p class="text-xs text-blue-700/80 dark:text-blue-300/80 mt-1 leading-relaxed max-w-2xl">
-					Informasi ini bersifat read-only untuk pengguna biasa. Untuk mengubah konfigurasi inti HR seperti master BPJS, approval workflow, atau parameter sistem lainnya, silakan hubungi Administrator HR Anda.
+					Informasi ini bersifat read-only untuk pengguna biasa. Untuk mengubah konfigurasi inti HR seperti master BPJS, parameter sistem lainnya, silakan hubungi Administrator HR Anda.
 				</p>
 			</div>
 		</div>

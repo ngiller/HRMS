@@ -49,8 +49,9 @@
 		}
 	}
 
-	function goToLogin() {
-		goto('/login');
+	async function goToLogin() {
+// eslint-disable-next-line svelte/no-navigation-without-resolve
+		await goto('/login');
 	}
 </script>
 

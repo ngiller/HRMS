@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { leaveRequests as api } from '$lib/api.js';
+	import { leaveRequests as api, auth } from '$lib/api.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import SwipeActions from '$lib/components/SwipeActions.svelte';
 	import BottomSheet from '$lib/components/BottomSheet.svelte';
@@ -40,6 +40,28 @@ import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 	let myBalances = $state<LeaveBalance[]>([]);
 	let showBalances = $state(true);
 
+	// Filter balances based on user's gender & marital status
+	let filteredBalances = $derived.by(() => {
+		const user = auth.getUser() as Record<string, any> | null;
+		const gender = user?.gender || '';
+		const marital = user?.marital_status || '';
+		
+		if (!myBalances || myBalances.length === 0) return [];
+		
+		return myBalances.filter(b => {
+			const code = (b as any).leave_type_code || '';
+			
+			// Cuti Hamil/Melahirkan: hanya untuk perempuan
+			if (code === 'melahirkan' && gender !== 'perempuan') return false;
+			// Cuti Keguguran: hanya untuk perempuan
+			if (code === 'keguguran' && gender !== 'perempuan') return false;
+			// Cuti Menikah: hanya untuk lajang (belum menikah)
+			if (code === 'menikah' && marital !== 'lajang') return false;
+			
+			return true;
+		});
+	});
+
 	let showMobileForm = $state(false);
 	let showRejectModal = $state(false);
 	let rejectId = $state<string | null>(null);
@@ -54,29 +76,27 @@ import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 		sortable: true, resizable: true, filter: true, floatingFilter: false,
 	};
 
-	const statusColors: Record<string, string> = {
+	// Valid leave statuses only (matching PostgreSQL leave_status enum)
+const LEAVE_STATUSES = ['pending', 'approved', 'rejected', 'cancelled', 'paid'] as const;
+
+const statusColors: Record<string, string> = {
     pending: 'bg-yellow-50 text-yellow-700 ring-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:ring-yellow-800',
     approved: 'bg-green-50 text-green-700 ring-green-200 dark:bg-green-900 dark:text-green-200 dark:ring-green-800',
-    active: 'bg-green-50 text-green-700 ring-green-200 dark:bg-green-900 dark:text-green-200 dark:ring-green-800',
-    completed: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-800',
     rejected: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800',
-    defaulted: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800',
     cancelled: 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600',
     paid: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-800',
 };
 
+const statusLabels: Record<string, string> = {
+    pending: 'Menunggu',
+    approved: 'Disetujui',
+    rejected: 'Ditolak',
+    cancelled: 'Dibatalkan',
+    paid: 'Dibayar'
+};
+
 function getStatusBadge(status: string) {
-    const labels: Record<string, string> = {
-        pending: 'Menunggu',
-        approved: 'Disetujui',
-        active: 'Aktif',
-        completed: 'Lunas',
-        rejected: 'Ditolak',
-        defaulted: 'Macet',
-        cancelled: 'Dibatalkan',
-        paid: 'Dibayar'
-    };
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${labels[status] || status}</span>`;
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${statusLabels[status] || status}</span>`;
 }
 
 	function iconView(): string {
@@ -273,12 +293,38 @@ function getStatusBadge(status: string) {
 
 	function cancelForm() { showForm = false; formError = ''; }
 
+	let userLeaveValidation = $derived.by(() => {
+		const user = auth.getUser() as Record<string, any> | null;
+		const gender = user?.gender || '';
+		const marital = user?.marital_status || '';
+		
+		// Build a map: leave_type_id -> { code, errorMessage }
+		const validationMap = new Map<string, string>();
+		for (const t of leaveTypes) {
+			if (t.code === 'melahirkan' && gender !== 'perempuan') {
+				validationMap.set(t.id, 'Cuti hamil/melahirkan hanya untuk karyawan perempuan');
+			} else if (t.code === 'keguguran' && gender !== 'perempuan') {
+				validationMap.set(t.id, 'Cuti keguguran hanya untuk karyawan perempuan');
+			} else if (t.code === 'menikah' && marital !== 'lajang') {
+				validationMap.set(t.id, 'Cuti menikah hanya untuk karyawan yang belum menikah (lajang)');
+			}
+		}
+		return validationMap;
+	});
+
 	async function handleSave() {
 		if (!form.leave_type_id) { formError = 'Jenis cuti harus dipilih'; return; }
 		if (!form.start_date) { formError = 'Tanggal mulai harus diisi'; return; }
 		if (!form.end_date) { formError = 'Tanggal selesai harus diisi'; return; }
 		if (form.total_days <= 0) { formError = 'Jumlah hari harus lebih dari 0'; return; }
 		if (!form.reason.trim()) { formError = 'Alasan cuti harus diisi'; return; }
+
+		// Frontend validation for leave type eligibility
+		const leaveError = userLeaveValidation.get(form.leave_type_id);
+		if (leaveError) {
+			formError = leaveError;
+			return;
+		}
 
 		isSaving = true; formError = '';
 		try {
@@ -354,6 +400,10 @@ function getStatusBadge(status: string) {
 	}
 </script>
 
+<!-- eslint-disable svelte/no-useless-children-snippet -->
+
+<!-- eslint-disable svelte/no-at-html-tags -->
+
 <div class="w-full">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
@@ -362,24 +412,21 @@ function getStatusBadge(status: string) {
 		</div>
 		<div class="flex items-center gap-2">
 			{#if !showForm && !showDetail}				{#if hasPermission('leave', 'create')}
-					<button onclick={openCreateForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer hidden sm:inline-flex">
+					<button onclick={() => { openCreateForm(); if (window.innerWidth < 640) showMobileForm = true; }} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-						Ajukan Cuti
-					</button>
-					<button onclick={() => { openCreateForm(); showMobileForm = true; }} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer sm:hidden">
-						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-						Ajukan
+						<span class="hidden sm:inline">Ajukan Cuti</span>
+						<span class="sm:hidden">Ajukan</span>
 					</button>
 				{/if}
 			{/if}
 		</div>
 	</div>
 
-	{#if showBalances && myBalances.length > 0}
+	{#if showBalances && filteredBalances.length > 0}
 		<div class="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm">
 			<h3 class="text-sm font-semibold text-gray-800 mb-3">Sisa Cuti Saya</h3>
 			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-				{#each myBalances as b}
+				{#each filteredBalances as b (b)}
 					<div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-100">
 						<div class="text-xs text-gray-500 mb-1 truncate">{b.leave_type_name}</div>
 						<div class="flex items-baseline gap-1">
@@ -397,8 +444,9 @@ function getStatusBadge(status: string) {
 		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<div class="flex flex-wrap items-center gap-2">
 				<button onclick={() => { statusFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!statusFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">Semua</button>
-				{#each Object.keys(statusColors) as status}
-					<button onclick={() => { statusFilter = status; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {statusFilter === status ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{status.charAt(0).toUpperCase() + status.slice(1)}</button>
+				{#each LEAVE_STATUSES as status (status)}
+					{@const label = statusLabels[status] || status.charAt(0).toUpperCase() + status.slice(1)}
+					<button onclick={() => { statusFilter = status; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer tap-highlight-transparent {statusFilter === status ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800'}">{label}</button>
 				{/each}
 			</div>
 			<div class="text-xs text-gray-400">{total > 0 ? `${total} pengajuan ditemukan` : ''}</div>
@@ -422,7 +470,7 @@ function getStatusBadge(status: string) {
 						<label for="leave-type" class="block text-sm font-medium text-gray-700 mb-1.5">Jenis Cuti <span class="text-red-500">*</span></label>
 						<select id="leave-type" bind:value={form.leave_type_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 							<option value="">-- Pilih Jenis Cuti --</option>
-							{#each leaveTypes as t}
+							{#each leaveTypes as t (t)}
 								<option value={t.id}>{t.name} ({t.is_paid ? 'Bayar' : 'Tidak Bayar'})</option>
 							{/each}
 						</select>
@@ -489,7 +537,7 @@ function getStatusBadge(status: string) {
 								<h3 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Progress Approval</h3>
 							</div>
 							<div class="space-y-2">
-								{#each trail as step}
+								{#each trail as step (step)}
 									{@const isPending = step.status === 'pending'}
 									{@const isApproved = step.status === 'approved'}
 									{@const isRejected = step.status === 'rejected'}
@@ -557,7 +605,7 @@ function getStatusBadge(status: string) {
 	{:else}
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
+				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _, i (i)}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
@@ -684,7 +732,7 @@ function getStatusBadge(status: string) {
 				<label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Jenis Cuti <span class="text-red-500">*</span></label>
 				<select bind:value={form.leave_type_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-800 dark:text-white">
 					<option value="">-- Pilih --</option>
-					{#each leaveTypes as t}
+					{#each leaveTypes as t (t)}
 						<option value={t.id}>{t.name} ({t.is_paid ? 'Bayar' : 'Tidak Bayar'})</option>
 					{/each}
 				</select>

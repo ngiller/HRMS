@@ -1,0 +1,58 @@
+177,219c
+func (s *EmployeeService) ExportEmployees(ctx context.Context) ([]byte, error) {
+	employees, err := repository.ListEmployeesForExportFull(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil data karyawan: %w", err)
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	sheet := "Worksheet"
+	f.SetSheetName("Sheet1", sheet)
+
+	headers := []string{
+		"Employee ID", "Full Name", "Barcode", "Organization", "Job Position", "Job Level",
+		"Join Date", "Resign Date", "Status Employee", "End Date", "Sign Date",
+		"Email", "Birth Date", "Age", "Birth Place", "Citizen ID", "Address",
+		"Residential Address", "NPWP", "PTKP Status", "Employee Tax Status",
+		"Tax Config", "Bank Name", "Bank Account", "Bank Account Holder",
+		"BPJS Ketenagakerjaan", "BPJS Kesehatan", "NIK (NPWP 16 Digit)",
+		"Mobile Phone", "Phone", "Branch Name", "Parent Branch Name",
+		"Religion", "Gender", "Marital Status", "Blood Type", "Nationality Code",
+		"Currency", "Length Of Service", "Payment Schedule", "Approval Line",
+		"Manager", "Grade", "Class", "Profile Picture", "Cost Center",
+		"Cost Center Category", "SBU", "NPWP 16 digit (new)", "Passport",
+		"Passport Expiration Date", "Jenis Dok. Referensi Bukti Potong",
+		"Nomor Dok. Referensi Bukti Potong", "Tanggal Dok. Referensi Bukti Potong",
+		"TIN (Taxpayer Identification Number)", "Ukuran Baju",
+	}
+
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, h)
+	}
+
+	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	f.SetRowStyle(sheet, 1, 1, style)
+
+	for i, emp := range employees {
+		row := i + 2
+		vals := []interface{}{
+			emp.EmployeeID, emp.FullName, emp.Barcode, emp.Organization, emp.JobPosition, emp.JobLevel,
+			emp.JoinDate, emp.ResignDate, emp.StatusEmployee, emp.EndDate, emp.SignDate,
+			emp.Email, emp.BirthDate, emp.Age, emp.BirthPlace, emp.CitizenIDAddress, emp.ResidentialAddress,
+			emp.NPWP, emp.PTKPStatus, emp.EmployeeTaxStatus, emp.TaxConfig, emp.BankName, emp.BankAccount, emp.BankAccountHolder,
+			emp.BPJSTK, emp.BPJSKesehatan, emp.NIK, emp.MobilePhone, emp.Phone, emp.BranchName, emp.ParentBranchName,
+			emp.Religion, emp.Gender, emp.MaritalStatus, emp.BloodType, emp.NationalityCode, emp.Currency, emp.LengthOfService, emp.PaymentSchedule,
+			emp.ApprovalLine, emp.Manager, emp.Grade, emp.Class, emp.ProfilePicture, emp.CostCenter, emp.CostCenterCategory, emp.SBU,
+			emp.NPWPBaru, emp.Passport, emp.PassportExpirationDate, emp.JenisDokReferensi, emp.NomorDokReferensi, emp.TanggalDokReferensi,
+			emp.TIN, emp.UkuranBaju,
+		}
+		for j, v := range vals {
+			cell, _ := excelize.CoordinatesToCellName(j+1, row)
+			f.SetCellValue(sheet, cell, v)
+		}
+	}
+.
+w

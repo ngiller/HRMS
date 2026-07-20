@@ -1,4 +1,5 @@
 <script lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount, onDestroy } from 'svelte';
 	import { overtime as api, employees } from '$lib/api.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
@@ -72,27 +73,26 @@ import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 	let showCancelFormConfirm = $state(false);
 	let showMobileForm = $state(false);
 
-	const statusColors: Record<string, string> = {
+	const OVERTIME_STATUSES = ['pending', 'approved', 'rejected', 'cancelled', 'paid'] as const;
+
+const statusColors: Record<string, string> = {
     pending: 'bg-yellow-50 text-yellow-700 ring-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:ring-yellow-800',
     approved: 'bg-green-50 text-green-700 ring-green-200 dark:bg-green-900 dark:text-green-200 dark:ring-green-800',
-    active: 'bg-green-50 text-green-700 ring-green-200 dark:bg-green-900 dark:text-green-200 dark:ring-green-800',
-    completed: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-800',
     rejected: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800',
-    defaulted: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800',
     cancelled: 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600',
+    paid: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-800',
+};
+
+const overtimeStatusLabels: Record<string, string> = {
+    pending: 'Menunggu',
+    approved: 'Disetujui',
+    rejected: 'Ditolak',
+    cancelled: 'Dibatalkan',
+    paid: 'Dibayar'
 };
 
 function getStatusBadge(status: string) {
-    const labels: Record<string, string> = {
-        pending: 'Menunggu',
-        approved: 'Disetujui',
-        active: 'Aktif',
-        completed: 'Lunas',
-        rejected: 'Ditolak',
-        defaulted: 'Macet',
-        cancelled: 'Dibatalkan'
-    };
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${labels[status] || status}</span>`;
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${statusColors[status] || 'bg-gray-50 text-gray-600 dark:bg-gray-900 dark:text-gray-300'}">${overtimeStatusLabels[status] || status}</span>`;
 }
 
 	const overtimeTypeLabels: Record<string, string> = {
@@ -424,6 +424,10 @@ function getStatusBadge(status: string) {
 	}
 </script>
 
+<!-- eslint-disable svelte/no-useless-children-snippet -->
+
+<!-- eslint-disable svelte/no-at-html-tags -->
+
 <div class="w-full">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
@@ -431,13 +435,10 @@ function getStatusBadge(status: string) {
 			<p class="text-sm text-gray-500 mt-0.5">Ajukan dan kelola pengajuan lembur karyawan</p>
 		</div>
 		{#if !showForm && hasPermission('overtime', 'create')}
-			<button onclick={openCreateForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer hidden sm:inline-flex">
+			<button onclick={() => { openCreateForm(); if (window.innerWidth < 640) showMobileForm = true; }} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-				Ajukan Lembur
-			</button>
-			<button onclick={() => { openCreateForm(); showMobileForm = true; }} class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer sm:hidden">
-				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-				Ajukan
+				<span class="hidden sm:inline">Ajukan Lembur</span>
+				<span class="sm:hidden">Ajukan</span>
 			</button>
 		{/if}
 	</div>
@@ -446,8 +447,9 @@ function getStatusBadge(status: string) {
 		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<div class="flex flex-wrap items-center gap-2">
 				<button onclick={() => { statusFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!statusFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">Semua</button>
-				{#each Object.keys(statusColors) as status}
-					<button onclick={() => { statusFilter = status; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {statusFilter === status ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{status.charAt(0).toUpperCase() + status.slice(1)}</button>
+				{#each OVERTIME_STATUSES as status (status)}
+					{@const label = overtimeStatusLabels[status] || status.charAt(0).toUpperCase() + status.slice(1)}
+					<button onclick={() => { statusFilter = status; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer tap-highlight-transparent {statusFilter === status ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800'}">{label}</button>
 				{/each}
 			</div>
 			<div class="text-xs text-gray-400">{total > 0 ? `${total} pengajuan ditemukan` : ''}</div>
@@ -537,7 +539,7 @@ function getStatusBadge(status: string) {
 								<h3 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Progress Approval</h3>
 							</div>
 							<div class="space-y-2">
-								{#each trail as step}
+								{#each trail as step (step)}
 									{@const isPending = step.status === 'pending'}
 									{@const isApproved = step.status === 'approved'}
 									{@const isRejected = step.status === 'rejected'}
@@ -616,7 +618,7 @@ function getStatusBadge(status: string) {
 	{:else}
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
+				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _, i (i)}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
@@ -637,7 +639,7 @@ function getStatusBadge(status: string) {
 				</div>
 				<PullToRefresh onRefresh={load}>
 				<div class="md:hidden space-y-3">
-					{#each items as item}
+					{#each items as item (item)}
 						<SwipeActions
 							onApprove={item.status === 'pending' && hasPermission('overtime', 'approve') ? () => handleApprove(item.id) : undefined}
 							onReject={item.status === 'pending' && hasPermission('overtime', 'approve') ? () => openReject(item.id) : undefined}
@@ -713,7 +715,7 @@ function getStatusBadge(status: string) {
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
@@ -780,9 +782,7 @@ function getStatusBadge(status: string) {
 	</BottomSheet>
 
 	<AnimatedPresence show={showRejectModal} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
+			<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tolak pengajuan lembur" class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
 			<div class="px-6 py-6">
@@ -805,9 +805,7 @@ function getStatusBadge(status: string) {
 </AnimatedPresence>
 
 {#if showCancelRequestConfirm}
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={abortCancelRequest} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') abortCancelRequest(); }}
+			<div onclick={abortCancelRequest} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') abortCancelRequest(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Batalkan Pengajuan Lembur" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm transform transition-all">
 			<div class="px-6 py-6 text-center">
@@ -829,9 +827,7 @@ function getStatusBadge(status: string) {
 {/if}
 
 {#if showCancelFormConfirm}
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={abortCancelForm} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') abortCancelForm(); }}
+			<div onclick={abortCancelForm} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') abortCancelForm(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Konfirmasi Batal" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm transform transition-all">
 			<div class="px-6 py-6 text-center">

@@ -9,6 +9,7 @@ import (
 	"hrms-backend/internal/database"
 	"hrms-backend/internal/models"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -563,6 +564,62 @@ func DeleteEmployeeSchedule(ctx context.Context, id, userID string) error {
 // 3. employees.work_schedule_id (old system fallback)
 // 4. departments.work_schedule_id (old system fallback)
 func ResolveEmployeeScheduleForDate(ctx context.Context, employeeID, date string) (*models.ResolvedSchedule, error) {
+	var err error
+	// Step 0: Try monthly roster schedule first (roster_entries + shifts)
+	var rosterSchedule models.ResolvedSchedule
+	rosterQuery := `
+		SELECT 
+			re.id::text as schedule_id,
+			s.start_time::text,
+			s.end_time::text,
+			COALESCE(s.break_start::text, '12:00') as break_start,
+			COALESCE(s.break_end::text, '13:00') as break_end,
+			FALSE as is_remote,
+			'roster_schedule' as source
+		FROM roster_entries re
+		JOIN shifts s ON s.id = re.shift_id
+		WHERE re.employee_id::text = $1 AND re.date = $2::date
+		LIMIT 1
+	`
+	var rsID string
+	err = database.Pool.QueryRow(ctx, rosterQuery, employeeID, date).Scan(
+		&rsID, &rosterSchedule.StartTime, &rosterSchedule.EndTime, 
+		&rosterSchedule.BreakStart, &rosterSchedule.BreakEnd,
+		&rosterSchedule.IsRemote, &rosterSchedule.Source,
+	)
+	if err == nil {
+		uid, parseErr := uuid.Parse(rsID)
+		if parseErr == nil {
+			rosterSchedule.ScheduleID = uid
+			// For location, try to fetch employee primary location as fallback
+			var locID *string
+			var locName, locAddress string
+			var lat, lng, radius float64
+			locQuery := `
+				SELECT al.id::text, COALESCE(al.name, ''), COALESCE(al.address, ''),
+					COALESCE(al.latitude, 0), COALESCE(al.longitude, 0), COALESCE(al.radius_meters, 0)
+				FROM employee_schedule_locations esl
+				JOIN attendance_locations al ON al.id = esl.attendance_location_id AND al.is_active = TRUE AND al.deleted_at IS NULL
+				JOIN employee_schedules es ON es.id = esl.employee_schedule_id AND es.employee_id::text = $1
+				WHERE esl.is_primary = TRUE
+				LIMIT 1
+			`
+			_ = database.Pool.QueryRow(ctx, locQuery, employeeID).Scan(&locID, &locName, &locAddress, &lat, &lng, &radius)
+			if locID != nil {
+				ulid, _ := uuid.Parse(*locID)
+				rosterSchedule.Location = &models.ResolvedLocation{
+					ID:           ulid,
+					Name:         locName,
+					Address:      locAddress,
+					Latitude:     lat,
+					Longitude:    lng,
+					RadiusMeters: int(radius),
+				}
+			}
+			return &rosterSchedule, nil
+		}
+	}
+
 	// Step 1+2: Try new flexible schedule system
 	query := `
 		SELECT es.id,
@@ -612,7 +669,7 @@ func ResolveEmployeeScheduleForDate(ctx context.Context, employeeID, date string
 	var locName, locAddress string
 	var lat, lng, radius float64
 
-	err := database.Pool.QueryRow(ctx, query, employeeID, date).Scan(
+	err = database.Pool.QueryRow(ctx, query, employeeID, date).Scan(
 		&s.ScheduleID, &s.StartTime, &s.EndTime, &s.BreakStart, &s.BreakEnd,
 		&s.IsRemote, &locID, &locName, &locAddress, &lat, &lng, &radius, &s.Source,
 	)
@@ -637,8 +694,24 @@ func ResolveEmployeeScheduleForDate(ctx context.Context, employeeID, date string
 	oldQuery := `
 		SELECT 
 			'work_schedule' as source,
-			COALESCE(ws.monday_start::text, '08:00'),
-			COALESCE(ws.monday_end::text, '17:00'),
+			CASE
+				WHEN EXTRACT(DOW FROM $2::date) = 0 THEN COALESCE(ws.sunday_start::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 1 THEN COALESCE(ws.monday_start::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 2 THEN COALESCE(ws.tuesday_start::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 3 THEN COALESCE(ws.wednesday_start::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 4 THEN COALESCE(ws.thursday_start::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 5 THEN COALESCE(ws.friday_start::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 6 THEN COALESCE(ws.saturday_start::text, '')
+			END AS start_time,
+			CASE
+				WHEN EXTRACT(DOW FROM $2::date) = 0 THEN COALESCE(ws.sunday_end::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 1 THEN COALESCE(ws.monday_end::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 2 THEN COALESCE(ws.tuesday_end::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 3 THEN COALESCE(ws.wednesday_end::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 4 THEN COALESCE(ws.thursday_end::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 5 THEN COALESCE(ws.friday_end::text, '')
+				WHEN EXTRACT(DOW FROM $2::date) = 6 THEN COALESCE(ws.saturday_end::text, '')
+			END AS end_time,
 			COALESCE(ws.break_start::text, '12:00'),
 			COALESCE(ws.break_end::text, '13:00'),
 			COALESCE(e.is_remote, FALSE),
@@ -651,7 +724,7 @@ func ResolveEmployeeScheduleForDate(ctx context.Context, employeeID, date string
 		WHERE e.id::text = $1 AND e.deleted_at IS NULL
 		LIMIT 1
 	`
-	err = database.Pool.QueryRow(ctx, oldQuery, employeeID).Scan(
+	err = database.Pool.QueryRow(ctx, oldQuery, employeeID, date).Scan(
 		&s.Source, &s.StartTime, &s.EndTime, &s.BreakStart, &s.BreakEnd,
 		&s.IsRemote, &locID, &locName, &locAddress, &lat, &lng, &radius,
 	)
@@ -672,7 +745,24 @@ func ResolveEmployeeScheduleForDate(ctx context.Context, employeeID, date string
 		// Step 4: Fallback to departments
 		deptQuery := `
 			SELECT 'department_schedule' as source,
-				COALESCE(ws.monday_start::text, '08:00'), COALESCE(ws.monday_end::text, '17:00'),
+				CASE
+					WHEN EXTRACT(DOW FROM $2::date) = 0 THEN COALESCE(ws.sunday_start::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 1 THEN COALESCE(ws.monday_start::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 2 THEN COALESCE(ws.tuesday_start::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 3 THEN COALESCE(ws.wednesday_start::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 4 THEN COALESCE(ws.thursday_start::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 5 THEN COALESCE(ws.friday_start::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 6 THEN COALESCE(ws.saturday_start::text, '')
+				END AS start_time,
+				CASE
+					WHEN EXTRACT(DOW FROM $2::date) = 0 THEN COALESCE(ws.sunday_end::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 1 THEN COALESCE(ws.monday_end::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 2 THEN COALESCE(ws.tuesday_end::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 3 THEN COALESCE(ws.wednesday_end::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 4 THEN COALESCE(ws.thursday_end::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 5 THEN COALESCE(ws.friday_end::text, '')
+					WHEN EXTRACT(DOW FROM $2::date) = 6 THEN COALESCE(ws.saturday_end::text, '')
+				END AS end_time,
 				COALESCE(ws.break_start::text, '12:00'), COALESCE(ws.break_end::text, '13:00'),
 				COALESCE(e.is_remote, FALSE),
 				al.id::text, COALESCE(al.name, ''), COALESCE(al.address, ''),
@@ -684,7 +774,7 @@ func ResolveEmployeeScheduleForDate(ctx context.Context, employeeID, date string
 			WHERE e.id::text = $1 AND e.deleted_at IS NULL
 			LIMIT 1
 		`
-		err = database.Pool.QueryRow(ctx, deptQuery, employeeID).Scan(
+		err = database.Pool.QueryRow(ctx, deptQuery, employeeID, date).Scan(
 			&s.Source, &s.StartTime, &s.EndTime, &s.BreakStart, &s.BreakEnd,
 			&s.IsRemote, &locID, &locName, &locAddress, &lat, &lng, &radius,
 		)

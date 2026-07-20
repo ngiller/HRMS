@@ -24,6 +24,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 		status: string;
 		created_at: string;
 		swap_partner_confirmed: boolean;
+		approval_trail?: string;
 	};
 
 	type FormData = {
@@ -47,6 +48,17 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	let statusFilter = $state('');
 	let isLoading = $state(true);
 	let errorMessage = $state('');
+	let searchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
+
+	function onSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			searchQuery = target.value;
+			gridApi?.setGridOption('quickFilterText', target.value);
+		}, 400);
+	}
 
 	let showForm = $state(false);
 	let formTitle = $state('');
@@ -265,7 +277,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			]);
 			scheduleOptions = schedRes.data || [];
 			employeeOptions = empRes.data || [];
-		} catch (_) {}
+		} catch (_) { /* silently fail */ }
 	}
 
 	async function load() {
@@ -371,12 +383,23 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 		finally { isSaving = false; }
 	}
 
+	function parseApprovalTrail(trail: string): any[] {
+		try {
+			const parsed = JSON.parse(trail);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
 	function formatDate(dateStr: string): string {
 		if (!dateStr) return '-';
 		return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
 </script>
+
+<!-- eslint-disable svelte/no-useless-children-snippet -->
 
 <div class="w-full">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -394,9 +417,14 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 
 	{#if !showForm}
 		<div class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+			<div class="relative flex-1 max-w-md">
+				<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+				<input type="search" value={searchQuery} placeholder="Cari permintaan shift..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+			</div>
+			
 			<div class="flex flex-wrap items-center gap-2">
 				<button onclick={() => { statusFilter = ''; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {!statusFilter ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">Semua</button>
-				{#each Object.entries(statusLabels) as [key, label]}
+				{#each Object.entries(statusLabels) as [key, label] (key)}
 					<button onclick={() => { statusFilter = key; page = 1; load(); }} class="px-3 py-1.5 text-xs font-medium rounded-lg border transition cursor-pointer {statusFilter === key ? 'bg-[#1A56DB] text-white border-[#1A56DB]' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{label}</button>
 				{/each}
 			</div>
@@ -432,14 +460,14 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						<label for="shift-current" class="block text-sm font-medium text-gray-700 mb-1.5">Jadwal Saat Ini</label>
 						<select id="shift-current" bind:value={form.current_schedule_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 							<option value="">-- Pilih (opsional) --</option>
-							{#each scheduleOptions as s}<option value={s.id}>{s.name}</option>{/each}
+							{#each scheduleOptions as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
 						</select>
 					</div>
 					<div>
 						<label for="shift-requested" class="block text-sm font-medium text-gray-700 mb-1.5">Jadwal yang Diminta <span class="text-red-500">*</span></label>
 						<select id="shift-requested" bind:value={form.requested_schedule_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 							<option value="">-- Pilih --</option>
-							{#each scheduleOptions as s}<option value={s.id}>{s.name}</option>{/each}
+							{#each scheduleOptions as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
 						</select>
 					</div>
 				</div>
@@ -451,7 +479,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 								<label for="shift-partner" class="block text-sm font-medium text-gray-700 mb-1.5">Partner Karyawan <span class="text-red-500">*</span></label>
 								<select id="shift-partner" bind:value={form.swap_partner_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 									<option value="">-- Pilih --</option>
-									{#each employeeOptions.filter(e => e.full_name) as e}<option value={e.id}>{e.full_name} ({e.employee_id})</option>{/each}
+									{#each employeeOptions.filter(e => e.full_name) as e (e.id)}<option value={e.id}>{e.full_name} ({e.employee_id})</option>{/each}
 								</select>
 							</div>
 							<div>
@@ -462,7 +490,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 								<label for="shift-partner-sched" class="block text-sm font-medium text-gray-700 mb-1.5">Jadwal Partner (opsional)</label>
 								<select id="shift-partner-sched" bind:value={form.swap_partner_schedule_id} class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white">
 									<option value="">-- Pilih (opsional) --</option>
-									{#each scheduleOptions as s}<option value={s.id}>{s.name}</option>{/each}
+									{#each scheduleOptions as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
 								</select>
 							</div>
 						</div>
@@ -493,6 +521,54 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				{#if isDetailLoading}
 					<div class="animate-pulse space-y-3 p-4"><div class="h-4 bg-gray-100 rounded w-48"></div><div class="h-4 bg-gray-50 rounded w-64"></div><div class="h-4 bg-gray-50 rounded w-40"></div></div>
 				{:else if detailData}
+					{#if detailData.approval_trail && detailData.approval_trail !== '[]' && detailData.approval_trail !== ''}
+						{@const trail = parseApprovalTrail(detailData.approval_trail)}
+						<div class="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl p-4 border border-indigo-100 dark:border-indigo-900/30 mb-6">
+							<div class="flex items-center gap-2 mb-3">
+								<svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+								<h3 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Progress Approval</h3>
+							</div>
+							<div class="space-y-2">
+								{#each trail as step (step)}
+									{@const isPending = step.status === 'pending'}
+									{@const isApproved = step.status === 'approved'}
+									{@const isRejected = step.status === 'rejected'}
+									<div class="flex items-center gap-3">
+										<div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {isApproved ? 'bg-emerald-100 text-emerald-600' : isRejected ? 'bg-red-100 text-red-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}">
+											{#if isApproved}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+											{:else if isRejected}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+											{:else}
+												<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+											{/if}
+										</div>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm font-medium {isApproved ? 'text-emerald-700 dark:text-emerald-300' : isRejected ? 'text-red-700 dark:text-red-300' : 'text-gray-700 dark:text-gray-300'}">
+												{step.approver_name || 'Approver'}
+												<span class="text-xs font-normal text-gray-400">Level {step.level || step.step}</span>
+											</p>
+											{#if step.note}
+												<p class="text-xs text-gray-400 truncate">{step.note}{#if step.date} &middot; {step.date || '-'}{/if}</p>
+											{/if}
+										</div>
+										<div>
+											{#if isApproved}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Disetujui</span>
+											{:else if isRejected}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Ditolak</span>
+											{:else}
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200 animate-pulse">Menunggu</span>
+											{/if}
+										</div>
+									</div>
+									{#if step !== trail[trail.length - 1]}
+										<div class="ml-3.5 border-l-2 border-gray-200 dark:border-gray-700 h-3"></div>
+									{/if}
+								{/each}
+							</div>
+						</div>
+					{/if}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Informasi Permintaan</h3>
@@ -525,7 +601,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	{:else}
 		<div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 			{#if isLoading}
-				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
+				<div class="p-6 animate-pulse"><div class="space-y-3">{#each [1,2,3,4,5] as _, i (i)}<div class="flex items-center gap-4 py-2"><div class="flex-1 space-y-1.5"><div class="h-4 bg-gray-100 rounded w-44"></div><div class="h-3 bg-gray-50 rounded w-28"></div></div><div class="h-6 bg-gray-100 rounded-full w-20"></div><div class="h-8 bg-gray-100 rounded w-24"></div></div>{/each}</div></div>
 			{:else if errorMessage}
 				<div class="py-16 text-center">
 					<div class="w-14 h-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center"><svg class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div>
@@ -546,7 +622,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				</div>
 				<PullToRefresh onRefresh={load}>
 				<div class="md:hidden space-y-3">
-					{#each items as item}
+					{#each items as item (item)}
 						<SwipeActions
 							onApprove={item.status === 'pending' && hasPermission('shift_change', 'update') ? () => handleApprove(item.id) : undefined}
 							onReject={item.status === 'pending' && hasPermission('shift_change', 'update') ? () => openReject(item.id) : undefined}
@@ -595,7 +671,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
@@ -610,9 +686,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 </div>
 
 <AnimatedPresence show={showRejectModal} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
+			<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tolak permintaan shift" class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
 			<div class="px-6 py-6">

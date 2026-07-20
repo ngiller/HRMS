@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"hrms-backend/internal/database"
+	"hrms-backend/internal/repository"
 )
 
 type ReportService struct{}
@@ -210,19 +212,40 @@ func (s *ReportService) PayrollSummary(ctx context.Context, year int) (*PayrollS
 func (s *ReportService) AttendanceSummary(ctx context.Context, year, month int, departmentID string) (*AttendanceSummaryReport, error) {
 	report := &AttendanceSummaryReport{}
 
+	cutoffStartDay := 26
+	cutoffEndDay := 25
+	c, _ := repository.GetCompany(ctx)
+	if c != nil && c.HRSettings.CutoffStartDay != nil {
+		cutoffStartDay = *c.HRSettings.CutoffStartDay
+	}
+	if c != nil && c.HRSettings.CutoffEndDay != nil {
+		cutoffEndDay = *c.HRSettings.CutoffEndDay
+	}
+
+	var dateFrom, dateTo string
+	if month > 0 && year > 0 {
+		startDate := time.Date(year, time.Month(month-1), cutoffStartDay, 0, 0, 0, 0, time.UTC)
+		endDate := time.Date(year, time.Month(month), cutoffEndDay, 23, 59, 59, 0, time.UTC)
+		dateFrom = startDate.Format("2006-01-02")
+		dateTo = endDate.Format("2006-01-02")
+	} else if year > 0 {
+		dateFrom = fmt.Sprintf("%d-01-01", year)
+		dateTo = fmt.Sprintf("%d-12-31", year)
+	}
+
 	where := "WHERE ar.deleted_at IS NULL"
 	args := []interface{}{}
 	argIdx := 0
 
-	if year > 0 {
+	if dateFrom != "" {
 		argIdx++
-		where += fmt.Sprintf(" AND EXTRACT(YEAR FROM ar.check_in) = $%d", argIdx)
-		args = append(args, year)
+		where += fmt.Sprintf(" AND ar.date >= $%d", argIdx)
+		args = append(args, dateFrom)
 	}
-	if month > 0 {
+	if dateTo != "" {
 		argIdx++
-		where += fmt.Sprintf(" AND EXTRACT(MONTH FROM ar.check_in) = $%d", argIdx)
-		args = append(args, month)
+		where += fmt.Sprintf(" AND ar.date <= $%d", argIdx)
+		args = append(args, dateTo)
 	}
 	if departmentID != "" {
 		argIdx++
@@ -245,10 +268,10 @@ func (s *ReportService) AttendanceSummary(ctx context.Context, year, month int, 
 
 	// Average work hours
 	hourQuery := fmt.Sprintf(`
-		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (check_out - check_in))/3600), 0)
+		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (check_out_time - check_in_time))/3600), 0)
 		FROM attendance_records ar
 		LEFT JOIN employees e ON e.id = ar.employee_id
-		%s AND ar.check_out IS NOT NULL
+		%s AND ar.check_out_time IS NOT NULL
 	`, where)
 	database.Pool.QueryRow(ctx, hourQuery, args...).Scan(&report.AverageWorkHours)
 
@@ -338,19 +361,40 @@ func (s *ReportService) LeaveSummary(ctx context.Context, year int, departmentID
 func (s *ReportService) OvertimeSummary(ctx context.Context, year, month int) (*OvertimeSummaryReport, error) {
 	report := &OvertimeSummaryReport{}
 
+	cutoffStartDay := 26
+	cutoffEndDay := 25
+	c, _ := repository.GetCompany(ctx)
+	if c != nil && c.HRSettings.CutoffStartDay != nil {
+		cutoffStartDay = *c.HRSettings.CutoffStartDay
+	}
+	if c != nil && c.HRSettings.CutoffEndDay != nil {
+		cutoffEndDay = *c.HRSettings.CutoffEndDay
+	}
+
+	var dateFrom, dateTo string
+	if month > 0 && year > 0 {
+		startDate := time.Date(year, time.Month(month-1), cutoffStartDay, 0, 0, 0, 0, time.UTC)
+		endDate := time.Date(year, time.Month(month), cutoffEndDay, 23, 59, 59, 0, time.UTC)
+		dateFrom = startDate.Format("2006-01-02")
+		dateTo = endDate.Format("2006-01-02")
+	} else if year > 0 {
+		dateFrom = fmt.Sprintf("%d-01-01", year)
+		dateTo = fmt.Sprintf("%d-12-31", year)
+	}
+
 	where := "WHERE otr.deleted_at IS NULL"
 	args := []interface{}{}
 	argIdx := 0
 
-	if year > 0 {
+	if dateFrom != "" {
 		argIdx++
-		where += fmt.Sprintf(" AND EXTRACT(YEAR FROM otr.created_at) = $%d", argIdx)
-		args = append(args, year)
+		where += fmt.Sprintf(" AND otr.created_at::date >= $%d", argIdx)
+		args = append(args, dateFrom)
 	}
-	if month > 0 {
+	if dateTo != "" {
 		argIdx++
-		where += fmt.Sprintf(" AND EXTRACT(MONTH FROM otr.created_at) = $%d", argIdx)
-		args = append(args, month)
+		where += fmt.Sprintf(" AND otr.created_at::date <= $%d", argIdx)
+		args = append(args, dateTo)
 	}
 
 	query := fmt.Sprintf(`

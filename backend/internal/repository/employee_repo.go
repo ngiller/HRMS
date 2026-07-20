@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"hrms-backend/internal/database"
 	"hrms-backend/internal/models"
@@ -15,6 +16,19 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// GetEmployeeByName looks up an employee by full_name (case-insensitive) and returns their ID.
+func GetEmployeeByName(ctx context.Context, name string) (*string, error) {
+	var id string
+	err := database.Pool.QueryRow(ctx, `SELECT id::text FROM employees WHERE LOWER(full_name) = LOWER($1) AND deleted_at IS NULL LIMIT 1`, name).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &id, nil
+}
 
 func ListEmployees(ctx context.Context, page, perPage int, search, departmentID, status string, includeDeleted bool) ([]models.EmployeeSummary, int, error) {
 	// Count total
@@ -45,9 +59,15 @@ func ListEmployees(ctx context.Context, page, perPage int, search, departmentID,
 		args = append(args, departmentID)
 	}
 	if status != "" {
-		argIdx++
-		filters = append(filters, fmt.Sprintf("e.employment_status::text = $%d", argIdx))
-		args = append(args, status)
+		if status == "active" {
+			filters = append(filters, "e.is_active = true")
+		} else if status == "inactive" {
+			filters = append(filters, "e.is_active = false")
+		} else {
+			argIdx++
+			filters = append(filters, fmt.Sprintf("e.employment_status::text = $%d", argIdx))
+			args = append(args, status)
+		}
 	}
 
 	for _, f := range filters {
@@ -125,12 +145,16 @@ func UpdateEmployeeWorkSchedule(ctx context.Context, id, workScheduleID, userID 
 			department_id,
 			COALESCE((SELECT name FROM departments WHERE id = department_id), ''),
 			work_schedule_id, COALESCE((SELECT name FROM work_schedules WHERE id = work_schedule_id), ''),
+			approval_line_id,
+			COALESCE((SELECT full_name FROM employees WHERE id = approval_line_id), '') as approval_line_name,
 			COALESCE(phone, ''), COALESCE(address_domicile, ''), COALESCE(photo_url, ''),
 			COALESCE(decrypt_sensitive(encrypted_nik), ''),
 			COALESCE(decrypt_sensitive(encrypted_npwp), ''),
 			COALESCE(decrypt_sensitive(encrypted_bank_name), ''),
 			COALESCE(decrypt_sensitive(encrypted_bank_account), ''),
 			COALESCE(decrypt_sensitive(encrypted_address_ktp), ''),
+			COALESCE(ptkp_status::text, ''),
+			is_pregnant,
 			base_salary,
 			daily_wage,
 			last_login_at, is_locked, locked_until, created_at, updated_at
@@ -179,12 +203,16 @@ func GetEmployeeByIDRepo(ctx context.Context, id string) (*models.Employee, erro
 			e.position_id, COALESCE(p.name, ''),
 			e.department_id, COALESCE(d.name, ''),
 			e.work_schedule_id, COALESCE(ws.name, ''),
+			e.approval_line_id,
+			COALESCE((SELECT full_name FROM employees WHERE id = e.approval_line_id), '') as approval_line_name,
 			COALESCE(e.phone, ''), COALESCE(e.address_domicile, ''), COALESCE(e.photo_url, ''),
 			COALESCE(decrypt_sensitive(e.encrypted_nik), ''),
 			COALESCE(decrypt_sensitive(e.encrypted_npwp), ''),
 			COALESCE(decrypt_sensitive(e.encrypted_bank_name), ''),
 			COALESCE(decrypt_sensitive(e.encrypted_bank_account), ''),
 			COALESCE(decrypt_sensitive(e.encrypted_address_ktp), ''),
+			COALESCE(e.ptkp_status::text, ''),
+			e.is_pregnant,
 			e.base_salary,
 			e.daily_wage,
 			e.last_login_at, e.is_locked, e.locked_until,
@@ -373,6 +401,40 @@ func GetDashboardStats(ctx context.Context) (*models.DashboardResponse, error) {
 		}
 	}
 
+	// Absent today: active employees with no check-in today + leave info
+	absentRows, err := database.Pool.Query(ctx, `
+		SELECT e.id::text, e.full_name, COALESCE(d.name, '') as dept_name,
+			CASE
+				WHEN lt.name IS NOT NULL THEN LOWER(lt.name)
+				ELSE 'tanpa_keterangan'
+			END as absence_reason,
+			COALESCE(lr.reason, '')
+		FROM employees e
+		LEFT JOIN departments d ON e.department_id = d.id
+		LEFT JOIN leave_requests lr ON lr.employee_id = e.id
+			AND CURRENT_DATE BETWEEN lr.start_date AND lr.end_date
+			AND lr.status = 'approved'
+		LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
+		WHERE e.deleted_at IS NULL AND e.is_active = TRUE
+		AND NOT EXISTS (
+			SELECT 1 FROM attendance_records ar
+			WHERE ar.employee_id = e.id AND ar.date = CURRENT_DATE
+		)
+		ORDER BY e.full_name ASC
+	`)
+	if err == nil {
+		defer absentRows.Close()
+		for absentRows.Next() {
+			var ae models.AbsentEmployee
+			if err := absentRows.Scan(&ae.EmployeeID, &ae.FullName, &ae.DepartmentName, &ae.AbsenceReason, &ae.LeaveReason); err == nil {
+				resp.AbsentToday = append(resp.AbsentToday, ae)
+			}
+		}
+	}
+	if resp.AbsentToday == nil {
+		resp.AbsentToday = []models.AbsentEmployee{}
+	}
+
 	return resp, nil
 }
 
@@ -385,8 +447,10 @@ func CreateEmployee(ctx context.Context, req *models.CreateEmployeeRequest, user
 	query := `
 		INSERT INTO employees (employee_id, full_name, email, password_hash, gender,
 			birth_place, birth_date, religion, marital_status, join_date,
-			employment_status, base_salary, daily_wage, phone, address_domicile, role_id, position_id, department_id,
-			encrypted_nik, encrypted_npwp, encrypted_bank_name, encrypted_bank_account, encrypted_address_ktp)
+			employment_status, base_salary, daily_wage, phone, address_domicile,
+			role_id, position_id, department_id,
+			encrypted_nik, encrypted_npwp, encrypted_bank_name, encrypted_bank_account, encrypted_address_ktp,
+			blood_type, ptkp_status, end_date, position_grade_id, approval_line_id)
 		VALUES ($1, $2, $3, $4, $5::gender_type,
 			NULLIF($6, ''), NULLIF(NULLIF($7, ''), 'null')::date, NULLIF($8, '')::religion_type,
 			NULLIF($9, '')::marital_status, NULLIF($10, '')::date,
@@ -395,7 +459,9 @@ func CreateEmployee(ctx context.Context, req *models.CreateEmployeeRequest, user
 			NULLIF(NULLIF($18, ''), 'null')::uuid,
 			encrypt_sensitive(NULLIF($19, '')), encrypt_sensitive(NULLIF($20, '')),
 			encrypt_sensitive(NULLIF($21, '')), encrypt_sensitive(NULLIF($22, '')),
-			encrypt_sensitive(NULLIF($23, '')))
+			encrypt_sensitive(NULLIF($23, '')),
+			NULLIF($24, ''), NULLIF($25, '')::ptkp_status, NULLIF(NULLIF($26, ''), 'null')::date,
+			NULLIF(NULLIF($27, ''), 'null')::uuid, NULLIF(NULLIF($28, ''), 'null')::uuid)
 		RETURNING id, employee_id, full_name, email, password_hash,
 			gender::text, COALESCE(birth_place, ''), birth_date, COALESCE(religion::text, ''),
 			COALESCE(marital_status::text, ''), join_date, employment_status::text, is_active,
@@ -404,12 +470,16 @@ func CreateEmployee(ctx context.Context, req *models.CreateEmployeeRequest, user
 			department_id,
 			COALESCE((SELECT name FROM departments WHERE id = department_id), ''),
 			work_schedule_id, COALESCE((SELECT name FROM work_schedules WHERE id = work_schedule_id), ''),
+			approval_line_id,
+			COALESCE((SELECT full_name FROM employees WHERE id = approval_line_id), '') as approval_line_name,
 			COALESCE(phone, ''), COALESCE(address_domicile, ''), COALESCE(photo_url, ''),
 			COALESCE(decrypt_sensitive(encrypted_nik), ''),
 			COALESCE(decrypt_sensitive(encrypted_npwp), ''),
 			COALESCE(decrypt_sensitive(encrypted_bank_name), ''),
 			COALESCE(decrypt_sensitive(encrypted_bank_account), ''),
 			COALESCE(decrypt_sensitive(encrypted_address_ktp), ''),
+			COALESCE(ptkp_status::text, ''),
+			is_pregnant,
 			base_salary,
 			daily_wage,
 			last_login_at, is_locked, locked_until, created_at, updated_at
@@ -432,6 +502,7 @@ func CreateEmployee(ctx context.Context, req *models.CreateEmployeeRequest, user
 			baseSalaryArg, dailyWageArg,
 			req.Phone, req.Address, req.RoleID, req.PositionID, req.DepartmentID,
 			req.NIK, req.NPWP, req.BankName, req.BankAccount, req.AddressKTP,
+			req.BloodType, req.PTKPStatus, req.EndDate, req.PositionGradeID, req.ApprovalLineID,
 		)
 		var scanErr error
 		employee, scanErr = scanEmployee(row)
@@ -575,6 +646,14 @@ func UpdateEmployee(ctx context.Context, id string, req *models.UpdateEmployeeRe
 		sets = append(sets, fmt.Sprintf("work_schedule_id = NULLIF($%d, '')::uuid", argIdx))
 		args = append(args, req.WorkScheduleID)
 	}
+	if req.ApprovalLineID != nil {
+		argIdx++
+		sets = append(sets, fmt.Sprintf("approval_line_id = NULLIF($%d, '')::uuid", argIdx))
+		args = append(args, *req.ApprovalLineID)
+	}
+	if req.IsPregnant != nil {
+		addSet("is_pregnant", *req.IsPregnant)
+	}
 
 	if len(sets) == 0 {
 		return nil, errors.New("tidak ada data yang diubah")
@@ -592,12 +671,16 @@ func UpdateEmployee(ctx context.Context, id string, req *models.UpdateEmployeeRe
 			department_id,
 			COALESCE((SELECT name FROM departments WHERE id = department_id), ''),
 			work_schedule_id, COALESCE((SELECT name FROM work_schedules WHERE id = work_schedule_id), ''),
+			approval_line_id,
+			COALESCE((SELECT full_name FROM employees WHERE id = approval_line_id), '') as approval_line_name,
 			COALESCE(phone, ''), COALESCE(address_domicile, ''), COALESCE(photo_url, ''),
 			COALESCE(decrypt_sensitive(encrypted_nik), ''),
 			COALESCE(decrypt_sensitive(encrypted_npwp), ''),
 			COALESCE(decrypt_sensitive(encrypted_bank_name), ''),
 			COALESCE(decrypt_sensitive(encrypted_bank_account), ''),
 			COALESCE(decrypt_sensitive(encrypted_address_ktp), ''),
+			COALESCE(ptkp_status::text, ''),
+			is_pregnant,
 			base_salary,
 			daily_wage,
 			last_login_at, is_locked, locked_until, created_at, updated_at
@@ -1119,6 +1202,127 @@ func ListEmployeesForExport(ctx context.Context) ([]models.EmployeeSummary, erro
 		)
 		if err != nil {
 			return nil, err
+		}
+		employees = append(employees, emp)
+	}
+	return employees, nil
+}
+
+func ListEmployeesForExportFull(ctx context.Context) ([]models.EmployeeExportFull, error) {
+	query := `
+		SELECT
+			COALESCE(e.employee_id, ''),
+			COALESCE(e.full_name, ''),
+			'', -- barcode
+			COALESCE(d.name, ''), -- organization
+			COALESCE(p.name, ''), -- job position
+			COALESCE(pg.name, ''), -- job level (grade name)
+			COALESCE(e.join_date::text, ''),
+			COALESCE(e.resigned_at::text, ''),
+			COALESCE(e.employment_status::text, ''),
+			COALESCE(e.end_date::text, ''),
+			'', -- sign date
+			COALESCE(e.email, ''),
+			COALESCE(e.birth_date::text, ''),
+			'', -- age (computed)
+			COALESCE(e.birth_place, ''),
+			COALESCE(decrypt_sensitive(e.encrypted_address_ktp), ''),
+			COALESCE(e.address_domicile, ''),
+			COALESCE(decrypt_sensitive(e.encrypted_npwp), ''),
+			COALESCE(e.ptkp_status::text, ''),
+			'', -- employee tax status
+			COALESCE(e.tax_method::text, ''),
+			COALESCE(decrypt_sensitive(e.encrypted_bank_name), ''),
+			COALESCE(decrypt_sensitive(e.encrypted_bank_account), ''),
+			COALESCE(e.full_name, ''), -- bank account holder
+			'', -- bpjs tk
+			'', -- bpjs kesehatan
+			COALESCE(decrypt_sensitive(e.encrypted_nik), ''),
+			COALESCE(e.phone, ''),
+			'', -- phone
+			'', -- branch name
+			'', -- parent branch name
+			COALESCE(e.religion::text, ''),
+			COALESCE(e.gender::text, ''),
+			COALESCE(e.marital_status::text, ''),
+			COALESCE(e.blood_type, ''),
+			'', -- nationality code
+			'', -- currency
+			'', -- length of service (computed)
+			'', -- payment schedule
+			COALESCE((SELECT full_name FROM employees WHERE id = e.approval_line_id), ''), -- approval line
+			'', -- manager
+			COALESCE(pg.name, ''), -- grade
+			'', -- class
+			CASE WHEN COALESCE(e.photo_url, '') != '' THEN 'true' ELSE 'false' END,
+			'', -- cost center
+			'', -- cost center category
+			'', -- sbu
+			COALESCE(decrypt_sensitive(e.encrypted_nik), ''), -- npwp baru
+			'', -- passport
+			'', -- passport expiration date
+			'', -- jenis dok referensi
+			'', -- nomor dok referensi
+			'', -- tanggal dok referensi
+			'', -- tin
+			''  -- ukuran baju
+		FROM employees e
+		LEFT JOIN departments d ON e.department_id = d.id
+		LEFT JOIN positions p ON e.position_id = p.id
+		LEFT JOIN position_grades pg ON e.position_grade_id = pg.id
+		WHERE e.deleted_at IS NULL
+		ORDER BY e.full_name ASC
+	`
+	rows, err := database.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var employees []models.EmployeeExportFull
+	for rows.Next() {
+		var emp models.EmployeeExportFull
+		err := rows.Scan(
+			&emp.EmployeeID, &emp.FullName, &emp.Barcode,
+			&emp.Organization, &emp.JobPosition, &emp.JobLevel,
+			&emp.JoinDate, &emp.ResignDate, &emp.StatusEmployee,
+			&emp.EndDate, &emp.SignDate,
+			&emp.Email, &emp.BirthDate, &emp.Age,
+			&emp.BirthPlace, &emp.CitizenIDAddress, &emp.ResidentialAddress,
+			&emp.NPWP, &emp.PTKPStatus, &emp.EmployeeTaxStatus,
+			&emp.TaxConfig,
+			&emp.BankName, &emp.BankAccount, &emp.BankAccountHolder,
+			&emp.BPJSTK, &emp.BPJSKesehatan, &emp.NIK,
+			&emp.MobilePhone, &emp.Phone,
+			&emp.BranchName, &emp.ParentBranchName,
+			&emp.Religion, &emp.Gender, &emp.MaritalStatus,
+			&emp.BloodType, &emp.NationalityCode, &emp.Currency,
+			&emp.LengthOfService, &emp.PaymentSchedule,
+			&emp.ApprovalLine, &emp.Manager, &emp.Grade,
+			&emp.Class, &emp.ProfilePicture,
+			&emp.CostCenter, &emp.CostCenterCategory, &emp.SBU,
+			&emp.NPWPBaru, &emp.Passport, &emp.PassportExpirationDate,
+			&emp.JenisDokReferensi, &emp.NomorDokReferensi, &emp.TanggalDokReferensi,
+			&emp.TIN, &emp.UkuranBaju,
+		)
+		if err != nil {
+			return nil, err
+		}
+		// Compute Age & Length of Service
+		if emp.BirthDate != "" {
+			if bd, err := time.Parse("2006-01-02", emp.BirthDate[:10]); err == nil {
+				age := int(time.Since(bd).Hours() / 24 / 365)
+				emp.Age = fmt.Sprintf("%d", age)
+			}
+		}
+		if emp.JoinDate != "" {
+			if jd, err := time.Parse("2006-01-02", emp.JoinDate[:10]); err == nil {
+				dur := time.Since(jd)
+				years := int(dur.Hours() / 24 / 365)
+				days := int(dur.Hours()/24) % 365
+				months := days / 30
+				emp.LengthOfService = fmt.Sprintf("%d Year %d Month %d Day", years, months, days%30)
+			}
 		}
 		employees = append(employees, emp)
 	}

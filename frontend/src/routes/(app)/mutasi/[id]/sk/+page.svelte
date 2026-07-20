@@ -333,10 +333,7 @@
 		button, .cursor-pointer {
 			display: none !important;
 		}
-		.shadow-sm, .shadow-2xl, .shadow {
-			box-shadow: none !important;
-		}
-		.rounded-xl, .rounded-lg, .rounded-2xl {
+		.rounded-xl, .rounded-lg {
 			border-radius: 0 !important;
 		}
 		.border {

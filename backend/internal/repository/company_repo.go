@@ -265,3 +265,122 @@ func UpdateEmployeeBPJSConfig(ctx context.Context, employeeID string, bpjsConfig
 
 	return nil
 }
+
+type EmployeeTaxConfig struct {
+	EmployeeID string            `json:"employee_id"`
+	TaxConfig  *models.TaxConfig `json:"tax_config"`
+}
+
+func GetEmployeeTaxConfig(ctx context.Context, employeeID string) (*EmployeeTaxConfig, error) {
+	query := `
+		SELECT id::text, tax_config
+		FROM employees
+		WHERE id::text = $1 AND deleted_at IS NULL
+	`
+
+	var cfg EmployeeTaxConfig
+	var taxBytes []byte
+
+	err := database.Pool.QueryRow(ctx, query, employeeID).Scan(&cfg.EmployeeID, &taxBytes)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("karyawan tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	if len(taxBytes) > 0 {
+		json.Unmarshal(taxBytes, &cfg.TaxConfig)
+	}
+
+	return &cfg, nil
+}
+
+func UpdateEmployeeTaxConfig(ctx context.Context, employeeID string, taxConfig *models.TaxConfig) error {
+	var query string
+	var args []interface{}
+
+	if taxConfig == nil {
+		query = `UPDATE employees SET tax_config = NULL, updated_at = NOW()
+			WHERE id::text = $1 AND deleted_at IS NULL`
+		args = []interface{}{employeeID}
+	} else {
+		taxJSON, err := json.Marshal(taxConfig)
+		if err != nil {
+			return err
+		}
+		query = `UPDATE employees SET tax_config = $1::jsonb, updated_at = NOW()
+			WHERE id::text = $2 AND deleted_at IS NULL`
+		args = []interface{}{string(taxJSON), employeeID}
+	}
+
+	tag, err := database.Pool.Exec(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("karyawan tidak ditemukan")
+	}
+
+	return nil
+}
+
+type EmployeeOvertimeConfig struct {
+	EmployeeID     string                 `json:"employee_id"`
+	OvertimeConfig *models.OvertimeConfig `json:"overtime_config"`
+}
+
+func GetEmployeeOvertimeConfig(ctx context.Context, employeeID string) (*EmployeeOvertimeConfig, error) {
+	query := `
+		SELECT id::text, overtime_config
+		FROM employees
+		WHERE id::text = $1 AND deleted_at IS NULL
+	`
+
+	var cfg EmployeeOvertimeConfig
+	var otBytes []byte
+
+	err := database.Pool.QueryRow(ctx, query, employeeID).Scan(&cfg.EmployeeID, &otBytes)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("karyawan tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	if len(otBytes) > 0 {
+		json.Unmarshal(otBytes, &cfg.OvertimeConfig)
+	}
+
+	return &cfg, nil
+}
+
+func UpdateEmployeeOvertimeConfig(ctx context.Context, employeeID string, otConfig *models.OvertimeConfig) error {
+	var query string
+	var args []interface{}
+
+	if otConfig == nil {
+		query = `UPDATE employees SET overtime_config = NULL, updated_at = NOW()
+			WHERE id::text = $1 AND deleted_at IS NULL`
+		args = []interface{}{employeeID}
+	} else {
+		otJSON, err := json.Marshal(otConfig)
+		if err != nil {
+			return err
+		}
+		query = `UPDATE employees SET overtime_config = $1::jsonb, updated_at = NOW()
+			WHERE id::text = $2 AND deleted_at IS NULL`
+		args = []interface{}{string(otJSON), employeeID}
+	}
+
+	tag, err := database.Pool.Exec(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("karyawan tidak ditemukan")
+	}
+
+	return nil
+}
+

@@ -35,41 +35,55 @@ type CreateApprovalWorkflowReq struct {
 	Description string `json:"description,omitempty"`
 }
 
+type UpdateApprovalWorkflowReq struct {
+	EntityType  string `json:"entity_type,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	IsActive    *bool  `json:"is_active,omitempty"`
+}
+
 // ─── Approval Workflow Step ────────────────────────────────────
 
 type ApprovalWorkflowStep struct {
-	ID              uuid.UUID  `json:"id"`
-	WorkflowID      uuid.UUID  `json:"workflow_id"`
-	StepOrder       int        `json:"step_order"`
-	ApproverType    string     `json:"approver_type"`    // 'approval_line', 'hr_manager', 'finance', 'director', 'department_head', 'specific_role'
-	ApproverRoleID  *uuid.UUID `json:"approver_role_id,omitempty"`
-	ConditionField  *string    `json:"condition_field,omitempty"`
-	ConditionOp     *string    `json:"condition_operator,omitempty"`
-	ConditionValue  *float64   `json:"condition_value,omitempty"`
-	EscalationHours int        `json:"escalation_hours"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	WorkflowID        uuid.UUID  `json:"workflow_id"`
+	StepOrder         int        `json:"step_order"`
+	ApproverType      string     `json:"approver_type"`    // 'approval_line', 'hr_manager', 'finance', 'director', 'department_head', 'specific_role', 'manager', 'specific_employee'
+	ApproverRoleID    *uuid.UUID `json:"approver_role_id,omitempty"`
+	ApproverEmployeeID *uuid.UUID `json:"approver_employee_id,omitempty"` // for specific_employee type
+	ApproverEmployeeName string  `json:"approver_employee_name,omitempty"`
+	StepMode          string     `json:"step_mode"`        // 'single' (default) or 'any' (parallel)
+	ConditionField    *string    `json:"condition_field,omitempty"`
+	ConditionOp       *string    `json:"condition_operator,omitempty"`
+	ConditionValue    *float64   `json:"condition_value,omitempty"`
+	EscalationHours   int        `json:"escalation_hours"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type CreateApprovalWorkflowStepReq struct {
-	WorkflowID      string   `json:"workflow_id"`
-	StepOrder       int      `json:"step_order"`
-	ApproverType    string   `json:"approver_type"`
-	ApproverRoleID  *string  `json:"approver_role_id,omitempty"`
-	ConditionField  *string  `json:"condition_field,omitempty"`
-	ConditionOp     *string  `json:"condition_operator,omitempty"`
-	ConditionValue  *float64 `json:"condition_value,omitempty"`
-	EscalationHours int      `json:"escalation_hours"`
+	WorkflowID        string   `json:"workflow_id"`
+	StepOrder         int      `json:"step_order"`
+	ApproverType      string   `json:"approver_type"`
+	ApproverRoleID    *string  `json:"approver_role_id,omitempty"`
+	ApproverEmployeeID *string `json:"approver_employee_id,omitempty"`
+	StepMode          string   `json:"step_mode,omitempty"`
+	ConditionField    *string  `json:"condition_field,omitempty"`
+	ConditionOp       *string  `json:"condition_operator,omitempty"`
+	ConditionValue    *float64 `json:"condition_value,omitempty"`
+	EscalationHours   int      `json:"escalation_hours"`
 }
 
 type UpdateApprovalWorkflowStepReq struct {
-	StepOrder       int      `json:"step_order"`
-	ApproverType    string   `json:"approver_type"`
-	ApproverRoleID  *string  `json:"approver_role_id,omitempty"`
-	ConditionField  *string  `json:"condition_field,omitempty"`
-	ConditionOp     *string  `json:"condition_operator,omitempty"`
-	ConditionValue  *float64 `json:"condition_value,omitempty"`
-	EscalationHours int      `json:"escalation_hours"`
+	StepOrder         int      `json:"step_order"`
+	ApproverType      string   `json:"approver_type"`
+	ApproverRoleID    *string  `json:"approver_role_id,omitempty"`
+	ApproverEmployeeID *string `json:"approver_employee_id,omitempty"`
+	StepMode          string   `json:"step_mode,omitempty"`
+	ConditionField    *string  `json:"condition_field,omitempty"`
+	ConditionOp       *string  `json:"condition_operator,omitempty"`
+	ConditionValue    *float64 `json:"condition_value,omitempty"`
+	EscalationHours   int      `json:"escalation_hours"`
 }
 
 // ─── Approval Request Tracking ─────────────────────────────────

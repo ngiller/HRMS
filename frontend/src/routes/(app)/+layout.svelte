@@ -11,6 +11,7 @@
   import { getAccessibleMenus, hasPermission, SIDEBAR_MENUS } from "$lib/permissions.js";
   import PWAInstallPrompt from "$lib/components/PWAInstallPrompt.svelte";
   import BottomTabBar from "$lib/components/BottomTabBar.svelte";
+  import Toast from "$lib/components/Toast.svelte";
 
   interface UserData {
     id: string;
@@ -116,12 +117,23 @@
   });
 
   function isActive(path: string): boolean {
+    if (!$page?.url) return false;
+    if (path.includes('?')) {
+      const parts = path.split('?');
+      const pathname = parts[0];
+      const params = new URLSearchParams(parts[1]);
+      if ($page.url.pathname !== pathname) return false;
+      for (const [key, val] of params.entries()) {
+        if ($page.url.searchParams.get(key) !== val) return false;
+      }
+      return true;
+    }
     return $page.url.pathname === path;
   }
 
   let dropdownOpen = $state(false);
   let notifDropdownOpen = $state(false);
-  let searchQuery = $state("");
+
   let menuSearchQuery = $state("");
   let unreadCount = $state(0);
   let recentNotifs = $state<any[]>([]);
@@ -130,7 +142,7 @@
   async function fetchNotifs() {
     try {
       if (!auth.isAuthenticated()) return;
-      const res = await notifications.list(1, 5);
+      const res = await notifications.list(1, 100);
       if (res.success) {
         recentNotifs = res.data.notifications || [];
         unreadCount = res.data.unread_count || 0;
@@ -152,7 +164,26 @@
 
   let sseConnected = $state(false);
 
-  function handleSSEApprovalEvent() {
+  function handleSSEApprovalEvent(data: any) {
+    const toast = (window as any).__toast;
+    
+    // Entity type labels
+    const entityLabels: Record<string, string> = {
+      leave: 'Cuti', overtime: 'Lembur', reimbursement: 'Reimbursement',
+      loan: 'Pinjaman', manual_attendance: 'Absensi Manual',
+      resign: 'Resign', mutation: 'Mutasi', shift_change: 'Shift',
+    };
+
+    // Show toast notification based on action
+    if (data?.action === 'new_pending' && toast?.add) {
+      const jenis = entityLabels[data.type] || '';
+      toast.add(`Ada pengajuan ${jenis} baru yang perlu disetujui!`, 'info');
+    } else if (data?.action === 'approved' && toast?.add) {
+      toast.add('Pengajuan Anda telah disetujui!', 'success');
+    } else if (data?.action === 'rejected' && toast?.add) {
+      toast.add('Pengajuan Anda ditolak.', 'error');
+    }
+
     // Refresh pending count in real-time when SSE event arrives
     fetchPendingCount();
     fetchNotifs();
@@ -169,7 +200,7 @@
         connectSSE(() => auth.getAccessToken() || '', {
           onEvent: (data) => {
             if (data && data.type === 'approval_update') {
-              handleSSEApprovalEvent();
+              handleSSEApprovalEvent(data.data);
             }
           },
           onConnected: () => { sseConnected = true; },
@@ -440,32 +471,10 @@
   <div class="flex-1 flex flex-col min-w-0">
     <!-- Topbar -->
     <header
-      class="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 shrink-0"
+      class="h-16 sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 shrink-0"
     >
-      <!-- Left: Search -->
-      <div class="relative">
-        <svg
-          class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="2"
-          stroke="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-          />
-        </svg>
-        <input
-          id="search-karyawan"
-          type="search"
-          bind:value={searchQuery}
-          class="w-72 pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-800 transition placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-gray-100"
-          placeholder="Cari karyawan..."
-        />
-      </div>
+      <!-- Left: Title or Breadcrumbs (Empty for now) -->
+      <div></div>
 
       <!-- Right: Notification + User -->
       <div class="flex items-center gap-4">
@@ -497,7 +506,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
             </svg>
             {#if unreadCount > 0}
-              <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-gray-900"></span>
+              <span class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold text-white bg-red-500 rounded-full border border-white/80 dark:border-gray-900 shadow-sm leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>
             {/if}
           </button>
 
@@ -512,9 +521,6 @@
             >
               <div class="p-3 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
                 <span class="font-semibold text-gray-900 dark:text-white text-sm">Notifikasi Baru</span>
-                {#if unreadCount > 0}
-                  <span class="text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">{unreadCount}</span>
-                {/if}
               </div>
               
               <div class="overflow-y-auto flex-1 divide-y divide-gray-50 dark:divide-gray-700/50">
@@ -683,12 +689,12 @@
 {:else}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-  class="md:hidden min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col"
+  class="md:hidden h-screen overflow-hidden bg-gray-50 dark:bg-gray-950 flex flex-col"
   onkeydown={() => {}}
 >
     <!-- Mobile Top Bar -- Clean, minimal -->
     <div
-      class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-b border-gray-200/70 dark:border-gray-800/70 px-4 h-14 flex items-center justify-between shrink-0 safe-area-top"
+      class="sticky top-0 z-40 bg-white/85 dark:bg-gray-900/85 backdrop-blur-md border-b border-gray-200/70 dark:border-gray-800/70 px-4 h-14 flex items-center justify-between shrink-0 safe-area-top"
     >
       <div class="flex items-center gap-2.5">
         <div class="w-7 h-7 bg-gradient-to-br from-[#1A56DB] to-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm shadow-blue-200">HR</div>
@@ -727,7 +733,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
           {#if unreadCount > 0}
-            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-900"></span>
+            <span class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold text-white bg-red-500 rounded-full ring-1 ring-white/80 dark:ring-gray-900 shadow-sm leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>
           {/if}
         </button>
 
@@ -803,7 +809,17 @@
 <!-- PWA Install Prompt -->
 <PWAInstallPrompt />
 
+<!-- Global Toast Notifications -->
+<Toast />
+
 <style>
+  :global(.hide-scrollbar) {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  :global(.hide-scrollbar::-webkit-scrollbar) {
+    display: none;
+  }
   :global(.dark .ag-theme-quartz) {
     --ag-foreground-color: #e5e7eb;
     --ag-background-color: #1f2937;

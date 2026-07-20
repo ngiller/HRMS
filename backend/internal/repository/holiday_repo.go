@@ -198,6 +198,16 @@ func DeleteHoliday(ctx context.Context, id, userID string) error {
 	})
 }
 
+// IsTodayHoliday checks if today is a company holiday
+func IsTodayHoliday(ctx context.Context) (bool, error) {
+	var count int
+	err := database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM company_holidays WHERE date = CURRENT_DATE AND is_active = TRUE`).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GetHolidaysByYear returns all holidays for a specific year
 func GetHolidaysByYear(ctx context.Context, year int) ([]models.CompanyHoliday, error) {
 	query := `

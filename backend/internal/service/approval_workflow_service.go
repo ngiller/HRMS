@@ -74,6 +74,13 @@ func (s *ApprovalWorkflowService) DeleteWorkflowStep(ctx context.Context, stepID
 	return repository.DeleteApprovalWorkflowStep(ctx, stepID)
 }
 
+func (s *ApprovalWorkflowService) UpdateWorkflow(ctx context.Context, workflowID string, req *models.UpdateApprovalWorkflowReq) (*models.ApprovalWorkflow, error) {
+	if workflowID == "" {
+		return nil, errors.New("ID workflow harus diisi")
+	}
+	return repository.UpdateApprovalWorkflow(ctx, workflowID, req)
+}
+
 func (s *ApprovalWorkflowService) DeleteWorkflow(ctx context.Context, workflowID string) error {
 	if workflowID == "" {
 		return errors.New("ID workflow harus diisi")
@@ -85,7 +92,7 @@ func (s *ApprovalWorkflowService) DeleteWorkflow(ctx context.Context, workflowID
 
 // ResolveWorkflowForRequest determines which steps apply to a request and creates tracking.
 // Called when a new request is created (e.g. leave, overtime).
-func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) (*models.ApprovalResult, error) {
+func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context, entityType, entityID, employeeID string) (*models.ApprovalResult, error) {
 	// Get active workflow
 	workflow, err := repository.GetActiveWorkflowByEntityType(ctx, entityType)
 	if err != nil {
@@ -102,6 +109,7 @@ func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context,
 	}
 
 	// Filter steps by condition
+	conditionValue, _ := s.getEntityConditionValue(ctx, entityType, entityID)
 	var applicableSteps []models.ApprovalWorkflowStep
 	for _, step := range allSteps {
 		if repository.EvaluateCondition(step, conditionValue) {
@@ -114,22 +122,149 @@ func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context,
 	}
 
 	// Create tracking
-	_, err = repository.CreateApprovalTracking(ctx, entityType, entityID, workflow.ID.String(), len(applicableSteps))
+	tracking, err := repository.CreateApprovalTracking(ctx, entityType, entityID, workflow.ID.String(), len(applicableSteps))
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat tracking approval: %w", err)
 	}
 
-	// Get the first approver
-	firstStep := applicableSteps[0]
-	approverID, approverName, err := repository.GetApproverByType(ctx, firstStep.ApproverType, employeeID, entityType)
-	if err != nil {
-		return nil, fmt.Errorf("gagal menentukan approver pertama: %w", err)
+	// Find the first resolvable approver by trying each applicable step in order
+	var approverID, approverName string
+	var resolvedStep *models.ApprovalWorkflowStep
+	for i := range applicableSteps {
+		step := applicableSteps[i]
+		var aID, aName string
+		var err error
+
+		if step.ApproverType == "specific_employee" {
+			// For specific_employee, the approver is stored directly on the step
+			if step.ApproverEmployeeID != nil {
+				aID = step.ApproverEmployeeID.String()
+				err = database.Pool.QueryRow(ctx,
+					`SELECT full_name FROM employees WHERE id = $1 AND deleted_at IS NULL`,
+					step.ApproverEmployeeID).Scan(&aName)
+			}
+		} else {
+			aID, aName, err = repository.GetApproverByType(ctx, step.ApproverType, employeeID, entityType)
+		}
+
+		if err == nil && aID != "" {
+			approverID = aID
+			approverName = aName
+			resolvedStep = &step
+			break
+		}
 	}
+	if resolvedStep == nil || approverID == "" {
+		// No approver could be resolved for any step — notify super admins and return generic result
+		s.notifySuperAdmins(ctx, entityType, entityID,
+			fmt.Sprintf("Pengajuan %s baru membutuhkan persetujuan. Tidak ada approver yang bisa ditentukan secara otomatis.", s.getEntityLabel(entityType)))
+		return &models.ApprovalResult{
+			Action:      "unresolved",
+			CurrentStep: 0,
+			TotalSteps:  len(applicableSteps),
+			Message:     "Tidak ada approver yang bisa ditentukan. Super Admin akan mendapatkan notifikasi.",
+		}, nil
+	}
+
+	stepMode := resolvedStep.StepMode
+	if stepMode == "" {
+		stepMode = "single"
+	}
+
+	// Update tracking current_step to match the resolved step
+	_ = repository.UpdateApprovalTrackingStep(ctx, tracking.ID.String(), int(resolvedStep.StepOrder), "pending")
+
+	notifRepo := repository.NewNotificationRepo()
+	entityLabel := s.getEntityLabel(entityType)
+
+	if stepMode == "any" {
+		// ========================================================
+		// PARALLEL MODE: Any matching approver can approve
+		// ========================================================
+		// Find ALL employees who match this approver type
+		allApprovers, err := repository.GetApproverIDsByType(ctx, resolvedStep.ApproverType, employeeID, entityType)
+		if err != nil || len(allApprovers) == 0 {
+			// Fallback: just use the single resolved approver
+			allApprovers = []struct{ ID string; Name string }{{ID: approverID, Name: approverName}}
+		}
+
+		// Initialize approval trail with role info instead of specific approver
+		approverNames := ""
+		for i, a := range allApprovers {
+			if i > 0 {
+				approverNames += ", "
+			}
+			approverNames += a.Name
+		}
+		initTrail := []map[string]interface{}{
+			{
+				"step":          resolvedStep.StepOrder,
+				"level":         1,
+				"step_mode":     "any",
+				"approver_role": resolvedStep.ApproverType,
+				"approver_list": approverNames,
+				"status":        "pending",
+				"note":          "",
+				"date":          nil,
+			},
+		}
+		trailJSON, _ := json.Marshal(initTrail)
+		_ = repository.UpdateApprovalTrail(ctx, entityType, entityID, string(trailJSON))
+
+		// Notify ALL matching approvers
+		for _, approver := range allApprovers {
+			n, _ := notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
+				UserID:           approver.ID,
+				NotificationType: "approval_request",
+				Title:            "Pengajuan Baru Perlu Disetujui",
+				Body:             fmt.Sprintf("Ada pengajuan %s baru. Siapa saja dari tim %s dapat menyetujuinya. Step %d dari %d.", entityLabel, s.getApproverLabel(resolvedStep.ApproverType), 1, len(applicableSteps)),
+				Data: map[string]any{
+					"type":       entityType,
+					"entity_id":  entityID,
+					"step":       1,
+					"totalSteps": len(applicableSteps),
+					"step_mode":  "any",
+				},
+			})
+			// Send push notification
+			if n != nil {
+				SendPushNotification(ctx, approver.ID, n)
+			}
+			if n != nil && GetSSEHub() != nil {
+				GetSSEHub().BroadcastToUser(approver.ID, SSEEvent{
+					Type: "approval_update",
+					Data: map[string]any{
+						"action":    "new_pending",
+						"userId":    approver.ID,
+						"step_mode": "any",
+					},
+				})
+			}
+			SendEmailForUser(ctx, approver.ID, "Pengajuan Baru: "+entityLabel,
+				fmt.Sprintf("Ada pengajuan %s baru yang perlu disetujui. Siapa saja dari tim %s dapat menyetujuinya.", entityLabel, s.getApproverLabel(resolvedStep.ApproverType)))
+		}
+
+		// Notify super admins
+		s.notifySuperAdmins(ctx, entityType, entityID,
+			fmt.Sprintf("Ada pengajuan %s baru. Siapa saja dari tim %s dapat menyetujui.", entityLabel, s.getApproverLabel(resolvedStep.ApproverType)))
+
+		return &models.ApprovalResult{
+			Action:       "pending",
+			CurrentStep:  int(resolvedStep.StepOrder),
+			TotalSteps:   len(applicableSteps),
+			NextApprover: s.getApproverLabel(resolvedStep.ApproverType),
+			Message:      fmt.Sprintf("Menunggu persetujuan dari tim %s", s.getApproverLabel(resolvedStep.ApproverType)),
+		}, nil
+	}
+
+	// ========================================================
+	// SINGLE MODE (default): Specific approver
+	// ========================================================
 
 	// Initialize approval trail
 	initTrail := []map[string]interface{}{
 		{
-			"step":          firstStep.StepOrder,
+			"step":          resolvedStep.StepOrder,
 			"level":         1,
 			"approver_id":   approverID,
 			"approver_name": approverName,
@@ -140,24 +275,24 @@ func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context,
 	}
 	trailJSON, _ := json.Marshal(initTrail)
 
-	_ = repository.UpdateApprovalTrail(ctx, entityType, entityID, string(trailJSON))
-
-	// Send notification to approver
-	notifRepo := repository.NewNotificationRepo()
-	entityLabel := s.getEntityLabel(entityType)
-	notifReq := &models.CreateNotificationRequest{
-		UserID:           approverID,
-		NotificationType: "approval_request",
-		Title:            "Pengajuan Baru Perlu Disetujui",
-		Body:             fmt.Sprintf("Ada pengajuan %s baru yang perlu Anda setujui. Step %d dari %d.", entityLabel, 1, len(applicableSteps)),
-		Data: map[string]any{
-			"type":       entityType,
-			"entity_id":  entityID,
-			"step":       1,
-			"totalSteps": len(applicableSteps),
-		},
-	}
-	n, _ := notifRepo.CreateNotification(ctx, notifReq)
+	_ = repository.UpdateApprovalTrail(ctx, entityType, entityID, string(trailJSON))		// Send notification to approver
+		notifReq := &models.CreateNotificationRequest{
+			UserID:           approverID,
+			NotificationType: "approval_request",
+			Title:            "Pengajuan Baru Perlu Disetujui",
+			Body:             fmt.Sprintf("Ada pengajuan %s baru yang perlu Anda setujui. Step %d dari %d.", entityLabel, 1, len(applicableSteps)),
+			Data: map[string]any{
+				"type":       entityType,
+				"entity_id":  entityID,
+				"step":       1,
+				"totalSteps": len(applicableSteps),
+			},
+		}
+		n, _ := notifRepo.CreateNotification(ctx, notifReq)
+		// Send push notification
+		if n != nil {
+			SendPushNotification(ctx, approverID, n)
+		}
 	// Broadcast SSE event to approver for real-time badge update
 	if n != nil && GetSSEHub() != nil {
 		GetSSEHub().BroadcastToUser(approverID, SSEEvent{
@@ -172,13 +307,72 @@ func (s *ApprovalWorkflowService) ResolveWorkflowForRequest(ctx context.Context,
 	SendEmailForUser(ctx, approverID, "Pengajuan Baru: "+entityLabel,
 		fmt.Sprintf("Ada pengajuan %s baru yang perlu Anda setujui.", entityLabel))
 
+	// Notify all super_admin users about this new request
+	s.notifySuperAdmins(ctx, entityType, entityID,
+		fmt.Sprintf("Ada pengajuan %s baru yang perlu disetujui. Approver: %s (Level 1).", entityLabel, approverName))
+
 	return &models.ApprovalResult{
 		Action:       "pending",
-		CurrentStep:  1,
+		CurrentStep:  int(resolvedStep.StepOrder),
 		TotalSteps:   len(applicableSteps),
 		NextApprover: approverName,
 		Message:      fmt.Sprintf("Menunggu approval %s", approverName),
 	}, nil
+}
+
+// notifySuperAdmins sends notifications and SSE alerts to all super_admin users
+func (s *ApprovalWorkflowService) notifySuperAdmins(ctx context.Context, entityType, entityID, message string) {
+	rows, err := database.Pool.Query(ctx, `
+		SELECT e.id::text FROM employees e
+		JOIN roles r ON r.id = e.role_id
+		WHERE r.slug = 'super_admin' AND e.deleted_at IS NULL
+	`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	notifRepo := repository.NewNotificationRepo()
+	entityLabel := s.getEntityLabel(entityType)
+	
+	for rows.Next() {
+		var saUserID string
+		if err := rows.Scan(&saUserID); err != nil {
+			continue
+		}
+
+		n, _ := notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
+			UserID:           saUserID,
+			NotificationType: "approval_request",
+			Title:            "Pengajuan Baru Perlu Disetujui",
+			Body:             message,
+			Data: map[string]any{
+				"type":      entityType,
+				"entity_id": entityID,
+			},
+		})
+
+		// Send push notification to super admin
+		if n != nil {
+			SendPushNotification(ctx, saUserID, n)
+		}
+
+		// Broadcast SSE event to super admin for real-time badge update
+		if n != nil && GetSSEHub() != nil {
+			GetSSEHub().BroadcastToUser(saUserID, SSEEvent{
+				Type: "approval_update",
+				Data: map[string]any{
+					"action": "new_pending",
+					"userId": saUserID,
+					"type":   entityType,
+				},
+			})
+		}
+
+		// Send email to super admin
+		SendEmailForUser(ctx, saUserID, "Pengajuan Baru: "+entityLabel,
+			fmt.Sprintf("Ada pengajuan %s baru yang perlu disetujui.", entityLabel))
+	}
 }
 
 // isSuperAdmin checks if the given user is a super_admin
@@ -248,38 +442,70 @@ func (s *ApprovalWorkflowService) ProcessApproval(ctx context.Context, entityTyp
 	currentStep := applicableSteps[currentStepIdx]
 
 	// Resolve the actual approver and their name
-	var expectedApproverID, expectedApproverName, requestorID string
+	var expectedApproverID, expectedApproverName, requestorID, actualApproverName string
+	isParallelMode := currentStep.StepMode == "any"
 
 	if isSuperAdmin {
 		// Super admin bypasses the approver verification entirely
 		// Use their own name for the trail
-		_ = database.Pool.QueryRow(ctx, `SELECT full_name FROM employees WHERE id::text = $1`, approverID).Scan(&expectedApproverName)
-		if expectedApproverName == "" {
-			expectedApproverName = approverID
+		_ = database.Pool.QueryRow(ctx, `SELECT full_name FROM employees WHERE id::text = $1`, approverID).Scan(&actualApproverName)
+		if actualApproverName == "" {
+			actualApproverName = approverID
 		}
 		// Get requestorID for notification purposes
 		requestorID, _ = repository.GetEntityRequestorID(ctx, entityType, entityID)
 		if requestorID == "" {
 			requestorID = entityID
 		}
-	} else {
-		// Get the requestor's employee ID to resolve approval_line correctly
+	} else if isParallelMode {
+		// PARALLEL MODE: Check if user matches the approver role
 		var err error
 		requestorID, err = repository.GetEntityRequestorID(ctx, entityType, entityID)
 		if err != nil {
 			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err)
 		}
 
-		expectedApproverID, expectedApproverName, err = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
+		// Verify user belongs to the matching role
+		if !s.isUserMatchingApproverRole(ctx, approverID, currentStep.ApproverType, requestorID, entityType) {
+			return nil, errors.New("anda tidak berwenang untuk melakukan approval ini")
+		}
+
+		// Get user's own name for the trail
+		_ = database.Pool.QueryRow(ctx, `SELECT full_name FROM employees WHERE id::text = $1`, approverID).Scan(&actualApproverName)
+		if actualApproverName == "" {
+			actualApproverName = approverID
+		}
+	} else {
+		// SINGLE MODE (default): Specific approver verification
+		var err error
+		requestorID, err = repository.GetEntityRequestorID(ctx, entityType, entityID)
 		if err != nil {
-			return nil, fmt.Errorf("gagal verifikasi approver: %w", err)
+			return nil, fmt.Errorf("gagal menentukan pengaju: %w", err)
+		}
+
+		if currentStep.ApproverType == "specific_employee" {
+			// For specific_employee, check the step's approver_employee_id directly
+			if currentStep.ApproverEmployeeID == nil {
+				return nil, errors.New("step approval tidak memiliki approver yang ditentukan")
+			}
+			expectedApproverID = currentStep.ApproverEmployeeID.String()
+			err = database.Pool.QueryRow(ctx,
+				`SELECT full_name FROM employees WHERE id = $1 AND deleted_at IS NULL`,
+				currentStep.ApproverEmployeeID).Scan(&expectedApproverName)
+			if err != nil {
+				return nil, errors.New("approver yang ditentukan tidak ditemukan")
+			}
+		} else {
+			expectedApproverID, expectedApproverName, err = repository.GetApproverByType(ctx, currentStep.ApproverType, requestorID, entityType)
+			if err != nil {
+				return nil, fmt.Errorf("gagal verifikasi approver: %w", err)
+			}
 		}
 		if expectedApproverID != approverID {
 			return nil, errors.New("anda tidak berwenang untuk melakukan approval ini")
 		}
+		actualApproverName = expectedApproverName
 	}
-
-	actualApproverName := expectedApproverName
 
 	// Execute approval in transaction
 	return s.processApprovalTx(ctx, entityType, entityID, approverID, action, note,
@@ -323,7 +549,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			// Notify requestor about rejection (notifications don't need to be transactional)
 			notifRepo := repository.NewNotificationRepo()
 			entityLabel := s.getEntityLabel(entityType)
-			_, _ = notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
+			nRej, _ := notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
 				UserID:           requestorID,
 				NotificationType: entityType + "_rejected",
 				Title:            entityLabel + " Ditolak",
@@ -335,6 +561,10 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 					"note":      note,
 				},
 			})
+			// Send push notification
+			if nRej != nil {
+				SendPushNotification(ctx, requestorID, nRej)
+			}
 			// Broadcast SSE event to requestor for real-time update
 			if GetSSEHub() != nil {
 				GetSSEHub().BroadcastToUser(requestorID, SSEEvent{
@@ -383,7 +613,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 			// Notify requestor about final approval
 			notifRepo := repository.NewNotificationRepo()
 			entityLabel := s.getEntityLabel(entityType)
-			_, _ = notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
+			nApp, _ := notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
 				UserID:           requestorID,
 				NotificationType: entityType + "_approved",
 				Title:            entityLabel + " Disetujui",
@@ -394,6 +624,10 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 					"status":    "approved",
 				},
 			})
+			// Send push notification
+			if nApp != nil {
+				SendPushNotification(ctx, requestorID, nApp)
+			}
 			// Broadcast SSE event to requestor for real-time update
 			if GetSSEHub() != nil {
 				GetSSEHub().BroadcastToUser(requestorID, SSEEvent{
@@ -420,7 +654,7 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 		// Notify requestor about current level approval
 		notifRepo := repository.NewNotificationRepo()
 		entityLabel := s.getEntityLabel(entityType)
-		_, _ = notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
+		nLvl, _ := notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
 			UserID:           requestorID,
 			NotificationType: entityType + "_level_approved",
 			Title:            entityLabel + " Disetujui Level " + fmt.Sprintf("%d", currentStepIdx+1),
@@ -432,6 +666,10 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 				"level":     currentStepIdx + 1,
 			},
 		})
+		// Send push notification
+		if nLvl != nil {
+			SendPushNotification(ctx, requestorID, nLvl)
+		}
 		// Broadcast SSE event to requestor for real-time update
 		if GetSSEHub() != nil {
 			GetSSEHub().BroadcastToUser(requestorID, SSEEvent{
@@ -449,13 +687,96 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 
 		// Move to next step
 		nextStep := applicableSteps[currentStepIdx+1]
-		nextApproverID, nextApproverName, err := repository.GetApproverByType(ctx, nextStep.ApproverType, requestorID, entityType)
-		if err != nil {
-			return fmt.Errorf("gagal menentukan approver berikutnya: %w", err)
+		nextStepMode := nextStep.StepMode
+		if nextStepMode == "" {
+			nextStepMode = "single"
 		}
 
 		if err := repository.UpdateApprovalTrackingStepTx(ctx, tx, tracking.ID.String(), nextStep.StepOrder, "pending"); err != nil {
 			return fmt.Errorf("gagal update tracking: %w", err)
+		}
+
+		if nextStepMode == "any" {
+			// PARALLEL MODE: next step can be approved by any matching approver
+			allNextApprovers, err := repository.GetApproverIDsByType(ctx, nextStep.ApproverType, requestorID, entityType)
+			if err != nil || len(allNextApprovers) == 0 {
+				return fmt.Errorf("gagal menentukan approver untuk step berikutnya: %w", err)
+			}
+
+			// Build list of approver names for trail
+			approverNames := ""
+			for i, a := range allNextApprovers {
+				if i > 0 {
+					approverNames += ", "
+				}
+				approverNames += a.Name
+			}
+
+			// Add next step to trail (within transaction)
+			nextTrailEntry := map[string]interface{}{
+				"step":          nextStep.StepOrder,
+				"level":         currentStepIdx + 2,
+				"step_mode":     "any",
+				"approver_role": nextStep.ApproverType,
+				"approver_list": approverNames,
+				"status":        "pending",
+				"note":          "",
+				"date":          nil,
+			}
+			s.appendToApprovalTrailTx(ctx, tx, entityType, entityID, nextTrailEntry)
+
+			// Notify ALL matching approvers
+			for _, a := range allNextApprovers {
+				nn, _ := notifRepo.CreateNotification(ctx, &models.CreateNotificationRequest{
+					UserID:           a.ID,
+					NotificationType: "approval_request",
+					Title:            "Pengajuan Baru Perlu Disetujui",
+					Body:             fmt.Sprintf("Ada pengajuan %s yang telah disetujui level sebelumnya dan kini menunggu persetujuan. Siapa saja dari tim %s dapat menyetujuinya. Step %d dari %d.", entityLabel, s.getApproverLabel(nextStep.ApproverType), currentStepIdx+2, len(applicableSteps)),
+					Data: map[string]any{
+						"type":       entityType,
+						"entity_id":  entityID,
+						"step":       currentStepIdx + 2,
+						"totalSteps": len(applicableSteps),
+						"step_mode":  "any",
+					},
+				})
+				// Send push notification
+				if nn != nil {
+					SendPushNotification(ctx, a.ID, nn)
+				}
+				if nn != nil && GetSSEHub() != nil {
+					GetSSEHub().BroadcastToUser(a.ID, SSEEvent{
+						Type: "approval_update",
+						Data: map[string]any{
+							"action":    "new_pending",
+							"userId":    a.ID,
+							"type":      entityType,
+							"step_mode": "any",
+						},
+					})
+				}
+				SendEmailForUser(ctx, a.ID, "Pengajuan Baru Perlu Disetujui",
+					fmt.Sprintf("Ada pengajuan %s yang menunggu persetujuan tim %s. Step %d dari %d.", entityLabel, s.getApproverLabel(nextStep.ApproverType), currentStepIdx+2, len(applicableSteps)))
+			}
+
+			// Notify super admins about next level
+			s.notifySuperAdmins(ctx, entityType, entityID,
+				fmt.Sprintf("Pengajuan %s telah disetujui level %d dan kini menunggu persetujuan tim %s.", entityLabel, currentStepIdx+1, s.getApproverLabel(nextStep.ApproverType)))
+
+			result = &models.ApprovalResult{
+				Action:       "pending_next_level",
+				CurrentStep:  nextStep.StepOrder,
+				TotalSteps:   len(applicableSteps),
+				NextApprover: s.getApproverLabel(nextStep.ApproverType),
+				Message:      fmt.Sprintf("Disetujui level %d. Menunggu approval dari tim %s", currentStepIdx+1, s.getApproverLabel(nextStep.ApproverType)),
+			}
+			return nil
+		}
+
+		// SINGLE MODE: specific next approver
+		nextApproverID, nextApproverName, err := repository.GetApproverByType(ctx, nextStep.ApproverType, requestorID, entityType)
+		if err != nil {
+			return fmt.Errorf("gagal menentukan approver berikutnya: %w", err)
 		}
 
 		// Add next step to trail (within transaction)
@@ -483,7 +804,11 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 				"totalSteps": len(applicableSteps),
 			},
 		}
-		_, _ = notifRepo.CreateNotification(ctx, nextNotifReq)
+		nNext, _ := notifRepo.CreateNotification(ctx, nextNotifReq)
+		// Send push notification to next approver
+		if nNext != nil {
+			SendPushNotification(ctx, nextApproverID, nNext)
+		}
 		// Broadcast SSE event to next approver for real-time badge update
 		if GetSSEHub() != nil {
 			GetSSEHub().BroadcastToUser(nextApproverID, SSEEvent{
@@ -498,6 +823,10 @@ func (s *ApprovalWorkflowService) processApprovalTx(
 		// Send email to next approver
 		SendEmailForUser(ctx, nextApproverID, "Pengajuan Baru Perlu Disetujui",
 			fmt.Sprintf("Ada pengajuan %s yang menunggu persetujuan Anda. Step %d dari %d.", entityLabel, currentStepIdx+2, len(applicableSteps)))
+
+		// Notify super admins about next level
+		s.notifySuperAdmins(ctx, entityType, entityID,
+			fmt.Sprintf("Pengajuan %s telah disetujui level %d dan kini menunggu persetujuan %s.", entityLabel, currentStepIdx+1, nextApproverName))
 
 		result = &models.ApprovalResult{
 			Action:       "pending_next_level",
@@ -763,6 +1092,72 @@ func (s *ApprovalWorkflowService) appendToApprovalTrailTx(ctx context.Context, t
 		repository.UpdateApprovalTrailTx(ctx, tx, entityType, entityID, string(updatedTrail))
 	} else {
 		repository.UpdateApprovalTrail(ctx, entityType, entityID, string(updatedTrail))
+	}
+}
+
+// isUserMatchingApproverRole checks if a user matches an approver type (for parallel mode)
+func (s *ApprovalWorkflowService) isUserMatchingApproverRole(ctx context.Context, userID, approverType, requestorID, entityType string) bool {
+	switch approverType {
+	case "approval_line":
+		var approverID string
+		err := database.Pool.QueryRow(ctx,
+			`SELECT COALESCE(e.approval_line_id::text, '') FROM employees e WHERE e.id::text = $1 AND e.deleted_at IS NULL`,
+			requestorID).Scan(&approverID)
+		return err == nil && approverID == userID
+
+	case "hr_manager", "finance", "director":
+		var matchedID string
+		err := database.Pool.QueryRow(ctx, `
+			SELECT e.id::text FROM employees e
+			JOIN roles r ON r.id = e.role_id
+			WHERE r.slug = $1 AND e.id::text = $2 AND e.is_active = TRUE AND e.deleted_at IS NULL
+		`, approverType, userID).Scan(&matchedID)
+		return err == nil && matchedID != ""
+
+	case "department_head":
+		var headID string
+		err := database.Pool.QueryRow(ctx, `
+			SELECT COALESCE(d.head_id::text, '') FROM employees e
+			LEFT JOIN departments d ON d.id = e.department_id
+			WHERE e.id::text = $1 AND e.deleted_at IS NULL
+		`, requestorID).Scan(&headID)
+		return err == nil && headID == userID
+
+	case "manager":
+		var managerID string
+		err := database.Pool.QueryRow(ctx,
+			`SELECT COALESCE(e.manager_id::text, '') FROM employees e WHERE e.id::text = $1 AND e.deleted_at IS NULL`,
+			requestorID).Scan(&managerID)
+		return err == nil && managerID == userID
+
+	case "specific_employee":
+		// specific_employee doesn't use dynamic role matching — it's resolved from step context
+		return false
+
+	default:
+		return false
+	}
+}
+
+// getApproverLabel returns the human-readable label for an approver type
+func (s *ApprovalWorkflowService) getApproverLabel(approverType string) string {
+	switch approverType {
+	case "approval_line":
+		return "Atasan Langsung"
+	case "hr_manager":
+		return "HR Manager"
+	case "finance":
+		return "Finance"
+	case "director":
+		return "Direktur"
+	case "department_head":
+		return "Kepala Departemen"
+	case "manager":
+		return "Manager"
+	case "specific_employee":
+		return "Karyawan Tertentu"
+	default:
+		return approverType
 	}
 }
 

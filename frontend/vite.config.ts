@@ -27,5 +27,10 @@ export default defineConfig(async () => {
 		}));
 	}
 
-	return { plugins };
+	return { 
+		plugins,
+		server: {
+			host: true,
+		}
+	};
 });

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"hrms-backend/internal/database"
@@ -219,6 +220,19 @@ func DeletePosition(ctx context.Context, id, userID string) error {
 		_, err := tx.Exec(ctx, `UPDATE positions SET deleted_at = NOW() WHERE id::text = $1 AND deleted_at IS NULL`, id)
 		return err
 	})
+}
+
+// GetPositionByName looks up a position ID by name (case-insensitive).
+func GetPositionByName(ctx context.Context, name string) (*string, error) {
+	var id string
+	err := database.Pool.QueryRow(ctx, `SELECT id::text FROM positions WHERE LOWER(name) = LOWER($1) AND deleted_at IS NULL LIMIT 1`, name).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &id, nil
 }
 
 func CheckPositionNameExists(ctx context.Context, name string, departmentID string, excludeID string) (bool, error) {

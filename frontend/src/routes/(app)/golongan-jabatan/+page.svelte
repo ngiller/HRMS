@@ -7,7 +7,7 @@
 import MobileCard from '$lib/components/MobileCard.svelte';
 import EmptyState from '$lib/components/EmptyState.svelte';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
 	import type { ApiResponse, AgGridCellParams, AgGridValueParams, PositionGrade } from '$lib/types.js';
@@ -431,7 +431,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				<!-- Mobile cards -->
 				<PullToRefresh onRefresh={load}>
 				<div class="md:hidden space-y-3">
-					{#each items as item}
+					{#each items as item (item)}
 						<MobileCard
 							title={item.name}
 							subtitle={item.description || ''}
@@ -439,21 +439,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							avatarColor={getAvatarTheme('positionGrade').gradientClasses}
 							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700' }]}
 						>
-							{#snippet children()}
-								<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-2">
-									<span class="flex items-center gap-1.5">Level {item.level}</span>
-								</div>
-								<div class="grid grid-cols-2 gap-3 text-xs">
-									<div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2">
-										<div class="text-gray-400 dark:text-gray-500">Min. Gaji</div>
-										<div class="font-medium text-gray-900 dark:text-white tabular-nums">{formatCurrency(item.min_salary)}</div>
-									</div>
-									<div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2">
-										<div class="text-gray-400 dark:text-gray-500">Max. Gaji</div>
-										<div class="font-medium text-gray-900 dark:text-white tabular-nums">{formatCurrency(item.max_salary)}</div>
-									</div>
-								</div>
-							{/snippet}
 							{#snippet footer()}
 								<div class="flex items-center gap-2">
 									{#if hasPermission('position_grade', 'update')}
@@ -472,7 +457,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>
@@ -487,7 +472,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 </div>
 
 <AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

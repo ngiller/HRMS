@@ -79,7 +79,7 @@ func (s *LoanService) Create(ctx context.Context, employeeID string, req *models
 	}
 
 	// Initialize workflow tracking (non-blocking, ignore errors)
-	err = s.initWorkflowTracking(ctx, "loan", l.ID.String(), employeeID, l.Amount)
+	err = s.initWorkflowTracking(ctx, "loan", l.ID.String(), employeeID)
 	if err != nil {
 		fmt.Printf("[WARN] Loan workflow init: %v\n", err)
 	}
@@ -87,9 +87,9 @@ func (s *LoanService) Create(ctx context.Context, employeeID string, req *models
 	return l, nil
 }
 
-func (s *LoanService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+func (s *LoanService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string) error {
 	wfSvc := NewApprovalWorkflowService()
-	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID)
 	return err
 }
 

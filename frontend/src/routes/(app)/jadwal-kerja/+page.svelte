@@ -7,7 +7,7 @@ import MobileCard from '$lib/components/MobileCard.svelte';
 import EmptyState from '$lib/components/EmptyState.svelte';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
 	import type { GridApi, ColDef, GridOptions } from 'ag-grid-community';
 	import { getAgGrid } from '$lib/ag-grid.js';
 	import type { ApiResponse, AgGridCellParams, AgGridValueParams } from '$lib/types.js';
@@ -300,7 +300,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					weekly_hours: d.weekly_hours || 40,
 				};
 			}
-		} catch {}
+		} catch { /* noop */ }
 		formError = '';
 		showForm = true;
 	}
@@ -421,7 +421,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 
 				<h3 class="text-sm font-semibold text-gray-800 pt-2 border-t border-gray-100">Jam Kerja</h3>
 				<div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-					{#each DAY_NAMES as day, i}
+					{#each DAY_NAMES as day, i (i)}
 						<div>
 							<div>
 								<span class="block text-xs font-medium text-gray-600 mb-1">{day}</span>
@@ -566,7 +566,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				</div>
 				<div class="md:hidden space-y-3">
 					<PullToRefresh onRefresh={load}>
-					{#each items as item}
+					{#each items as item (item)}
 						<MobileCard
 							title={item.name}
 							subtitle={scheduleTypeLabels[item.schedule_type] || item.schedule_type}
@@ -575,12 +575,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800' }]}
 							onclick={() => viewDetail(item)}
 						>
-							{#snippet children()}
-								<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-									<span>{item.weekly_hours} jam/minggu</span>
-									<span>· {formatDate(item.created_at)}</span>
-								</div>
-							{/snippet}
 						</MobileCard>
 					{/each}
 					</PullToRefresh>
@@ -589,7 +583,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700 dark:text-gray-300">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = getPageNum(i)}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}">{pageNum}</button>

@@ -1,10 +1,11 @@
 <script lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { attendanceLocations as api } from '$lib/api.js';
 	import { hasPermission } from '$lib/permissions.js';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
-	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
+	import { AnimatedPresence } from '$lib';
 import MobileCard from '$lib/components/MobileCard.svelte';
 import EmptyState from '$lib/components/EmptyState.svelte';
 	import { getAvatarTheme, getInitials } from '$lib/avatar-theme.js';
@@ -66,6 +67,10 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 	let mapMarker: any = null;
 	let mapCircle: any = null;
 
+	let mapLayerType = $state<'street' | 'hybrid'>('hybrid');
+	let streetLayer: any;
+	let hybridLayer: any;
+
 	async function initMap() {
 		if (map) {
 			map.invalidateSize();
@@ -84,13 +89,36 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 			leafletReady = true;
 		}
 		if (!mapContainer) return;
-		map = L.map(mapContainer, { zoomControl: true, attributionControl: false }).setView([-2.5489, 118.0149], 5);
-		L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20 }).addTo(map);
+		
+		streetLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20 });
+		hybridLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20 });
+		
+		map = L.map(mapContainer, { 
+			zoomControl: false, // We'll disable default to add our own or just let leaflet put it top left by default
+			attributionControl: false,
+			layers: [hybridLayer] // Default to hybrid/structure view
+		}).setView([-2.5489, 118.0149], 5);
+		
+		L.control.zoom({ position: 'bottomright' }).addTo(map);
+
 		map.on('click', (e: any) => {
 			form.latitude = parseFloat(e.latlng.lat.toFixed(6));
 			form.longitude = parseFloat(e.latlng.lng.toFixed(6));
 		});
 		setTimeout(() => map?.invalidateSize(), 50);
+	}
+
+	function toggleMapLayer() {
+		if (!map || !streetLayer || !hybridLayer) return;
+		if (mapLayerType === 'hybrid') {
+			map.removeLayer(hybridLayer);
+			map.addLayer(streetLayer);
+			mapLayerType = 'street';
+		} else {
+			map.removeLayer(streetLayer);
+			map.addLayer(hybridLayer);
+			mapLayerType = 'hybrid';
+		}
 	}
 
 	function destroyMap() {
@@ -106,7 +134,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 		mapMarker?.remove();
 		mapCircle?.remove();
 		if (!form.latitude && !form.longitude) return;
-		const latlng: L.LatLngExpression = [form.latitude, form.longitude];
+		const latlng: any = [form.latitude, form.longitude];
 		mapMarker = L.marker(latlng, { draggable: true }).addTo(map);
 		mapMarker.on('dragend', () => {
 			const pos = mapMarker!.getLatLng();
@@ -481,7 +509,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						
 						{#if mapSearchResults.length > 0}
 							<div class="absolute left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[2000] max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-750">
-								{#each mapSearchResults as result}
+								{#each mapSearchResults as result (result)}
 									<button type="button" onclick={() => selectMapResult(result)} class="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-750 text-xs text-gray-700 dark:text-gray-300 transition-colors truncate block cursor-pointer">
 										{result.display_name}
 									</button>
@@ -496,7 +524,24 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 						{/if}
 					</div>
 
-					<div bind:this={mapContainer} class="flex-1 rounded-lg border border-gray-200 overflow-hidden" style="z-index: 1; min-height: 250px;"></div>
+					<div class="relative flex-1 rounded-lg border border-gray-200 overflow-hidden" style="min-height: 250px;">
+						<div bind:this={mapContainer} class="absolute inset-0" style="z-index: 1;"></div>
+						
+						<!-- Custom Map Layer Toggle Button -->
+						<button type="button" onclick={toggleMapLayer} class="absolute bottom-4 left-4 z-[400] bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-lg shadow-black/10 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2.5 cursor-pointer group" aria-label="Ganti tipe peta">
+							{#if mapLayerType === 'hybrid'}
+								<div class="w-8 h-8 rounded-lg bg-blue-50 text-[#1A56DB] flex items-center justify-center">
+									<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
+								</div>
+								<span class="text-xs font-semibold text-gray-700 pr-3 group-hover:text-[#1A56DB] transition-colors">Ubah ke Jalan</span>
+							{:else}
+								<div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+									<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" /></svg>
+								</div>
+								<span class="text-xs font-semibold text-gray-700 pr-3 group-hover:text-emerald-600 transition-colors">Ubah ke Satelit</span>
+							{/if}
+						</button>
+					</div>
 				</div>
 			</div>
 			<div class="sticky bottom-0 z-10 flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm">
@@ -531,7 +576,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 				</div>
 				<div class="md:hidden space-y-3">
 					<PullToRefresh onRefresh={load}>
-					{#each items as item}
+					{#each items as item (item)}
 						<MobileCard
 							title={item.name}
 							subtitle={item.address || ''}
@@ -539,12 +584,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 							avatarColor={getAvatarTheme('attendanceLocation').gradientClasses}
 							badges={[{ label: item.is_active ? 'Aktif' : 'Nonaktif', color: item.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900 dark:text-red-200 dark:ring-red-800' }]}
 						>
-							{#snippet children()}
-								<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-									<span class="font-mono">{item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}</span>
-									<span>Radius: {item.radius_meters}m</span>
-								</div>
-							{/snippet}
 							{#snippet footer()}
 								<div class="flex items-center gap-2">
 									<button onclick={() => openEditForm(item)} class="flex-1 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer active:scale-95">Edit</button>
@@ -561,7 +600,7 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 					<div class="text-xs text-gray-500">Menampilkan {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} dari <span class="font-medium text-gray-700">{total}</span></div>
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1} class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pageNum <= totalPages}
 								<button onclick={() => goToPage(pageNum)} class="w-8 h-8 text-xs font-medium rounded-lg border transition cursor-pointer {pageNum === page ? 'bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}">{pageNum}</button>
@@ -576,7 +615,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 </div>
 
 <AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -600,7 +638,6 @@ import EmptyState from '$lib/components/EmptyState.svelte';
 </AnimatedPresence>
 
 <AnimatedPresence show={showCancelConfirm} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div onclick={abortCancel} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') abortCancel(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

@@ -175,7 +175,7 @@ func (s *EmployeeService) LogHistory(ctx context.Context, employeeID, changeType
 }
 
 func (s *EmployeeService) ExportEmployees(ctx context.Context) ([]byte, error) {
-	employees, err := repository.ListEmployeesForExport(ctx)
+	employees, err := repository.ListEmployeesForExportFull(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("gagal mengambil data karyawan: %w", err)
 	}
@@ -183,28 +183,74 @@ func (s *EmployeeService) ExportEmployees(ctx context.Context) ([]byte, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	sheet := "Karyawan"
+	sheet := "Data Karyawan"
 	f.SetSheetName("Sheet1", sheet)
 
-	// Headers
-	headers := []string{"NIK", "Nama Lengkap", "Email", "Jenis Kelamin", "Status", "Role", "Posisi", "Departemen", "Tanggal Bergabung", "No. Telepon", "Status Aktif"}
+	headers := []string{
+		"Employee ID", "Full Name", "Barcode",
+		"Organization", "Job Position", "Job Level",
+		"Join Date", "Resign Date", "Status Employee",
+		"End Date", "Sign Date",
+		"Email", "Birth Date", "Age",
+		"Birth Place", "Citizen ID Address", "Residential Address",
+		"NPWP", "PTKP Status", "Employee Tax Status",
+		"Tax Config",
+		"Bank Name", "Bank Account", "Bank Account Holder",
+		"BPJS Ketenagakerjaan", "BPJS Kesehatan",
+		"NIK (NPWP 16 Digit)",
+		"Mobile Phone", "Phone",
+		"Branch Name", "Parent Branch Name",
+		"Religion", "Gender", "Marital Status",
+		"Blood Type", "Nationality Code", "Currency",
+		"Length Of Service", "Payment Schedule",
+		"Approval Line", "Manager", "Grade",
+		"Class", "Profile Picture",
+		"Cost Center", "Cost Center Category", "SBU",
+		"NPWP 16 digit (new)",
+		"Passport", "Passport Expiration Date",
+		"Jenis Dok. Referensi Bukti Potong",
+		"Nomor Dok. Referensi Bukti Potong",
+		"Tanggal Dok. Referensi Bukti Potong",
+		"TIN (Taxpayer Identification Number)",
+		"Ukuran Baju",
+	}
+
+	boldStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheet, cell, h)
 	}
-
-	// Bold headers
-	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
-	f.SetRowStyle(sheet, 1, 1, style)
+	f.SetRowStyle(sheet, 1, 1, boldStyle)
 
 	for i, emp := range employees {
 		row := i + 2
 		vals := []interface{}{
-			emp.EmployeeID, emp.FullName, emp.Email,
-			emp.Gender, emp.EmploymentStatus,
-			emp.RoleName, emp.PositionName, emp.DepartmentName,
-			emp.JoinDate, emp.Phone,
-			map[bool]string{true: "Aktif", false: "Non-Aktif"}[emp.IsActive],
+			emp.EmployeeID, emp.FullName, emp.Barcode,
+			emp.Organization, emp.JobPosition, emp.JobLevel,
+			emp.JoinDate, emp.ResignDate, emp.StatusEmployee,
+			emp.EndDate, emp.SignDate,
+			emp.Email, emp.BirthDate, emp.Age,
+			emp.BirthPlace, emp.CitizenIDAddress, emp.ResidentialAddress,
+			emp.NPWP, emp.PTKPStatus, emp.EmployeeTaxStatus,
+			emp.TaxConfig,
+			emp.BankName, emp.BankAccount, emp.BankAccountHolder,
+			emp.BPJSTK, emp.BPJSKesehatan,
+			emp.NIK,
+			emp.MobilePhone, emp.Phone,
+			emp.BranchName, emp.ParentBranchName,
+			emp.Religion, emp.Gender, emp.MaritalStatus,
+			emp.BloodType, emp.NationalityCode, emp.Currency,
+			emp.LengthOfService, emp.PaymentSchedule,
+			emp.ApprovalLine, emp.Manager, emp.Grade,
+			emp.Class, emp.ProfilePicture,
+			emp.CostCenter, emp.CostCenterCategory, emp.SBU,
+			emp.NPWPBaru,
+			emp.Passport, emp.PassportExpirationDate,
+			emp.JenisDokReferensi,
+			emp.NomorDokReferensi,
+			emp.TanggalDokReferensi,
+			emp.TIN,
+			emp.UkuranBaju,
 		}
 		for j, v := range vals {
 			cell, _ := excelize.CoordinatesToCellName(j+1, row)
@@ -212,7 +258,6 @@ func (s *EmployeeService) ExportEmployees(ctx context.Context) ([]byte, error) {
 		}
 	}
 
-	// Auto-width columns
 	for i := range headers {
 		col, _ := excelize.ColumnNumberToName(i + 1)
 		f.SetColWidth(sheet, col, col, 20)
@@ -250,50 +295,194 @@ func (s *EmployeeService) ImportEmployees(ctx context.Context, file *multipart.F
 		return result, nil
 	}
 
-	// Column mapping (0-indexed from Excel):
-	// A(0)=NIK, B(1)=Nama*, C(2)=Email*, D(3)=Gender, E(4)=Status,
-	// F(5)=TempatLahir, G(6)=TglLahir, H(7)=Agama, I(8)=StatusPernikahan,
-	// J(9)=TglBergabung, K(10)=NoTelepon, L(11)=Alamat
-	// Use GetCellValue per cell to preserve empty leading cells (e.g. empty NIK)
+	// Pre-load lookup data for resolving names to IDs
+	deptList, _ := repository.GetAllDepartments(ctx)
+	posList, _ := repository.GetAllPositions(ctx)
+	gradeList, _ := repository.GetAllPositionGrades(ctx)
+
+	deptMap := make(map[string]string)
+	for _, d := range deptList {
+		deptMap[strings.ToLower(d.Name)] = d.ID.String()
+	}
+	posMap := make(map[string]string)
+	for _, p := range posList {
+		posMap[strings.ToLower(p.Name)] = p.ID.String()
+	}
+	gradeMap := make(map[string]string)
+	for _, g := range gradeList {
+		gradeMap[strings.ToLower(g.Name)] = g.ID.String()
+	}
+
 	for i := range rows[1:] {
 		rowNum := i + 2
 
-		cells := make([]string, 12)
-		for c := 0; c < 12; c++ {
+		cells := make([]string, 56)
+		for c := 0; c < 56; c++ {
 			colName, _ := excelize.ColumnNumberToName(c + 1)
 			val, _ := f.GetCellValue(sheet, fmt.Sprintf("%s%d", colName, rowNum))
 			cells[c] = strings.TrimSpace(val)
 		}
 
+		// 55-column mapping (indices match employee_template.xlsx)
+		// 0=EmployeeID, 1=FullName, 2=Barcode, 3=Organization, 4=Job Position, 5=Job Level
+		// 6=JoinDate, 7=ResignDate, 8=Status Employee, 9=EndDate
+		// 11=Email, 12=BirthDate, 14=BirthPlace
+		// 15=CitizenIDAddr, 16=ResidentialAddr, 17=NPWP, 18=PTKPStatus
+		// 21=BankName, 22=BankAccount, 23=BankAccountHolder
+		// 26=NIK, 27=MobilePhone, 28=Phone
+		// 31=Religion, 32=Gender, 33=MaritalStatus, 34=BloodType
+		// 39=ApprovalLine
+		employeeID := cells[0]
 		fullName := cells[1]
-		email := cells[2]
+		orgName := cells[3]         // Organization (department)
+		jobPositionName := cells[4]  // Job Position
+		jobLevelName := cells[5]     // Job Level (grade)
+		joinDate := cells[6]
+		empStatusStr := cells[8]
+		endDateStr := cells[9]
+		email := cells[11]
+		dateOfBirth := cells[12]
+		placeOfBirth := cells[14]
+		nik := cells[26]          // NIK (NPWP 16 Digit)
+		addressKTP := cells[15]    // Citizen ID Address
+		address := cells[16]       // Residential Address
+		npwp := cells[17]          // NPWP
+		ptkpStr := cells[18]       // PTKP Status
+		bankName := cells[21]      // Bank Name
+		bankAccount := cells[22]   // Bank Account
+		phone := cells[27]         // Mobile Phone
+		religion := cells[31]      // Religion
+		genderStr := cells[32]     // Gender
+		maritalStatus := cells[33] // Marital Status
+		bloodType := cells[34]     // Blood Type
+		approvalLineName := cells[39] // Approval Line
+
 		if fullName == "" || email == "" {
 			result.Errors = append(result.Errors, fmt.Sprintf("Baris %d: nama dan email wajib diisi", rowNum))
 			continue
 		}
 
 		gender := "laki_laki"
-		g := strings.ToLower(cells[3])
-		if g == "perempuan" || g == "p" {
+		g := strings.ToLower(genderStr)
+		if g == "perempuan" || g == "p" || g == "female" || g == "f" {
 			gender = "perempuan"
 		}
 
 		empStatus := "percobaan"
-		s := strings.ToLower(cells[4])
-		if s == "tetap" || s == "kontrak" || s == "magang" {
-			empStatus = s
+		s := strings.ToLower(empStatusStr)
+		if strings.Contains(s, "tetap") || strings.Contains(s, "permanent") {
+			empStatus = "tetap"
+		} else if strings.Contains(s, "kontrak") || strings.Contains(s, "contract") {
+			empStatus = "kontrak"
+		} else if strings.Contains(s, "magang") || strings.Contains(s, "intern") {
+			empStatus = "percobaan"
 		}
 
-		maritalStatus := strings.ToLower(cells[8])
+		// Normalize marital status: DB enum values are: lajang, menikah, cerai_hidup, cerai_mati
+		maritalStatus = strings.ToLower(maritalStatus)
+		if strings.Contains(maritalStatus, "single") || strings.Contains(maritalStatus, "belum menikah") || strings.Contains(maritalStatus, "lajang") {
+			maritalStatus = "lajang"
+		} else if strings.Contains(maritalStatus, "married") || strings.Contains(maritalStatus, "menikah") {
+			maritalStatus = "menikah"
+		} else if strings.Contains(maritalStatus, "widow") || strings.Contains(maritalStatus, "cerai") {
+			maritalStatus = "cerai_hidup"
+		} else {
+			maritalStatus = "lajang"
+		}
 
-		joinDate := cells[9]
+		religion = strings.ToLower(religion)
+		if strings.Contains(religion, "christian") || strings.Contains(religion, "kristen") {
+			religion = "kristen"
+		} else if strings.Contains(religion, "catholic") || strings.Contains(religion, "katolik") {
+			religion = "katolik"
+		} else if strings.Contains(religion, "moslem") || strings.Contains(religion, "muslim") || strings.Contains(religion, "islam") {
+			religion = "islam"
+		} else if strings.Contains(religion, "hindu") {
+			religion = "hindu"
+		} else if strings.Contains(religion, "buddh") {
+			religion = "buddha"
+		} else if strings.Contains(religion, "kong") {
+			religion = "konghucu"
+		} else {
+			religion = "lainnya"
+		}
+		maritalStatus = strings.ReplaceAll(maritalStatus, " ", "_")
+		maritalStatus = strings.ReplaceAll(maritalStatus, "-", "_")
+		switch maritalStatus {
+		case "belum_menikah", "single", "lajang":
+			maritalStatus = "lajang"
+		case "menikah", "married", "kawin":
+			maritalStatus = "menikah"
+		case "cerai_hidup", "cerai", "divorced":
+			maritalStatus = "cerai_hidup"
+		case "cerai_mati", "widow", "widower", "janda", "duda":
+			maritalStatus = "cerai_mati"
+		}
+
+		// Normalize PTKP Status (case-insensitive)
+		ptkpStatus := strings.ToUpper(ptkpStr)
+		if ptkpStatus != "" {
+			ptkpStatus = strings.ReplaceAll(ptkpStatus, " ", "")
+			ptkpStatus = strings.ReplaceAll(ptkpStatus, "/", "") // TK/0 -> TK0
+		}
+
 		if joinDate == "" {
-			joinDate = "2026-01-01"
+			joinDate = time.Now().Format("2006-01-02")
+		} else if len(joinDate) >= 10 {
+			joinDate = joinDate[:10]
 		}
 
-		employeeID := strings.TrimSpace(cells[0])
+		// Normalize end date
+		if endDateStr != "" && len(endDateStr) >= 10 {
+			endDateStr = endDateStr[:10]
+		}
+
 		if employeeID == "" {
 			employeeID = fmt.Sprintf("IMP-%d", time.Now().UnixNano())
+		}
+
+		// Resolve department, position, grade by name using pre-loaded maps
+		// Also tries English→Indonesian translation and substring matching
+		deptID := resolveDepartmentID(deptMap, orgName)
+		if deptID == "" && orgName != "" {
+			req := &models.CreateDepartmentRequest{
+				Name: orgName,
+				Code: fmt.Sprintf("DPT-%d", time.Now().UnixMilli()%1000000),
+			}
+			if newDept, err := repository.CreateDepartment(ctx, req, userID); err == nil && newDept != nil {
+				deptID = newDept.ID.String()
+				deptMap[strings.ToLower(orgName)] = deptID
+			}
+		}
+
+		posID := resolvePositionID(posMap, jobPositionName)
+		if posID == "" && jobPositionName != "" {
+			req := &models.CreatePositionRequest{
+				Name: jobPositionName,
+			}
+			if newPos, err := repository.CreatePosition(ctx, req, userID); err == nil && newPos != nil {
+				posID = newPos.ID.String()
+				posMap[strings.ToLower(jobPositionName)] = posID
+			}
+		}
+
+		gradeID := resolveGradeID(gradeMap, jobLevelName)
+		if gradeID == "" && jobLevelName != "" {
+			req := &models.CreatePositionGradeRequest{
+				Name: jobLevelName,
+			}
+			if newGrade, err := repository.CreatePositionGrade(ctx, req, userID); err == nil && newGrade != nil {
+				gradeID = newGrade.ID.String()
+				gradeMap[strings.ToLower(jobLevelName)] = gradeID
+			}
+		}
+
+		// Resolve approval line by employee name (lookup on-the-fly)
+		approvalLineID := ""
+		if approvalLineName != "" {
+			if id, err := repository.GetEmployeeByName(ctx, approvalLineName); err == nil && id != nil {
+				approvalLineID = *id
+			}
 		}
 
 		req := &models.CreateEmployeeRequest{
@@ -304,12 +493,24 @@ func (s *EmployeeService) ImportEmployees(ctx context.Context, file *multipart.F
 			Gender:           gender,
 			EmploymentStatus: empStatus,
 			JoinDate:         joinDate,
-			Phone:            cells[10],
-			PlaceOfBirth:     cells[5],
-			DateOfBirth:      cells[6],
-			Religion:         strings.ToLower(cells[7]),
+			Phone:            phone,
+			PlaceOfBirth:     placeOfBirth,
+			DateOfBirth:      dateOfBirth,
+			Religion:         normalizeReligion(religion),
 			MaritalStatus:    maritalStatus,
-			Address:          cells[11],
+			Address:          address,
+			AddressKTP:       addressKTP,
+			NIK:              nik,
+			NPWP:             npwp,
+			BankName:         bankName,
+			BankAccount:      bankAccount,
+			DepartmentID:     deptID,
+			PositionID:       posID,
+			PositionGradeID:  gradeID,
+			BloodType:        bloodType,
+			PTKPStatus:       ptkpStatus,
+			EndDate:          endDateStr,
+			ApprovalLineID:   approvalLineID,
 		}
 
 		_, err := repository.CreateEmployee(ctx, req, userID)
@@ -322,6 +523,143 @@ func (s *EmployeeService) ImportEmployees(ctx context.Context, file *multipart.F
 
 	result.Message = fmt.Sprintf("Berhasil mengimpor %d dari %d data", result.Success, len(rows[1:]))
 	return result, nil
+}
+
+// resolveDepartmentID tries exact match, then translation map, then substring match
+func resolveDepartmentID(deptMap map[string]string, name string) string {
+	if name == "" {
+		return ""
+	}
+	key := strings.ToLower(strings.TrimSpace(name))
+	
+	// 1. Exact match
+	if id, ok := deptMap[key]; ok {
+		return id
+	}
+	
+	// 2. English → Indonesian translation map
+	translate := map[string]string{
+		"accounting":            "keuangan",
+		"sales":                 "penjualan",
+		"marketing":             "pemasaran",
+		"hrd":                   "sumber daya manusia",
+		"human resources":       "sumber daya manusia",
+		"human resources & general": "sumber daya manusia",
+		"it":                    "teknologi informasi",
+		"information technology": "teknologi informasi",
+		"technical":             "teknologi informasi",
+		"development":           "teknologi informasi",
+		"engineering":           "teknologi informasi",
+		"director":              "direksi",
+		"finance":               "keuangan",
+		"financial":             "keuangan",
+		"logistic":              "",
+		"general affair":        "sumber daya manusia",
+	}
+	if translated, ok := translate[key]; ok && translated != "" {
+		if id, ok := deptMap[translated]; ok {
+			return id
+		}
+	}
+	
+	// 3. Substring: check if any DB dept name contains the key or vice versa
+	for dbName, id := range deptMap {
+		if strings.Contains(dbName, key) || strings.Contains(key, dbName) {
+			return id
+		}
+	}
+	
+	return ""
+}
+
+// resolvePositionID tries exact match, then substring match
+func resolvePositionID(posMap map[string]string, name string) string {
+	if name == "" {
+		return ""
+	}
+	key := strings.ToLower(strings.TrimSpace(name))
+	
+	// 1. Exact match
+	if id, ok := posMap[key]; ok {
+		return id
+	}
+	
+	// 2. English → Indonesian translation
+	translate := map[string]string{
+		"accounting":              "accounting",
+		"pre sales":               "sales",
+		"inbound sales":           "sales",
+		"in house sales":          "sales",
+		"sales admin":             "sales",
+		"sales manager":           "sales manager",
+		"web programmer":          "staff it",
+		"engineer":                "staff it",
+		"office boy":              "",
+		"driver":                  "",
+		"purchasing":              "",
+		"store officer":           "",
+		"hrd":                     "hr staff",
+		"human resources & accounting": "hr staff",
+		"marketing":               "marketing",
+		"project manager":         "manager it",
+		"business development manager": "marketing manager",
+		"project coordinator":     "",
+		"project admin":           "",
+		"project sales leader":    "sales manager",
+		"retail sales coordinator": "sales",
+		"assistant head of technical": "staff it",
+		"head of technical and development": "it director",
+		"director":                "",
+	}
+	if translated, ok := translate[key]; ok && translated != "" {
+		if id, ok := posMap[translated]; ok {
+			return id
+		}
+	}
+	
+	// 3. Substring match
+	for dbName, id := range posMap {
+		if strings.Contains(dbName, key) || strings.Contains(key, dbName) {
+			return id
+		}
+	}
+	
+	return ""
+}
+
+// resolveGradeID tries exact match, then translation, then substring
+func resolveGradeID(gradeMap map[string]string, name string) string {
+	if name == "" {
+		return ""
+	}
+	key := strings.ToLower(strings.TrimSpace(name))
+	
+	// 1. Exact match
+	if id, ok := gradeMap[key]; ok {
+		return id
+	}
+	
+	// 2. English → Indonesian translation
+	translate := map[string]string{
+		"owner":       "director",
+		"direktur":    "director",
+		"vp":          "senior manager",
+		"head":        "manager",
+	}
+	if translated, ok := translate[key]; ok && translated != "" {
+		if id, ok := gradeMap[translated]; ok {
+			return id
+		}
+	}
+	
+	// 3. Substring match
+	for dbName, id := range gradeMap {
+		if strings.Contains(dbName, key) || strings.Contains(key, dbName) {
+			return id
+		}
+	}
+	
+	return ""
 }
 
 func (s *EmployeeService) UpdateWorkSchedule(ctx context.Context, id, workScheduleID, userID string) (*models.Employee, error) {
@@ -440,4 +778,25 @@ func (s *EmployeeService) DeleteEmployee(ctx context.Context, id string, userID 
 	}
 
 	return repository.DeleteEmployee(ctx, id, userID)
+}
+
+// normalizeReligion maps various religion inputs to the DB enum values
+func normalizeReligion(s string) string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	switch v {
+	case "islam", "moslem", "muslim":
+		return "islam"
+	case "kristen", "christian", "protestan":
+		return "kristen"
+	case "katolik", "catholic":
+		return "katolik"
+	case "hindu":
+		return "hindu"
+	case "buddha", "buddhist", "budha":
+		return "buddha"
+	case "konghucu", "confucius", "confucian":
+		return "konghucu"
+	default:
+		return v
+	}
 }

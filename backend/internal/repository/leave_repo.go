@@ -36,6 +36,20 @@ func GetAllLeaveTypes(ctx context.Context) ([]models.LeaveTypeSummary, error) {
 	return types, nil
 }
 
+func GetLeaveTypeByID(ctx context.Context, id string) (*models.LeaveTypeSummary, error) {
+	query := `SELECT id, name, code, default_quota, is_paid, is_active
+		FROM leave_types WHERE id::text = $1 AND deleted_at IS NULL`
+	var t models.LeaveTypeSummary
+	err := database.Pool.QueryRow(ctx, query, id).Scan(&t.ID, &t.Name, &t.Code, &t.DefaultQuota, &t.IsPaid, &t.IsActive)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &t, nil
+}
+
 // ─── Leave Balances ───────────────────────────────────────────
 
 func GetLeaveBalances(ctx context.Context, employeeID string, year int) ([]models.LeaveBalance, error) {

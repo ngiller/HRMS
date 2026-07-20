@@ -107,13 +107,18 @@ func (s *LeaveService) Create(ctx context.Context, employeeID string, req *model
 		return nil, errors.New("alasan cuti harus diisi")
 	}
 
+	// Validasi eligibility berdasarkan jenis cuti
+	if err := s.validateLeaveEligibility(ctx, employeeID, req.LeaveTypeID); err != nil {
+		return nil, err
+	}
+
 	r, err := repository.CreateLeaveRequest(ctx, employeeID, employeeID, req)
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat pengajuan cuti: %w", err)
 	}
 
 	// Initialize workflow tracking (non-blocking, ignore errors)
-	err = s.initWorkflowTracking(ctx, "leave", r.ID.String(), employeeID, float64(r.TotalDays))
+	err = s.initWorkflowTracking(ctx, "leave", r.ID.String(), employeeID)
 	if err != nil {
 		// Log warning but don't fail - leave was created successfully
 		fmt.Printf("[WARN] Leave workflow init: %v\n", err)
@@ -122,9 +127,57 @@ func (s *LeaveService) Create(ctx context.Context, employeeID string, req *model
 	return r, nil
 }
 
-func (s *LeaveService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+// validateLeaveEligibility checks if the employee is eligible for the selected leave type
+// based on gender and marital status rules.
+func (s *LeaveService) validateLeaveEligibility(ctx context.Context, employeeID, leaveTypeID string) error {
+	// Fetch leave type to get the code
+	leaveType, err := repository.GetLeaveTypeByID(ctx, leaveTypeID)
+	if err != nil {
+		return fmt.Errorf("gagal memuat data jenis cuti: %w", err)
+	}
+	if leaveType == nil {
+		return errors.New("jenis cuti tidak ditemukan")
+	}
+
+	// Fetch employee data
+	employee, err := repository.GetEmployeeByIDRepo(ctx, employeeID)
+	if err != nil {
+		return fmt.Errorf("gagal memuat data karyawan: %w", err)
+	}
+	if employee == nil {
+		return errors.New("karyawan tidak ditemukan")
+	}
+
+	switch leaveType.Code {
+	case "melahirkan":
+		// Cuti Hamil/Melahirkan: only perempuan + menikah + is_pregnant
+		if employee.Gender != "perempuan" {
+			return errors.New("cuti hamil/melahirkan hanya untuk karyawan perempuan")
+		}
+		if employee.MaritalStatus != "menikah" {
+			return errors.New("cuti hamil/melahirkan hanya untuk karyawan yang sudah menikah")
+		}
+		if !employee.IsPregnant {
+			return errors.New("cuti hamil/melahirkan hanya untuk karyawan yang sedang hamil. Silakan hubungi HR untuk memperbarui status kehamilan")
+		}
+	case "keguguran":
+		// Cuti Keguguran: only perempuan
+		if employee.Gender != "perempuan" {
+			return errors.New("cuti keguguran hanya untuk karyawan perempuan")
+		}
+	case "menikah":
+		// Cuti Menikah: only lajang (belum menikah)
+		if employee.MaritalStatus != "lajang" {
+			return errors.New("cuti menikah hanya untuk karyawan yang belum menikah (lajang)")
+		}
+	}
+
+	return nil
+}
+
+func (s *LeaveService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string) error {
 	wfSvc := NewApprovalWorkflowService()
-	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID)
 	return err
 }
 

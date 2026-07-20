@@ -503,32 +503,34 @@
 				<div class="hidden md:block">
 					<div bind:this={gridContainer} class="ag-theme-quartz w-full" style="min-height: 400px"></div>
 				</div>
-				<div class="md:hidden space-y-3">
+				<div class="md:hidden">
 					<PullToRefresh onRefresh={loadSchedules}>
-					{#each filteredSchedules as s (s)}
-						<MobileCard
-							title={s.employee_name}
-							subtitle={`${s.template_name || 'Manual'} · ${s.start_time?.slice(0,5)}-${s.end_time?.slice(0,5)}`}
-							avatar={getInitials(s.employee_name)}
-							avatarColor={getAvatarTheme('schedule').gradientClasses}
-							badges={s.is_remote ? [{ label: 'WFH', color: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' }] : undefined}
-						>
-							{#snippet footer()}
-								<div class="flex items-center justify-between">
-									<span class="text-xs text-gray-400">
-										{formatDate(s.effective_from)}{s.effective_until ? ` - ${formatDate(s.effective_until)}` : ' - ∞'}
-									</span>
-									<button onclick={() => confirmDelete(s.id)} class="py-1.5 px-3 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">
-										Hapus
-									</button>
+						<div class="space-y-3">
+							{#each filteredSchedules as s (s)}
+								<MobileCard
+									title={s.employee_name}
+									subtitle={`${s.template_name || 'Manual'} · ${s.start_time?.slice(0,5)}-${s.end_time?.slice(0,5)}`}
+									avatar={getInitials(s.employee_name)}
+									avatarColor={getAvatarTheme('schedule').gradientClasses}
+									badges={s.is_remote ? [{ label: 'WFH', color: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' }] : undefined}
+								>
+									{#snippet footer()}
+										<div class="flex items-center justify-between">
+											<span class="text-xs text-gray-400">
+												{formatDate(s.effective_from)}{s.effective_until ? ` - ${formatDate(s.effective_until)}` : ' - ∞'}
+											</span>
+											<button onclick={() => confirmDelete(s.id)} class="py-1.5 px-3 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition cursor-pointer active:scale-95">
+												Hapus
+											</button>
+										</div>
+									{/snippet}
+								</MobileCard>
+							{:else}
+								<div class="py-8 text-center text-sm text-gray-500">
+									Tidak ada jadwal yang cocok dengan kata kunci "{searchQuery}"
 								</div>
-							{/snippet}
-						</MobileCard>
-					{:else}
-						<div class="py-8 text-center text-sm text-gray-500">
-							Tidak ada jadwal yang cocok dengan kata kunci "{searchQuery}"
+							{/each}
 						</div>
-					{/each}
 					</PullToRefresh>
 				</div>
 				<div class="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/30">

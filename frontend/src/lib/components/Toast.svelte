@@ -45,6 +45,8 @@
 	});
 </script>
 
+<!-- eslint-disable svelte/no-at-html-tags -->
+
 {#if toasts.length > 0}
 	<div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 w-[calc(100%-2rem)] max-w-md pointer-events-none">
 		{#each toasts as toast, i (toast.id)}

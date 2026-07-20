@@ -6,8 +6,38 @@
 	let password = $state('admin123');
 	let remember = $state(true);
 	let isLoading = $state(false);
+	let isSettingUp = $state(false);
+	let setupStatus = $state('');
 	let errorMessage = $state('');
 	let showPassword = $state(false);
+
+	/** Request camera permission silently, then stop the stream */
+	async function requestCamera(): Promise<boolean> {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: { width: 640, height: 480, facingMode: 'user' },
+			});
+			stream.getTracks().forEach(t => t.stop());
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/** Request location permission silently */
+	function requestLocation(): Promise<boolean> {
+		return new Promise((resolve) => {
+			if (!navigator.geolocation) {
+				resolve(false);
+				return;
+			}
+			navigator.geolocation.getCurrentPosition(
+				() => resolve(true),
+				() => resolve(false),
+				{ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+			);
+		});
+	}
 
 	async function handleLogin(e: Event) {
 		e.preventDefault();
@@ -17,20 +47,41 @@
 		try {
 			const response = await auth.login(email, password);
 			auth.saveSession(response);
-			goto('/dashboard', { replaceState: true });
+
+			// After login, request device permissions while showing loading
+			isLoading = false;
+			isSettingUp = true;
+
+			setupStatus = 'Mengakses kamera...';
+			const camOk = await requestCamera();
+
+			setupStatus = 'Mendapatkan lokasi...';
+			const locOk = await requestLocation();
+
+			// Brief pause so user sees the check was done
+			await new Promise(r => setTimeout(r, 400));
+
+			setupStatus = camOk && locOk ? 'Semua perangkat siap ✓' : 'Lanjut...';
+			await new Promise(r => setTimeout(r, 300));
+
+// eslint-disable-next-line svelte/no-navigation-without-resolve
+			await goto('/dashboard', { replaceState: true });
 		} catch (error) {
 			if (error instanceof ApiError) {
 				errorMessage = error.message;
 			} else {
 				errorMessage = 'Terjadi kesalahan. Silakan coba lagi.';
 			}
+			isSettingUp = false;
 		} finally {
 			isLoading = false;
+			isSettingUp = false;
 		}
 	}
 
-	function goToForgotPassword() {
-		goto('/forgot-password');
+	async function goToForgotPassword() {
+// eslint-disable-next-line svelte/no-navigation-without-resolve
+		await goto('/forgot-password');
 	}
 </script>
 
@@ -130,7 +181,7 @@
 				<button
 					type="submit"
 					class="w-full py-2.5 bg-[#1A56DB] text-white rounded-lg font-semibold text-sm hover:bg-[#1e40af] transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-					disabled={isLoading}
+					disabled={isLoading || isSettingUp}
 				>
 					{#if isLoading}
 						<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -138,6 +189,14 @@
 							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
 						</svg>
 						Memproses...
+					{:else if isSettingUp}
+						<span class="flex items-center gap-2">
+							<svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+							</svg>
+							{setupStatus || 'Menyiapkan perangkat...'}
+						</span>
 					{:else}
 						Masuk
 					{/if}
@@ -275,7 +334,7 @@
 			<button
 				type="submit"
 				class="w-full py-4 bg-gradient-to-r from-[#1A56DB] to-[#1e40af] text-white rounded-xl font-bold text-[15px] hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
-				disabled={isLoading}
+				disabled={isLoading || isSettingUp}
 			>
 				{#if isLoading}
 					<svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -283,6 +342,14 @@
 						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
 					</svg>
 					Memproses...
+				{:else if isSettingUp}
+					<span class="flex items-center justify-center gap-2">
+						<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+						</svg>
+						{setupStatus || 'Menyiapkan perangkat...'}
+					</span>
 				{:else}
 					Masuk ke Sistem
 				{/if}

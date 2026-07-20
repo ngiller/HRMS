@@ -43,17 +43,26 @@ func CheckManualAttendanceCount(ctx context.Context, employeeID string, dateStr 
 
 func CreateManualAttendanceRequest(ctx context.Context, employeeID string, req *models.CreateManualAttendanceRequest) (*models.ManualAttendanceRequest, error) {
 	var checkInTime, checkOutTime *time.Time
+
+	// Parse request date to use as the base date for check-in/out timestamps
+	var reqDate time.Time
+	if req.Date != "" {
+		reqDate, _ = time.Parse("2006-01-02", req.Date)
+	} else {
+		reqDate = time.Now()
+	}
+
 	if req.CheckInTime != "" {
 		t, err := time.Parse("15:04", req.CheckInTime)
 		if err == nil {
-			parsed := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), t.Hour(), t.Minute(), 0, 0, time.Now().Location())
+			parsed := time.Date(reqDate.Year(), reqDate.Month(), reqDate.Day(), t.Hour(), t.Minute(), 0, 0, time.Local)
 			checkInTime = &parsed
 		}
 	}
 	if req.CheckOutTime != "" {
 		t, err := time.Parse("15:04", req.CheckOutTime)
 		if err == nil {
-			parsed := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), t.Hour(), t.Minute(), 0, 0, time.Now().Location())
+			parsed := time.Date(reqDate.Year(), reqDate.Month(), reqDate.Day(), t.Hour(), t.Minute(), 0, 0, time.Local)
 			checkOutTime = &parsed
 		}
 	}

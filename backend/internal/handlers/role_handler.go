@@ -99,6 +99,16 @@ func (h *RoleHandler) UpdateRole(c *fiber.Ctx) error {
 		return c.Status(status).JSON(ErrorResponse(err.Error()))
 	}
 
+	if service.GetSSEHub() != nil {
+		service.GetSSEHub().BroadcastAll(service.SSEEvent{
+			Type: "role_update",
+			Data: map[string]interface{}{
+				"role_id": id,
+				"slug":    role.Slug,
+			},
+		})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(SuccessResponse(role, "Role berhasil diperbarui"))
 }
 

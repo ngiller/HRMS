@@ -22,6 +22,8 @@
 	});
 </script>
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
+
 <div class="max-w-lg mx-auto text-center py-16">
 	<!-- Icon -->
 	<div class="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -44,8 +46,9 @@
 	</div>
 
 	<!-- Back button -->
+
 	<button
-		onclick={() => goto('/dashboard')}
+		onclick={async () => await goto('/dashboard')}
 		class="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition cursor-pointer"
 	>
 		<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">

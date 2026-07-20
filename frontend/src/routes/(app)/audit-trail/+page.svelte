@@ -30,7 +30,7 @@
 		try {
 			const res = await employees.list(1, 200);
 			if (res.success) employeeList = res.data || [];
-		} catch {}
+		} catch { /* silent fail */ }
 	}
 
 	async function loadFilterOptions() {
@@ -41,7 +41,7 @@
 			]);
 			if (typesRes.success) entityTypes = typesRes.data?.entity_types || [];
 			if (actionsRes.success) actions = actionsRes.data?.actions || [];
-		} catch {}
+		} catch { /* silent */ }
 	}
 
 	onMount(() => {
@@ -138,7 +138,7 @@
 					class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
 				>
 					<option value="">Semua Aksi</option>
-					{#each actions as a}
+					{#each actions as a (a)}
 						<option value={a}>{a}</option>
 					{/each}
 				</select>
@@ -150,7 +150,7 @@
 					class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
 				>
 					<option value="">Semua Entitas</option>
-					{#each entityTypes as et}
+					{#each entityTypes as et (et)}
 						<option value={et}>{et}</option>
 					{/each}
 				</select>
@@ -162,7 +162,7 @@
 					class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
 				>
 					<option value="">Semua Karyawan</option>
-					{#each employeeList as emp}
+					{#each employeeList as emp (emp.id)}
 						<option value={emp.id}>{emp.full_name}</option>
 					{/each}
 				</select>
@@ -226,7 +226,7 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50 text-sm">
-					{#each items as item}
+					{#each items as item (item)}
 						<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
 							<td class="p-4 text-gray-500 dark:text-gray-400">{formatDate(item.created_at)}</td>
 							<td class="p-4 font-medium text-gray-900 dark:text-white">{item.employee_name || '-'}</td>
@@ -251,7 +251,7 @@
 			<div class="flex items-center gap-1.5">
 				<button onclick={() => goToPage(pageNum - 1)} disabled={pageNum <= 1}
 					class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-				{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+				{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 					{@const pageIdx = Math.max(1, Math.min(pageNum - 2, totalPages - 4)) + i}
 					{#if pageIdx <= totalPages}
 						<button onclick={() => goToPage(pageIdx)}

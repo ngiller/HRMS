@@ -56,9 +56,8 @@
 
 {#if showPrompt}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:bottom-6 md:w-96 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 md:p-5 pwa-install-card"
+    class="print:hidden fixed left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 md:p-5 pwa-install-card"
     onclick={(e) => e.stopPropagation()}
     role="dialog"
     aria-label="Instal Aplikasi"
@@ -103,6 +102,13 @@
 <style>
   .pwa-install-card {
     animation: pwa-slide-up 0.3s ease-out;
+    bottom: calc(var(--bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+
+  @media (min-width: 768px) {
+    .pwa-install-card {
+      bottom: 1.5rem;
+    }
   }
 
   @keyframes pwa-slide-up {

@@ -60,6 +60,9 @@
 	<div
 		class="transition-all ease-out"
 		style="
+			position: fixed;
+			inset: 0;
+			z-index: 1;
 			transition-property: {animations[type] || 'opacity'};
 			transition-duration: {duration}ms;
 			transition-delay: {delay}ms;

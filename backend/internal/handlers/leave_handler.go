@@ -129,7 +129,11 @@ func (h *LeaveHandler) CreateLeaveRequest(c *fiber.Ctx) error {
 		switch err.Error() {
 		case "jenis cuti harus dipilih", "tanggal mulai harus diisi",
 			"tanggal selesai harus diisi", "jumlah hari harus lebih dari 0",
-			"alasan cuti harus diisi":
+			"alasan cuti harus diisi",
+			"cuti hamil/melahirkan hanya untuk karyawan perempuan",
+			"cuti hamil/melahirkan hanya untuk karyawan yang sudah menikah",
+			"cuti keguguran hanya untuk karyawan perempuan",
+			"cuti menikah hanya untuk karyawan yang belum menikah (lajang)":
 			status = fiber.StatusBadRequest
 		}
 		return c.Status(status).JSON(ErrorResponse(err.Error()))

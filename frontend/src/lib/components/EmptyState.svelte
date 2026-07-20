@@ -45,8 +45,10 @@
 	<!-- Icon -->
 	<div class="w-{compact ? '12' : '14'} h-{compact ? '12' : '14'} mx-auto mb-{compact ? '3' : '4'} rounded-xl flex items-center justify-center {iconColors[variant] || iconColors.empty}">
 		{#if icon}
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html icon}
 		{:else}
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html icons[variant] || icons.empty}
 		{/if}
 	</div>

@@ -68,6 +68,12 @@ func (h *DocumentHandler) GetDocument(c *fiber.Ctx) error {
 // CreateDocument creates a new document record
 // POST /api/documents
 func (h *DocumentHandler) CreateDocument(c *fiber.Ctx) error {
+	// Employees cannot create documents for other employees
+	roleSlug, _ := c.Locals("role_slug").(string)
+	if roleSlug == "employee" {
+		return c.Status(fiber.StatusForbidden).JSON(ErrorResponse("Anda tidak memiliki akses untuk menambahkan dokumen"))
+	}
+
 	req := new(models.CreateDocumentReq)
 	if err := c.BodyParser(req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse("Format request tidak valid"))

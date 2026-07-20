@@ -119,14 +119,45 @@ func CreateApprovalWorkflow(ctx context.Context, req *models.CreateApprovalWorkf
 	return &w, nil
 }
 
-func UpdateApprovalWorkflow(ctx context.Context, workflowID string, req *models.CreateApprovalWorkflowReq) (*models.ApprovalWorkflow, error) {
-	var w models.ApprovalWorkflow
-	err := database.Pool.QueryRow(ctx, `
+func UpdateApprovalWorkflow(ctx context.Context, workflowID string, req *models.UpdateApprovalWorkflowReq) (*models.ApprovalWorkflow, error) {
+	// Build dynamic SET clause
+	setClause := "updated_at = NOW()"
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.EntityType != "" {
+		argIdx++
+		setClause += fmt.Sprintf(", entity_type = $%d", argIdx)
+		args = append(args, req.EntityType)
+	}
+	if req.Name != "" {
+		argIdx++
+		setClause += fmt.Sprintf(", name = $%d", argIdx)
+		args = append(args, req.Name)
+	}
+	if req.Name != "" || req.EntityType != "" {
+		argIdx++
+		setClause += fmt.Sprintf(", description = $%d", argIdx)
+		args = append(args, req.Description)
+	}
+	if req.IsActive != nil {
+		argIdx++
+		setClause += fmt.Sprintf(", is_active = $%d", argIdx)
+		args = append(args, *req.IsActive)
+	}
+
+	query := fmt.Sprintf(`
 		UPDATE approval_workflows
-		SET entity_type = $2, name = $3, description = $4, updated_at = NOW()
+		SET %s
 		WHERE id::text = $1 AND deleted_at IS NULL
 		RETURNING id, entity_type, name, COALESCE(description, ''), is_active, created_at, updated_at
-	`, workflowID, req.EntityType, req.Name, req.Description).Scan(
+	`, setClause)
+
+	// Prepend workflowID to args
+	allArgs := append([]interface{}{workflowID}, args...)
+
+	var w models.ApprovalWorkflow
+	err := database.Pool.QueryRow(ctx, query, allArgs...).Scan(
 		&w.ID, &w.EntityType, &w.Name, &w.Description, &w.IsActive, &w.CreatedAt, &w.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -156,6 +187,7 @@ func DeleteApprovalWorkflow(ctx context.Context, workflowID string) error {
 func ListApprovalWorkflowSteps(ctx context.Context, workflowID string) ([]models.ApprovalWorkflowStep, error) {
 	rows, err := database.Pool.Query(ctx, `
 		SELECT id, workflow_id, step_order, approver_type, approver_role_id,
+			approver_employee_id, step_mode,
 			condition_field, condition_operator, condition_value,
 			escalation_hours, created_at, updated_at
 		FROM approval_workflow_steps
@@ -171,9 +203,16 @@ func ListApprovalWorkflowSteps(ctx context.Context, workflowID string) ([]models
 	for rows.Next() {
 		var s models.ApprovalWorkflowStep
 		if err := rows.Scan(&s.ID, &s.WorkflowID, &s.StepOrder, &s.ApproverType, &s.ApproverRoleID,
+			&s.ApproverEmployeeID, &s.StepMode,
 			&s.ConditionField, &s.ConditionOp, &s.ConditionValue,
 			&s.EscalationHours, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
+		}
+		// Look up employee name for specific_employee type
+		if s.ApproverType == "specific_employee" && s.ApproverEmployeeID != nil {
+			_ = database.Pool.QueryRow(ctx,
+				`SELECT full_name FROM employees WHERE id = $1 AND deleted_at IS NULL`,
+				s.ApproverEmployeeID).Scan(&s.ApproverEmployeeName)
 		}
 		steps = append(steps, s)
 	}
@@ -189,16 +228,23 @@ func CreateApprovalWorkflowStep(ctx context.Context, req *models.CreateApprovalW
 	if req.ApproverRoleID != nil {
 		roleID = req.ApproverRoleID
 	}
+	var empID *string
+	if req.ApproverEmployeeID != nil {
+		empID = req.ApproverEmployeeID
+	}
 
 	err := database.Pool.QueryRow(ctx, `
 		INSERT INTO approval_workflow_steps (workflow_id, step_order, approver_type, approver_role_id,
+			approver_employee_id, step_mode,
 			condition_field, condition_operator, condition_value, escalation_hours)
-		VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, $7, $8)
+		VALUES ($1::uuid, $2, $3, $4::uuid, $5::uuid, $6, $7, $8, $9, $10)
 		RETURNING id, workflow_id, step_order, approver_type, approver_role_id,
+			approver_employee_id, step_mode,
 			condition_field, condition_operator, condition_value, escalation_hours, created_at, updated_at
-	`, req.WorkflowID, req.StepOrder, req.ApproverType, roleID,
+	`, req.WorkflowID, req.StepOrder, req.ApproverType, roleID, empID, req.StepMode,
 		req.ConditionField, req.ConditionOp, req.ConditionValue, req.EscalationHours).Scan(
 		&s.ID, &s.WorkflowID, &s.StepOrder, &s.ApproverType, &s.ApproverRoleID,
+		&s.ApproverEmployeeID, &s.StepMode,
 		&s.ConditionField, &s.ConditionOp, &s.ConditionValue,
 		&s.EscalationHours, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
@@ -213,18 +259,25 @@ func UpdateApprovalWorkflowStep(ctx context.Context, stepID string, req *models.
 	if req.ApproverRoleID != nil {
 		roleID = req.ApproverRoleID
 	}
+	var empID *string
+	if req.ApproverEmployeeID != nil {
+		empID = req.ApproverEmployeeID
+	}
 
 	err := database.Pool.QueryRow(ctx, `
 		UPDATE approval_workflow_steps
 		SET step_order = $2, approver_type = $3, approver_role_id = $4::uuid,
-			condition_field = $5, condition_operator = $6, condition_value = $7,
-			escalation_hours = $8, updated_at = NOW()
+			approver_employee_id = $5::uuid, step_mode = $6,
+			condition_field = $7, condition_operator = $8, condition_value = $9,
+			escalation_hours = $10, updated_at = NOW()
 		WHERE id::text = $1
 		RETURNING id, workflow_id, step_order, approver_type, approver_role_id,
+			approver_employee_id, step_mode,
 			condition_field, condition_operator, condition_value, escalation_hours, created_at, updated_at
-	`, stepID, req.StepOrder, req.ApproverType, roleID,
+	`, stepID, req.StepOrder, req.ApproverType, roleID, empID, req.StepMode,
 		req.ConditionField, req.ConditionOp, req.ConditionValue, req.EscalationHours).Scan(
 		&s.ID, &s.WorkflowID, &s.StepOrder, &s.ApproverType, &s.ApproverRoleID,
+		&s.ApproverEmployeeID, &s.StepMode,
 		&s.ConditionField, &s.ConditionOp, &s.ConditionValue,
 		&s.EscalationHours, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
@@ -253,6 +306,7 @@ func DeleteApprovalWorkflowStep(ctx context.Context, stepID string) error {
 func GetActiveStepsForEntityType(ctx context.Context, entityType string) ([]models.ApprovalWorkflowStep, error) {
 	rows, err := database.Pool.Query(ctx, `
 		SELECT aws.id, aws.workflow_id, aws.step_order, aws.approver_type, aws.approver_role_id,
+			aws.approver_employee_id, aws.step_mode,
 			aws.condition_field, aws.condition_operator, aws.condition_value,
 			aws.escalation_hours, aws.created_at, aws.updated_at
 		FROM approval_workflow_steps aws
@@ -269,6 +323,7 @@ func GetActiveStepsForEntityType(ctx context.Context, entityType string) ([]mode
 	for rows.Next() {
 		var s models.ApprovalWorkflowStep
 		if err := rows.Scan(&s.ID, &s.WorkflowID, &s.StepOrder, &s.ApproverType, &s.ApproverRoleID,
+			&s.ApproverEmployeeID, &s.StepMode,
 			&s.ConditionField, &s.ConditionOp, &s.ConditionValue,
 			&s.EscalationHours, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
@@ -374,9 +429,130 @@ func GetApproverByType(ctx context.Context, approverType string, requestorID str
 		}
 		return approverID, approverName, nil
 
+	case "manager":
+		// Get the requestor's manager_id from employees table
+		var approverID, approverName string
+		err := database.Pool.QueryRow(ctx, `
+			SELECT COALESCE(e.manager_id::text, ''), COALESCE(ae.full_name, '')
+			FROM employees e
+			LEFT JOIN employees ae ON ae.id = e.manager_id
+			WHERE e.id::text = $1 AND e.deleted_at IS NULL
+		`, requestorID).Scan(&approverID, &approverName)
+		if err != nil {
+			return "", "", err
+		}
+		if approverID == "" {
+			return "", "", errors.New("manager tidak ditemukan untuk karyawan ini")
+		}
+		return approverID, approverName, nil
+
+	case "specific_employee":
+		// This shouldn't be called directly without a step context.
+		// The approver_employee_id should be resolved from the step.
+		return "", "", errors.New("specific_employee harus diresolve dari konteks step")
+
 	default:
 		return "", "", fmt.Errorf("tipe approver tidak dikenal: %s", approverType)
 	}
+}
+
+// GetApproverIDsByType returns ALL employee IDs and names matching the approver type.
+// Used for parallel (any) approval mode where all matching users can approve.
+func GetApproverIDsByType(ctx context.Context, approverType string, requestorID string, entityType string) ([]struct{ ID string; Name string }, error) {
+	var results []struct{ ID string; Name string }
+
+	switch approverType {
+	case "approval_line":
+		// Single person — return just the one
+		id, name, err := GetApproverByType(ctx, approverType, requestorID, entityType)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, struct{ ID string; Name string }{ID: id, Name: name})
+
+	case "hr_manager", "finance", "director":
+		// Role slug matches the approver_type
+		rows, err := database.Pool.Query(ctx, `
+			SELECT e.id::text, e.full_name FROM employees e
+			JOIN roles r ON r.id = e.role_id
+			WHERE r.slug = $1 AND e.is_active = TRUE AND e.deleted_at IS NULL
+			ORDER BY e.created_at ASC
+		`, approverType)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item struct{ ID string; Name string }
+			if err := rows.Scan(&item.ID, &item.Name); err != nil {
+				continue
+			}
+			results = append(results, item)
+		}
+		rows.Close()
+		// If no results, fallback to super_admin
+		if len(results) == 0 {
+			rows2, err := database.Pool.Query(ctx, `
+				SELECT e.id::text, e.full_name FROM employees e
+				JOIN roles r ON r.id = e.role_id
+				WHERE r.slug = 'super_admin' AND e.is_active = TRUE AND e.deleted_at IS NULL
+				ORDER BY e.created_at ASC
+			`)
+			if err == nil {
+				defer rows2.Close()
+				for rows2.Next() {
+					var item struct{ ID string; Name string }
+					if err := rows2.Scan(&item.ID, &item.Name); err != nil {
+						continue
+					}
+					results = append(results, item)
+				}
+				rows2.Close()
+			}
+		}
+
+	case "department_head":
+		// Find department head of the requestor's department
+		rows, err := database.Pool.Query(ctx, `
+			SELECT e2.id::text, e2.full_name
+			FROM employees e
+			LEFT JOIN departments d ON d.id = e.department_id
+			LEFT JOIN employees e2 ON e2.id = d.head_id
+			WHERE e.id::text = $1 AND e.deleted_at IS NULL AND e2.deleted_at IS NULL
+		`, requestorID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item struct{ ID string; Name string }
+			if err := rows.Scan(&item.ID, &item.Name); err != nil {
+				continue
+			}
+			results = append(results, item)
+		}
+		rows.Close()
+
+	case "manager":
+		// Get the requestor's manager
+		id, name, err := GetApproverByType(ctx, approverType, requestorID, entityType)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, struct{ ID string; Name string }{ID: id, Name: name})
+
+	case "specific_employee":
+		// This shouldn't be called directly — resolved from the step context
+		return nil, errors.New("specific_employee harus diresolve dari konteks step")
+
+	default:
+		return nil, fmt.Errorf("tipe approver tidak dikenal: %s", approverType)
+	}
+
+	if results == nil {
+		results = []struct{ ID string; Name string }{}
+	}
+	return results, nil
 }
 
 // ==================== Approval Tracking ====================
@@ -599,6 +775,119 @@ func GetPendingApprovalsByUser(ctx context.Context, userID string) ([]models.Pen
 					item.ApproverType = "finance"
 					items = append(items, item)
 				}
+			}
+		}
+	}
+
+	// 3. Pending as manager (requestor's manager_id matches this user)
+	mgrQuery := fmt.Sprintf(`
+		SELECT%s
+		FROM approval_request_tracking art%s
+		WHERE art.status = 'pending'
+			AND art.current_step > 0
+			AND e.manager_id::text = $1
+			AND e.deleted_at IS NULL
+		ORDER BY art.created_at ASC
+	`, selectCols, entityJoinSQL)
+	mgrRows, err := database.Pool.Query(ctx, mgrQuery, userID)
+	if err == nil {
+		defer mgrRows.Close()
+		for mgrRows.Next() {
+			var item models.PendingApprovalItem
+			if err := mgrRows.Scan(&item.TrackingID, &item.EntityType, &item.EntityID,
+				&item.RequestorName, &item.RequestorID,
+				&item.CurrentStep, &item.TotalSteps,
+				&item.CreatedAt, &item.ElapsedHours); err != nil {
+				continue
+			}
+			dup := false
+			for i := range items {
+				if items[i].TrackingID == item.TrackingID {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				item.ApproverType = "manager"
+				items = append(items, item)
+			}
+		}
+	}
+
+	// 4. Pending as department head (user is head of requestor's department)
+	headQuery := fmt.Sprintf(`
+		SELECT%s
+		FROM approval_request_tracking art
+		%s
+		LEFT JOIN departments d ON d.id = e.department_id
+		WHERE art.status = 'pending'
+			AND art.current_step > 0
+			AND d.head_id::text = $1
+			AND e.deleted_at IS NULL
+		ORDER BY art.created_at ASC
+	`, selectCols, entityJoinSQL)
+	headRows, err := database.Pool.Query(ctx, headQuery, userID)
+	if err == nil {
+		defer headRows.Close()
+		for headRows.Next() {
+			var item models.PendingApprovalItem
+			if err := headRows.Scan(&item.TrackingID, &item.EntityType, &item.EntityID,
+				&item.RequestorName, &item.RequestorID,
+				&item.CurrentStep, &item.TotalSteps,
+				&item.CreatedAt, &item.ElapsedHours); err != nil {
+				continue
+			}
+			dup := false
+			for i := range items {
+				if items[i].TrackingID == item.TrackingID {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				item.ApproverType = "department_head"
+				items = append(items, item)
+			}
+		}
+	}
+
+	// 5. Pending as specific_employee (user is designated on the step's approver_employee_id)
+	specQuery := fmt.Sprintf(`
+		SELECT%s
+		FROM approval_request_tracking art%s
+		WHERE art.status = 'pending'
+			AND art.current_step > 0
+			AND e.deleted_at IS NULL
+			AND EXISTS (
+				SELECT 1 FROM approval_workflow_steps aws
+				JOIN approval_workflows aw ON aw.id = aws.workflow_id AND aw.id = art.workflow_id
+				WHERE aws.step_order = art.current_step
+				AND aws.approver_type = 'specific_employee'
+				AND aws.approver_employee_id::text = $1
+			)
+		ORDER BY art.created_at ASC
+	`, selectCols, entityJoinSQL)
+	specRows, err := database.Pool.Query(ctx, specQuery, userID)
+	if err == nil {
+		defer specRows.Close()
+		for specRows.Next() {
+			var item models.PendingApprovalItem
+			if err := specRows.Scan(&item.TrackingID, &item.EntityType, &item.EntityID,
+				&item.RequestorName, &item.RequestorID,
+				&item.CurrentStep, &item.TotalSteps,
+				&item.CreatedAt, &item.ElapsedHours); err != nil {
+				continue
+			}
+			dup := false
+			for i := range items {
+				if items[i].TrackingID == item.TrackingID {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				item.ApproverType = "specific_employee"
+				items = append(items, item)
 			}
 		}
 	}

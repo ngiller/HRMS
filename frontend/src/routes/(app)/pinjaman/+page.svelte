@@ -1,4 +1,5 @@
 <script lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount } from 'svelte';
 	import { loans, employees, ApiError } from '$lib/api.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
@@ -29,6 +30,8 @@
 	let currentPage = $state(1);
 	let perPage = $state(25);
 	let isLoading = $state(true);
+	let searchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
 	let statusFilter = $state('');
 	let errorMessage = $state('');
 
@@ -44,6 +47,21 @@
 
 	let actionLoading = $state(false);
 	let rejectionReason = $state('');
+	let filteredLoans = $derived.by(() => {
+		if (!searchQuery.trim()) return loanData;
+		const q = searchQuery.toLowerCase();
+		return loanData.filter(i =>
+			i.employee_name?.toLowerCase().includes(q) ||
+			i.loan_type?.toLowerCase().includes(q) ||
+			i.purpose?.toLowerCase().includes(q)
+		);
+	});
+
+	function onSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => { searchQuery = target.value; }, 400);
+	}
 
 	// Reject Modal
 	let showRejectModal = $state(false);
@@ -62,14 +80,14 @@
 		try {
 			const res = await loans.getStats();
 			if (res?.success) stats = res.data;
-		} catch {}
+		} catch { /* silent fail */ }
 	}
 
 	async function loadEmployeeOptions() {
 		try {
 			const res = await employees.list(1, 100);
 			if (res?.success) employeeOptions = res.data;
-		} catch {}
+		} catch { /* silent */ }
 	}
 
 	async function loadData() {
@@ -251,6 +269,10 @@
 	}
 </script>
 
+<!-- eslint-disable svelte/no-useless-children-snippet -->
+
+<!-- eslint-disable svelte/no-at-html-tags -->
+
 <div class="w-full">
 	<div class="flex items-center justify-between mb-6">
 		<div>
@@ -331,7 +353,7 @@
 					<div>
 						<label for="loan-tenor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tenor (bulan) <span class="text-red-500">*</span></label>
 						<select id="loan-tenor" bind:value={createForm.installment_count} class="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none">
-							{#each Array.from({ length: 24 }, (_, i) => i + 1) as n}
+							{#each Array.from({ length: 24 }, (_, i) => i + 1) as n (n)}
 								<option value={n}>{n} bulan</option>
 							{/each}
 						</select>
@@ -380,7 +402,7 @@
 								<h3 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Progress Approval</h3>
 							</div>
 							<div class="space-y-2">
-								{#each trail as step}
+								{#each trail as step (step)}
 									{@const isPending = step.status === 'pending'}
 									{@const isApproved = step.status === 'approved'}
 									{@const isRejected = step.status === 'rejected'}
@@ -466,7 +488,12 @@
 		</div>
 	{:else}
 		<!-- ─── Table ─── -->
-		<div class="flex gap-3 mb-4">
+		<div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+		<div class="relative flex-1 max-w-md">
+			<svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+			<input type="search" value={searchQuery} placeholder="Cari pinjaman..." oninput={onSearchInput} class="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] focus:bg-white dark:focus:bg-gray-900 transition placeholder:text-gray-400" />
+		</div>
+				<div class="flex gap-3">
 			<select
 				bind:value={statusFilter}
 				onchange={() => { currentPage = 1; loadData(); }}
@@ -479,6 +506,7 @@
 				<option value="completed">Lunas</option>
 				<option value="rejected">Ditolak</option>
 			</select>
+			</div>
 		</div>
 
 		{#if errorMessage}
@@ -508,7 +536,7 @@
 						{:else if loanData.length === 0}
 							<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-400">Belum ada data pinjaman</td></tr>
 						{:else}
-							{#each loanData as item}
+							{#each filteredLoans as item (item)}
 								<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition {detailItem?.id === item.id && showDetail ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}">
 									<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.employee_name}</td>
 									<td class="px-4 py-3 text-gray-600 dark:text-gray-400">{item.loan_type}</td>
@@ -538,7 +566,7 @@
 						description="Belum ada data pinjaman yang diajukan."
 					/>
 				{:else}
-					<StaggerList items={loanData}>
+					<StaggerList items={filteredLoans}>
 						{#snippet children(item)}
 							{@const theme = getAvatarTheme('loan')}
 							<MobileCard
@@ -601,9 +629,7 @@
 
 <!-- ─── Reject Modal ─── -->
 <AnimatedPresence show={showRejectModal} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
+			<div onclick={cancelReject} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelReject(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tolak pengajuan pinjaman" class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md">
 			<div class="px-6 py-6">

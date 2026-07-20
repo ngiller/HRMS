@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { roles as rolesApi } from '$lib/api.js';
+	import { roles as rolesApi, auth } from '$lib/api.js';
 	import PulseLoader from '$lib/components/PulseLoader.svelte';
 	import AnimatedPresence from '$lib/components/AnimatedPresence.svelte';
 	import { hasPermission } from '$lib/permissions.js';
@@ -354,6 +354,7 @@
 			} else {
 				await rolesApi.create(payload);
 			}
+			await auth.refreshSession();
 			cancelForm();
 			loadRoles();
 		} catch (error: unknown) {
@@ -380,6 +381,7 @@
 		isSaving = true;
 		try {
 			await rolesApi.remove(deletingId);
+			await auth.refreshSession();
 			showDeleteConfirm = false;
 			deletingId = null;
 			deletingName = '';
@@ -561,7 +563,7 @@
 						<span class="text-xs text-gray-400">Centang modul & action yang diizinkan</span>
 					</div>
 					<div class="space-y-2 max-h-80 overflow-y-auto border border-gray-200 rounded-xl p-3">
-						{#each permissionModules as mod}
+						{#each permissionModules as mod (mod.module)}
 							<div class="border border-gray-100 rounded-lg p-3 hover:bg-gray-50/50 transition">
 								<div class="flex items-center justify-between mb-2">
 									<label class="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
@@ -576,7 +578,7 @@
 									<span class="text-xs text-gray-400">{mod.module}</span>
 								</div>
 								<div class="flex flex-wrap gap-2 ml-6">
-									{#each mod.actions as action}
+									{#each mod.actions as action (action)}
 										<label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer transition {isPermissionChecked(mod.module, action) ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}">
 											<input
 												type="checkbox"
@@ -649,7 +651,7 @@
 
 				<!-- Mobile Cards -->
 				<div class="md:hidden divide-y divide-gray-100">
-					{#each roles as role}
+					{#each roles as role (role.id)}
 					{@const canEdit = hasPermission('user_management', 'update')}
 					{@const canDelete = hasPermission('user_management', 'delete') && !role.is_system_role}
 						<div class="p-4 hover:bg-blue-50/40 transition-colors">
@@ -699,7 +701,7 @@
 					<div class="flex items-center gap-1.5">
 						<button onclick={() => goToPage(page - 1)} disabled={page <= 1}
 							class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">Sebelumnya</button>
-						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i}
+						{#each Array.from({ length: Math.min(5, totalPages) }) as _, i (i)}
 							{@const pn = Math.max(1, Math.min(page - 2, totalPages - 4)) + i}
 							{#if pn <= totalPages}
 								<button onclick={() => goToPage(pn)}
@@ -717,9 +719,7 @@
 
 <!-- Delete Confirmation Modal (tetap modal, cuma buat konfirmasi) -->
 <AnimatedPresence show={showDeleteConfirm} type="scale" duration={200}>
-	<!-- svelte-ignore a11y_interactive_supports_focus -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
+			<div onclick={cancelDelete} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') cancelDelete(); }}
 		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Hapus role" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
 			<div class="px-6 py-6 text-center">

@@ -84,8 +84,7 @@ func (s *ShiftChangeService) Create(ctx context.Context, employeeID string, req 
 	}
 
 	// Initialize workflow tracking (non-blocking, ignore errors)
-	// Shift changes are unconditional (single-step approval), so conditionValue = 0
-	err = s.initWorkflowTracking(ctx, "shift_change", r.ID.String(), employeeID, 0)
+	err = s.initWorkflowTracking(ctx, "shift_change", r.ID.String(), employeeID)
 	if err != nil {
 		fmt.Printf("[WARN] Shift change workflow init: %v\n", err)
 	}
@@ -93,9 +92,9 @@ func (s *ShiftChangeService) Create(ctx context.Context, employeeID string, req 
 	return r, nil
 }
 
-func (s *ShiftChangeService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+func (s *ShiftChangeService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string) error {
 	wfSvc := NewApprovalWorkflowService()
-	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID)
 	return err
 }
 

@@ -74,7 +74,7 @@ func (s *ReimbursementService) Create(ctx context.Context, employeeID string, re
 	}
 
 	// Initialize workflow tracking (non-blocking, ignore errors)
-	err = s.initWorkflowTracking(ctx, "reimbursement", r.ID.String(), employeeID, r.Amount)
+	err = s.initWorkflowTracking(ctx, "reimbursement", r.ID.String(), employeeID)
 	if err != nil {
 		fmt.Printf("[WARN] Reimbursement workflow init: %v\n", err)
 	}
@@ -82,9 +82,9 @@ func (s *ReimbursementService) Create(ctx context.Context, employeeID string, re
 	return r, nil
 }
 
-func (s *ReimbursementService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string, conditionValue float64) error {
+func (s *ReimbursementService) initWorkflowTracking(ctx context.Context, entityType, entityID, employeeID string) error {
 	wfSvc := NewApprovalWorkflowService()
-	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID, conditionValue)
+	_, err := wfSvc.ResolveWorkflowForRequest(ctx, entityType, entityID, employeeID)
 	return err
 }
 

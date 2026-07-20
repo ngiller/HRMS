@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"hrms-backend/internal/database"
@@ -297,6 +298,19 @@ func DeleteDepartment(ctx context.Context, id, userID string) error {
 		_, err := tx.Exec(ctx, `UPDATE departments SET deleted_at = NOW() WHERE id::text = $1 AND deleted_at IS NULL`, id)
 		return err
 	})
+}
+
+// GetDepartmentByName looks up a department ID by name (case-insensitive).
+func GetDepartmentByName(ctx context.Context, name string) (*string, error) {
+	var id string
+	err := database.Pool.QueryRow(ctx, `SELECT id::text FROM departments WHERE LOWER(name) = LOWER($1) AND deleted_at IS NULL LIMIT 1`, name).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &id, nil
 }
 
 // CheckDepartmentCodeExists checks if a department code already exists (excluding a given ID).

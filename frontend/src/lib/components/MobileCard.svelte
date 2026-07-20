@@ -50,8 +50,6 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
 	{...typeof onclick === 'function' ? { onclick, role: 'button', tabindex: 0 } : {}}
 	onkeydown={(e) => { if (typeof onclick === 'function' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onclick(); } }}
@@ -76,7 +74,7 @@
 			</div>
 			{#if badges && badges.length > 0}
 				<div class="flex items-center gap-1.5 shrink-0">
-					{#each badges as badge}
+					{#each badges as badge (badge)}
 						<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 {badge.color || 'bg-gray-50 text-gray-600 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700'}">
 							{badge.label}
 						</span>

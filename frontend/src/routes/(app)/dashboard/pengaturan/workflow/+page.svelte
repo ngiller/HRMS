@@ -1,9 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { approvalWorkflows } from '$lib/api.js';
-	import { fade, scale, slide } from 'svelte/transition';
-	import { fly } from 'svelte/transition';
-	import { AnimatedPresence } from '$lib/index.js';
+	import { approvalWorkflows, employees } from '$lib/api.js';
+	import { slide, fly } from 'svelte/transition';
 
 	const ENTITY_LABELS: Record<string, string> = {
 		leave: 'Cuti',
@@ -38,23 +36,14 @@
 		mutation: 'from-indigo-500 to-indigo-600',
 	};
 
-	const ENTITY_BG: Record<string, string> = {
-		leave: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300',
-		overtime: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300',
-		reimbursement: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300',
-		shift_change: 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300',
-		loan: 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300',
-		manual_attendance: 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300',
-		resign: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300',
-		mutation: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300',
-	};
-
 	const APPROVER_LABELS: Record<string, string> = {
 		approval_line: 'Atasan Langsung',
 		hr_manager: 'HR Manager',
 		finance: 'Finance',
 		director: 'Direktur',
 		department_head: 'Kepala Departemen',
+		manager: 'Manager',
+		specific_employee: 'Karyawan Tertentu',
 	};
 
 	const ENTITY_ORDER = ['leave', 'overtime', 'reimbursement', 'shift_change', 'loan', 'manual_attendance', 'resign', 'mutation'];
@@ -74,6 +63,9 @@
 		step_order: number;
 		approver_type: string;
 		approver_role_id: string | null;
+		approver_employee_id: string | null;
+		approver_employee_name: string | null;
+		step_mode?: string;
 		condition_field: string | null;
 		condition_operator: string | null;
 		condition_value: number | null;
@@ -98,35 +90,63 @@
 	let errorMessage = $state('');
 	let successMessage = $state('');
 
-	// Create & Edit workflow modal
-	let showCreateModal = $state(false);
+	// ═══ Inline Create Workflow ═══
+	let showCreateForm = $state(false);
 	let createForm = $state({ name: '', entity_type: 'leave', description: '' });
 	let createError = $state('');
 	let isCreating = $state(false);
 
-	let showEditModal = $state(false);
-	let editForm = $state({ id: '', name: '', entity_type: 'leave', description: '' });
+	// ═══ Inline Edit Workflow (per workflow ID) ═══
+	let editingWorkflowId = $state<string | null>(null);
+	let editForm = $state({ name: '', description: '' });
 	let editError = $state('');
 	let isEditing = $state(false);
 
-	// Add step modal
-	let showAddStepModal = $state(false);
-	let addStepWorkflowId = $state('');
-	let addStepWorkflowName = $state('');
-	let stepForm = $state({
+	// ═══ Employee list for specific_employee picker ═══
+	let employeeList = $state<{ id: string; full_name: string; department_name: string }[]>([]);
+	let employeeSearch = $state('');
+	let filteredEmployees = $derived.by(() => {
+		if (!employeeSearch.trim()) return employeeList.slice(0, 20);
+		const q = employeeSearch.toLowerCase();
+		return employeeList.filter(e => e.full_name.toLowerCase().includes(q) || (e.department_name || '').toLowerCase().includes(q)).slice(0, 20);
+	});
+	let showEmployeePicker = $state(false);
+
+	// ═══ Inline Edit Step ═══
+	let editingStepId = $state<string | null>(null);
+	let editingStepWfId = $state<string | null>(null);
+	let editStepForm = $state({
 		step_order: 1,
 		approver_type: 'approval_line',
+		step_mode: 'single',
 		condition_field: '',
 		condition_operator: '',
 		condition_value: 0,
 		escalation_hours: 0,
+		approver_employee_id: '',
+		approver_employee_name: '',
+	});
+	let editStepError = $state('');
+	let isEditingStep = $state(false);
+
+	// ═══ Inline Add Step (per workflow ID) ═══
+	let addingStepForId = $state<string | null>(null);
+	let stepForm = $state({
+		step_order: 1,
+		approver_type: 'approval_line',
+		step_mode: 'single',
+		condition_field: '',
+		condition_operator: '',
+		condition_value: 0,
+		escalation_hours: 0,
+		approver_employee_id: '',
+		approver_employee_name: '',
 	});
 	let stepError = $state('');
 	let isAddingStep = $state(false);
 
-	// Delete confirmation
-	let showDeleteModal = $state(false);
-	let deleteTarget = $state<{ id: string; name: string } | null>(null);
+	// ═══ Inline Delete Confirmation ═══
+	let confirmingDeleteId = $state<string | null>(null);
 	let isDeleting = $state(false);
 
 	// Expanded workflows
@@ -179,24 +199,22 @@
 			.map(t => ({ type: t, count: counts[t] || 0 }));
 	}
 
-	// ─── Create Workflow ────────────────────────────────────────
+	// ─── Create Workflow (inline) ───────────────────────────────
 
-	function openCreateModal(entityType?: string) {
-		createForm = { name: '', entity_type: entityType || 'leave', description: '' };
+	function toggleCreateForm(entityType?: string) {
+		showCreateForm = !showCreateForm;
+		createForm = { name: '', entity_type: entityType || (showCreateForm ? createForm.entity_type : 'leave'), description: '' };
 		createError = '';
-		showCreateModal = true;
+		// If clicking a different entity type while form is open, just update the type
+		if (entityType && showCreateForm) {
+			showCreateForm = true;
+			createForm.entity_type = entityType;
+		}
 	}
 
 	async function handleCreate() {
-		// Validasi form
-		if (!createForm.name.trim()) {
-			createError = 'Nama workflow harus diisi';
-			return;
-		}
-		if (!createForm.entity_type) {
-			createError = 'Tipe entity harus dipilih';
-			return;
-		}
+		if (!createForm.name.trim()) { createError = 'Nama workflow harus diisi'; return; }
+		if (!createForm.entity_type) { createError = 'Tipe entity harus dipilih'; return; }
 
 		isCreating = true;
 		createError = '';
@@ -206,7 +224,7 @@
 				entity_type: createForm.entity_type,
 				description: createForm.description.trim(),
 			});
-			showCreateModal = false;
+			showCreateForm = false;
 			successMessage = `Workflow "${createForm.name.trim()}" berhasil dibuat!`;
 			setTimeout(() => successMessage = '', 4000);
 			await loadWorkflows();
@@ -217,38 +235,32 @@
 		}
 	}
 
-	// ─── Edit Workflow ──────────────────────────────────────────
+	// ─── Edit Workflow (inline) ─────────────────────────────────
 
-	function openEditModal(wf: WorkflowSummary) {
-		editForm = {
-			id: wf.id,
-			name: wf.name,
-			entity_type: wf.entity_type,
-			description: wf.description,
-		};
-		editError = '';
-		showEditModal = true;
+	function toggleEdit(wf: WorkflowSummary) {
+		if (editingWorkflowId === wf.id) {
+			editingWorkflowId = null;
+		} else {
+			editingWorkflowId = wf.id;
+			editForm = { name: wf.name, description: wf.description };
+			editError = '';
+		}
 	}
 
 	async function handleEdit() {
-		if (!editForm.name.trim()) {
-			editError = 'Nama workflow harus diisi';
-			return;
-		}
-		if (!editForm.entity_type) {
-			editError = 'Tipe entity harus dipilih';
-			return;
-		}
+		if (!editForm.name.trim()) { editError = 'Nama workflow harus diisi'; return; }
+		if (!editingWorkflowId) return;
 
 		isEditing = true;
 		editError = '';
 		try {
-			await approvalWorkflows.update(editForm.id, {
+			const wf = workflows.find(w => w.id === editingWorkflowId);
+			await approvalWorkflows.update(editingWorkflowId, {
 				name: editForm.name.trim(),
-				entity_type: editForm.entity_type,
+				entity_type: wf?.entity_type || 'leave',
 				description: editForm.description.trim(),
 			});
-			showEditModal = false;
+			editingWorkflowId = null;
 			successMessage = `Workflow "${editForm.name.trim()}" berhasil diperbarui!`;
 			setTimeout(() => successMessage = '', 4000);
 			await loadWorkflows();
@@ -259,56 +271,155 @@
 		}
 	}
 
-	// ─── Add Step ───────────────────────────────────────────────
+	// ─── Add Step (inline) ──────────────────────────────────────
 
-	function openAddStepModal(workflowId: string, workflowName: string) {
-		// Find current max step order
-		const detail = workflowDetails[workflowId];
-		const steps = detail?.steps || [];
-		const maxOrder = steps.reduce((max, s) => Math.max(max, s.step_order), 0);
+	async function loadEmployeeList() {
+		try {
+			const res = await employees.list(1, 100);
+			if (res.success) {
+				const emps = res.data || [];
+				employeeList = emps.map((e: any) => ({
+					id: e.id,
+					full_name: e.full_name,
+					department_name: e.department_name || '',
+				}));
+			}
+		} catch {
+			// silent
+		}
+	}
 
-		addStepWorkflowId = workflowId;
-		addStepWorkflowName = workflowName;
-		stepForm = {
-			step_order: maxOrder + 1,
-			approver_type: 'approval_line',
-			condition_field: '',
-			condition_operator: '',
-			condition_value: 0,
-			escalation_hours: 0,
-		};
-		stepError = '';
-		showAddStepModal = true;
+	function toggleAddStep(workflowId: string) {
+		if (addingStepForId === workflowId) {
+			addingStepForId = null;
+		} else {
+			// Tutup edit workflow kalo lagi kebuka
+			editingWorkflowId = null;
+			
+			const detail = workflowDetails[workflowId];
+			const steps = detail?.steps || [];
+			const maxOrder = steps.reduce((max, s) => Math.max(max, s.step_order), 0);
+
+			addingStepForId = workflowId;
+			stepForm = {
+				step_order: maxOrder + 1,
+				approver_type: 'approval_line',
+				step_mode: 'single',
+				condition_field: '',
+				condition_operator: '',
+				condition_value: 0,
+				escalation_hours: 0,
+				approver_employee_id: '',
+				approver_employee_name: '',
+			};
+			employeeSearch = '';
+			showEmployeePicker = false;
+			stepError = '';
+			loadEmployeeList();
+		}
 	}
 
 	async function handleAddStep() {
-		if (!stepForm.approver_type) {
-			stepError = 'Tipe approver harus dipilih';
+		if (!stepForm.approver_type) { stepError = 'Tipe approver harus dipilih'; return; }
+		if (!addingStepForId) return;
+		if (stepForm.approver_type === 'specific_employee' && !stepForm.approver_employee_id) {
+			stepError = 'Pilih karyawan yang akan menjadi approver';
 			return;
 		}
 
 		isAddingStep = true;
 		stepError = '';
+		const wid = addingStepForId; // capture before async ops
 		try {
-			await approvalWorkflows.addStep(addStepWorkflowId, {
+			await approvalWorkflows.addStep(addingStepForId, {
 				step_order: stepForm.step_order,
 				approver_type: stepForm.approver_type,
+				step_mode: stepForm.step_mode,
+				approver_employee_id: stepForm.approver_employee_id || null,
 				condition_field: stepForm.condition_field || null,
 				condition_operator: stepForm.condition_operator || null,
 				condition_value: stepForm.condition_value || null,
 				escalation_hours: stepForm.escalation_hours || null,
 			});
-			showAddStepModal = false;
-			successMessage = `Step ${stepForm.step_order} berhasil ditambahkan ke "${addStepWorkflowName}"!`;
+			addingStepForId = null;
+			successMessage = `Step ${stepForm.step_order} berhasil ditambahkan!`;
 			setTimeout(() => successMessage = '', 4000);
 			// Refresh detail
-			workflowDetails[addStepWorkflowId] = null;
-			await loadWorkflowDetail(addStepWorkflowId);
+			workflowDetails[wid] = null;
+			await loadWorkflowDetail(wid);
 			await loadWorkflows();
 		} catch (e: any) {
 			stepError = e?.message || 'Gagal menambahkan step';
 		} finally {
 			isAddingStep = false;
+		}
+	}
+
+	// ─── Edit Step (inline) ────────────────────────────────────
+
+	function toggleEditStep(step: WorkflowStep, wfId: string) {
+		if (editingStepId === step.id) {
+			editingStepId = null;
+			editingStepWfId = null;
+		} else {
+			// Tutup add step kalo lagi kebuka
+			addingStepForId = null;
+			
+			editingStepId = step.id;
+			editingStepWfId = wfId;
+			editStepForm = {
+				step_order: step.step_order,
+				approver_type: step.approver_type,
+				step_mode: step.step_mode || 'single',
+				condition_field: step.condition_field || '',
+				condition_operator: step.condition_operator || '',
+				condition_value: step.condition_value || 0,
+				escalation_hours: step.escalation_hours || 0,
+				approver_employee_id: step.approver_employee_id || '',
+				approver_employee_name: step.approver_employee_name || '',
+			};
+			employeeSearch = '';
+			showEmployeePicker = false;
+			editStepError = '';
+			loadEmployeeList();
+		}
+	}
+
+	async function handleUpdateStep() {
+		if (!editingStepId) return;
+		if (!editStepForm.approver_type) { editStepError = 'Tipe approver harus dipilih'; return; }
+		if (editStepForm.approver_type === 'specific_employee' && !editStepForm.approver_employee_id) {
+			editStepError = 'Pilih karyawan yang akan menjadi approver';
+			return;
+		}
+
+		isEditingStep = true;
+		editStepError = '';
+		const wfId = editingStepWfId;
+		try {
+			await approvalWorkflows.updateStep(editingStepId, {
+				step_order: editStepForm.step_order,
+				approver_type: editStepForm.approver_type,
+				step_mode: editStepForm.step_mode,
+				approver_employee_id: editStepForm.approver_employee_id || null,
+				condition_field: editStepForm.condition_field || null,
+				condition_operator: editStepForm.condition_operator || null,
+				condition_value: editStepForm.condition_value || null,
+				escalation_hours: editStepForm.escalation_hours || null,
+			});
+			editingStepId = null;
+			editingStepWfId = null;
+			successMessage = `Step ${editStepForm.step_order} berhasil diperbarui!`;
+			setTimeout(() => successMessage = '', 4000);
+			if (wfId) {
+				workflowDetails[wfId] = null;
+				await loadWorkflowDetail(wfId);
+			}
+			await loadWorkflows();
+		} catch (e: any) {
+			editStepError = e?.message || 'Gagal memperbarui step';
+		} finally {
+			isEditingStep = false;
 		}
 	}
 
@@ -333,30 +444,31 @@
 		}
 	}
 
-	// ─── Delete Workflow ────────────────────────────────────────
+	// ─── Delete Workflow (inline) ───────────────────────────────
 
-	function openDeleteModal(id: string, name: string) {
-		deleteTarget = { id, name };
-		showDeleteModal = true;
+	function toggleDeleteConfirm(id: string) {
+		confirmingDeleteId = confirmingDeleteId === id ? null : id;
 	}
 
 	async function handleDeleteWorkflow() {
-		if (!deleteTarget) return;
+		if (!confirmingDeleteId) return;
 		isDeleting = true;
 		try {
-			await approvalWorkflows.remove(deleteTarget.id);
-			showDeleteModal = false;
-			successMessage = `Workflow "${deleteTarget.name}" berhasil dihapus!`;
+			const wf = workflows.find(w => w.id === confirmingDeleteId);
+			await approvalWorkflows.remove(confirmingDeleteId);
+			successMessage = `Workflow "${wf?.name}" berhasil dihapus!`;
 			setTimeout(() => successMessage = '', 4000);
-			delete workflowDetails[deleteTarget.id];
+			delete workflowDetails[confirmingDeleteId];
+			confirmingDeleteId = null;
 			await loadWorkflows();
 		} catch (e: any) {
 			errorMessage = e?.message || 'Gagal menghapus workflow';
 		} finally {
 			isDeleting = false;
-			deleteTarget = null;
 		}
 	}
+
+	// ─── Expand / Collapse ──────────────────────────────────────
 
 	function toggleExpand(id: string) {
 		if (expandedWorkflows.has(id)) {
@@ -383,7 +495,7 @@
 
 <div class="w-full animate-in fade-in duration-500">
 	<!-- Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div class="flex items-center gap-4">
 			<div class="w-14 h-14 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
 				<svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -395,12 +507,73 @@
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Konfigurasi alur persetujuan untuk setiap modul</p>
 			</div>
 		</div>
-		<button onclick={() => openCreateModal()}
+		<button onclick={() => toggleCreateForm()}
 			class="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition-all active:scale-[0.97] shadow-sm shadow-blue-200 cursor-pointer">
 			<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 			Buat Workflow Baru
 		</button>
 	</div>
+
+	<!-- ═══ INLINE CREATE WORKFLOW FORM ═══ -->
+	{#if showCreateForm}
+		<div transition:slide={{ duration: 200 }} class="mb-6 bg-white dark:bg-gray-800/50 rounded-2xl border border-blue-200 dark:border-blue-800 shadow-sm overflow-hidden">
+			<div class="px-6 py-5">
+				<div class="flex items-center gap-3 mb-5">
+					<div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+						<svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+					</div>
+					<div>
+						<h3 class="text-sm font-bold text-gray-900 dark:text-white">Buat Workflow Baru</h3>
+						<p class="text-xs text-gray-500 dark:text-gray-400">Isi detail workflow approval</p>
+					</div>
+				</div>
+
+				{#if createError}
+					<div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2.5 text-sm text-red-700 dark:text-red-300">{createError}</div>
+				{/if}
+
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+					<div>
+						<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nama Workflow <span class="text-red-500">*</span></label>
+						<input type="text" bind:value={createForm.name}
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400"
+							placeholder="Contoh: Workflow Cuti Tahunan" />
+					</div>
+					<div>
+						<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipe Module <span class="text-red-500">*</span></label>
+						<select bind:value={createForm.entity_type}
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+							{#each ENTITY_ORDER as type (type)}
+								<option value={type}>{ENTITY_LABELS[type]}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Deskripsi</label>
+						<input type="text" bind:value={createForm.description}
+							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400"
+							placeholder="Deskripsi (opsional)" />
+					</div>
+				</div>
+
+				<div class="flex items-center justify-end gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+					<button onclick={() => showCreateForm = false} disabled={isCreating}
+						class="px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer">
+						Batal
+					</button>
+					<button onclick={handleCreate} disabled={isCreating}
+						class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
+						{#if isCreating}
+							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+							Menyimpan...
+						{:else}
+							Buat Workflow
+						{/if}
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Success Message -->
 	{#if successMessage}
@@ -416,16 +589,10 @@
 				<div class="bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 animate-pulse">
 					<div class="flex items-center gap-3 mb-4">
 						<div class="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700"></div>
-						<div class="flex-1">
-							<div class="h-4 bg-gray-100 dark:bg-gray-700 rounded w-28 mb-2"></div>
-							<div class="h-3 bg-gray-50 dark:bg-gray-700/50 rounded w-20"></div>
-						</div>
+						<div class="flex-1"><div class="h-4 bg-gray-100 dark:bg-gray-700 rounded w-28 mb-2"></div><div class="h-3 bg-gray-50 dark:bg-gray-700/50 rounded w-20"></div></div>
 					</div>
 					<div class="h-3 bg-gray-50 dark:bg-gray-700/50 rounded w-full mb-3"></div>
-					<div class="flex gap-2">
-						<div class="h-8 bg-gray-50 dark:bg-gray-700/50 rounded-lg w-20"></div>
-						<div class="h-8 bg-gray-50 dark:bg-gray-700/50 rounded-lg w-20"></div>
-					</div>
+					<div class="flex gap-2"><div class="h-8 bg-gray-50 dark:bg-gray-700/50 rounded-lg w-20"></div><div class="h-8 bg-gray-50 dark:bg-gray-700/50 rounded-lg w-20"></div></div>
 				</div>
 			{/each}
 		</div>
@@ -436,50 +603,46 @@
 				<p class="text-sm font-medium text-red-800 dark:text-red-200">{errorMessage}</p>
 			</div>
 		</div>
-		<div class="mt-4 text-center">
-			<button onclick={loadWorkflows} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium cursor-pointer">Muat Ulang</button>
-		</div>
+		<div class="mt-4 text-center"><button onclick={loadWorkflows} class="px-5 py-2 bg-[#1A56DB] text-white rounded-lg text-sm font-medium cursor-pointer">Muat Ulang</button></div>
 	{:else if workflows.length === 0}
 		<div class="bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-16 text-center">
 			<div class="w-20 h-20 mx-auto mb-5 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
 				<svg class="w-10 h-10 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 			</div>
 			<h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Belum Ada Workflow</h3>
-			<p class="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">Buat workflow approval untuk mengatur alur persetujuan setiap modul seperti cuti, lembur, reimbursement, dan lainnya.</p>
-			<button onclick={() => openCreateModal()}
+			<p class="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">Buat workflow approval untuk mengatur alur persetujuan setiap modul.</p>
+			<button onclick={() => toggleCreateForm()}
 				class="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1A56DB] text-white rounded-xl text-sm font-semibold hover:bg-[#1e40af] transition cursor-pointer">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 				Buat Workflow Pertama
 			</button>
 		</div>
 	{:else}
-		<!-- Entity Type Tabs -->
+		<!-- Entity Type Cards -->
 		{@const typesWithWorkflows = getEntityTypeCount()}
 		<div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 			{#each typesWithWorkflows as { type, count } (type)}
 				{@const workflows = getWorkflowsByType(type)}
 				<div class="bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-					<!-- Header -->
+					<!-- Card Header -->
 					<div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
 						<div class="flex items-center gap-3">
 							<div class="w-10 h-10 rounded-xl bg-gradient-to-br {ENTITY_COLORS[type] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white shadow-sm">
-								<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" d={ENTITY_ICONS[type] || 'M12 6v12m6-6H6'} />
-								</svg>
+								<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d={ENTITY_ICONS[type] || 'M12 6v12m6-6H6'} /></svg>
 							</div>
 							<div>
 								<h3 class="text-sm font-bold text-gray-900 dark:text-white">{ENTITY_LABELS[type] || type}</h3>
 								<p class="text-xs text-gray-500 dark:text-gray-400">{count} workflow</p>
 							</div>
 						</div>
-						<button onclick={() => openCreateModal(type)}
+						<button onclick={() => toggleCreateForm(type)}
 							class="p-1.5 rounded-lg text-gray-400 hover:text-[#1A56DB] hover:bg-blue-50 dark:hover:bg-blue-900/20 transition cursor-pointer"
 							title="Tambah workflow untuk {ENTITY_LABELS[type] || type}">
 							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 						</button>
 					</div>
 
-					<!-- Workflow cards -->
+					<!-- Workflow items -->
 					<div class="divide-y divide-gray-50 dark:divide-gray-700/30">
 						{#each workflows as wf (wf.id)}
 							<div class="transition-colors hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
@@ -494,7 +657,7 @@
 										<div class="min-w-0 flex-1">
 											<div class="flex items-center gap-2">
 												<p class="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-[#1A56DB] dark:group-hover:text-blue-400 transition-colors">{wf.name}</p>
-												<button onclick={(e) => { e.stopPropagation(); openEditModal(wf); }}
+												<button onclick={(e) => { e.stopPropagation(); toggleEdit(wf); }}
 													class="p-1 rounded text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
 													title="Edit workflow">
 													<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
@@ -513,37 +676,183 @@
 									</div>
 								</div>
 
-								<!-- Expanded steps -->
+								<!-- Expanded section -->
 								{#if isExpanded(wf.id)}
 									{@const detail = workflowDetails[wf.id]}
 									<div class="px-5 pb-4 space-y-2 border-t border-gray-50 dark:border-gray-700/30 pt-3" transition:slide={{ duration: 200 }}>
+										
+										<!-- ═══ INLINE EDIT WORKFLOW FORM ═══ -->
+										{#if editingWorkflowId === wf.id}
+											<div class="mb-4 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-200 dark:border-blue-800/50">
+												{#if editError}
+													<div class="mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300">{editError}</div>
+												{/if}
+												<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+													<div>
+														<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nama Workflow <span class="text-red-500">*</span></label>
+														<input type="text" bind:value={editForm.name}
+															class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+													</div>
+													<div>
+														<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Deskripsi</label>
+														<input type="text" bind:value={editForm.description}
+															class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+													</div>
+												</div>
+												<div class="flex items-center gap-2 justify-end">
+													<button onclick={() => editingWorkflowId = null} disabled={isEditing}
+														class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">Batal</button>
+													<button onclick={handleEdit} disabled={isEditing}
+														class="px-3 py-1.5 text-xs font-semibold bg-[#1A56DB] text-white rounded-lg hover:bg-[#1e40af] transition disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer">
+														{#if isEditing}
+															<svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+														{/if}
+														Simpan
+													</button>
+												</div>
+											</div>
+										{/if}
+
+										<!-- Steps list -->
 										{#if detail && detail.steps}
 											{#if detail.steps.length === 0}
 												<p class="text-xs text-gray-400 italic text-center py-3">Belum ada step approval. Tambahkan step pertama.</p>
 											{:else}
 												{#each detail.steps as step (step.id)}
-													<div class="flex items-center gap-3 px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50 group/step">
-														<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm">
-															{step.step_order}
+													{#if editingStepId === step.id}
+														<!-- ═══ INLINE EDIT STEP FORM ═══ -->
+														<div class="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800/50" transition:slide={{ duration: 200 }}>
+															{#if editStepError}
+																<div class="mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300">{editStepError}</div>
+															{/if}
+															<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+																<div>
+																	<label class="block text-[10px] font-medium text-gray-700 dark:text-gray-300 mb-1">Urutan</label>
+																	<input type="number" bind:value={editStepForm.step_order} min="1" max="10"
+																		class="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-1 focus:ring-blue-400/20 focus:border-blue-400 transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+																</div>
+																<div>
+																	<label class="block text-[10px] font-medium text-gray-700 dark:text-gray-300 mb-1">Tipe Approver</label>
+																	<select bind:value={editStepForm.approver_type}
+																		class="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-1 focus:ring-blue-400/20 focus:border-blue-400 transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+																		{#each Object.entries(APPROVER_LABELS) as [value, label] (value)}
+																			<option value={value}>{label}</option>
+																		{/each}
+																	</select>
+																</div>
+																{#if editStepForm.approver_type === 'specific_employee'}
+																<div class="sm:col-span-2">
+																	<label class="block text-[10px] font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Karyawan</label>
+																	<div class="relative">
+																		<div onclick={() => { showEmployeePicker = !showEmployeePicker; employeeSearch = ''; }}
+																			class="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white cursor-pointer flex items-center justify-between">
+																			{#if editStepForm.approver_employee_name}
+																				<span>{editStepForm.approver_employee_name}</span>
+																			{:else}
+																				<span class="text-gray-400">Pilih karyawan...</span>
+																			{/if}
+																			<svg class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+																		</div>
+																		{#if showEmployeePicker}
+																			<div class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-hidden flex flex-col">
+																				<div class="p-1.5 border-b border-gray-100 dark:border-gray-600">
+																					<input type="text" bind:value={employeeSearch}
+																						class="w-full px-2 py-1 text-[10px] border border-gray-200 dark:border-gray-500 rounded-md bg-gray-50 dark:bg-gray-600 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-400"
+																						placeholder="Cari nama..." />
+																				</div>
+																				<div class="overflow-y-auto flex-1">
+																					{#if filteredEmployees.length === 0}
+																						<p class="text-[10px] text-gray-400 text-center py-2">Tidak ada</p>
+																					{:else}
+																						{#each filteredEmployees as emp (emp.id)}
+																							<button onclick={() => {
+																								editStepForm.approver_employee_id = emp.id;
+																								editStepForm.approver_employee_name = emp.full_name;
+																								showEmployeePicker = false;
+																							}}
+																								class="w-full text-left px-2.5 py-1.5 text-[10px] hover:bg-blue-50 dark:hover:bg-blue-900/20 transition cursor-pointer flex items-center justify-between">
+																								<span class="font-medium text-gray-900 dark:text-white">{emp.full_name}</span>
+																								{#if emp.department_name}
+																									<span class="text-gray-400">{emp.department_name}</span>
+																								{/if}
+																							</button>
+																						{/each}
+																					{/if}
+																				</div>
+																			</div>
+																		{/if}
+																	</div>
+																</div>
+																{/if}
+																<div>
+																	<label class="block text-[10px] font-medium text-gray-700 dark:text-gray-300 mb-1">Eskalasi (jam)</label>
+																	<input type="number" bind:value={editStepForm.escalation_hours} min="0" max="168"
+																		class="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-1 focus:ring-blue-400/20 focus:border-blue-400 transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+																</div>
+																<div>
+																	<label class="block text-[10px] font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mode</label>
+																	<div class="flex items-center gap-1.5">
+																		<label class="flex items-center gap-1 px-2 py-1.5 border rounded-md cursor-pointer text-[10px] {editStepForm.step_mode === 'single' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}">
+																			<input type="radio" name="edit_step_mode" value="single" bind:group={editStepForm.step_mode} class="sr-only" />
+																			Single
+																		</label>
+																		<label class="flex items-center gap-1 px-2 py-1.5 border rounded-md cursor-pointer text-[10px] {editStepForm.step_mode === 'any' ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}">
+																			<input type="radio" name="edit_step_mode" value="any" bind:group={editStepForm.step_mode} class="sr-only" />
+																			Parallel
+																		</label>
+																	</div>
+																</div>
+															</div>
+															<div class="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-blue-200/50 dark:border-blue-800/30">
+																<button onclick={() => { editingStepId = null; editingStepWfId = null; }} disabled={isEditingStep}
+																	class="px-2.5 py-1 text-[10px] font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">Batal</button>
+																<button onclick={handleUpdateStep} disabled={isEditingStep}
+																	class="px-2.5 py-1 text-[10px] font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer">
+																	{#if isEditingStep}
+																		<svg class="w-2.5 h-2.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+																	{/if}
+																	Simpan
+																</button>
+															</div>
 														</div>
-														<div class="flex-1 min-w-0">
-															<p class="text-sm font-medium text-gray-900 dark:text-white">{getApproverLabel(step.approver_type)}</p>
+													{:else}
+													<div class="flex items-center gap-3 px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50 group/step">
+														<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm">{step.step_order}</div>
+													<div class="flex-1 min-w-0">
+														<p class="text-sm font-medium text-gray-900 dark:text-white">
+															{getApproverLabel(step.approver_type)}
+															{#if step.approver_type === 'specific_employee' && step.approver_employee_name}
+																<span class="text-xs text-amber-600 dark:text-amber-400 font-normal">— {step.approver_employee_name}</span>
+															{/if}
+														</p>
+														<div class="flex items-center gap-2 mt-0.5">
+															{#if step.step_mode === 'any'}
+																<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+																	<svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 20.25a7.125 7.125 0 0 1 14.25 0" /></svg>
+																	Parallel
+																</span>
+															{/if}
 															{#if step.condition_field}
-																<p class="text-[10px] text-gray-500 dark:text-gray-400">
-																	Syarat: {step.condition_field} {step.condition_operator} {step.condition_value}
-																</p>
+																<span class="text-[10px] text-gray-500 dark:text-gray-400">Syarat: {step.condition_field} {step.condition_operator} {step.condition_value}</span>
 															{/if}
 														</div>
-														{#if step.escalation_hours}
-															<span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Eskalasi {step.escalation_hours}jam</span>
-														{/if}
-								<button onclick={() => handleDeleteStep(step.id, wf.id)} disabled={deletingStep === step.id}
-									class="p-1 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover/step:opacity-100 transition-all cursor-pointer disabled:opacity-30"
-									title="Hapus step">
-															<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-														</button>
 													</div>
-												{/each}
+													{#if step.escalation_hours}
+														<span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Eskalasi {step.escalation_hours}j</span>
+													{/if}
+													<button onclick={() => toggleEditStep(step, wf.id)}
+														class="p-1 rounded text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 opacity-0 group-hover/step:opacity-100 transition-all cursor-pointer"
+														title="Edit step">
+														<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
+													</button>
+													<button onclick={() => handleDeleteStep(step.id, wf.id)} disabled={deletingStep === step.id}
+														class="p-1 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover/step:opacity-100 transition-all cursor-pointer disabled:opacity-30"
+														title="Hapus step">
+														<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+													</button>
+												</div>
+											{/if}
+											{/each}
 											{/if}
 										{:else}
 											<div class="flex items-center justify-center py-3">
@@ -551,18 +860,144 @@
 											</div>
 										{/if}
 
-										<!-- Add step button & delete workflow -->
+										<!-- ═══ INLINE ADD STEP FORM ═══ -->
+										{#if addingStepForId === wf.id}
+											<div class="mt-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/50" transition:slide={{ duration: 200 }}>
+												{#if stepError}
+													<div class="mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300">{stepError}</div>
+												{/if}
+												<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+													<div>
+														<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Urutan Step</label>
+														<input type="number" bind:value={stepForm.step_order} min="1" max="10"
+															class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+													</div>
+											<div>
+												<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Tipe Approver <span class="text-red-500">*</span></label>
+												<select bind:value={stepForm.approver_type}
+													class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+													{#each Object.entries(APPROVER_LABELS) as [value, label] (value)}
+														<option value={value}>{label}</option>
+													{/each}
+												</select>
+											</div>
+
+											<!-- Employee picker for specific_employee -->
+											{#if stepForm.approver_type === 'specific_employee'}
+											<div class="sm:col-span-2">
+												<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Karyawan <span class="text-red-500">*</span></label>
+												<div class="relative">
+													<div onclick={() => { showEmployeePicker = !showEmployeePicker; employeeSearch = ''; }}
+														class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white cursor-pointer flex items-center justify-between">
+														{#if stepForm.approver_employee_name}
+															<span>{stepForm.approver_employee_name}</span>
+														{:else}
+															<span class="text-gray-400">Cari & pilih karyawan...</span>
+														{/if}
+														<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+													</div>
+													
+													{#if showEmployeePicker}
+														<div class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-hidden flex flex-col">
+															<div class="p-2 border-b border-gray-100 dark:border-gray-600">
+																<input type="text" bind:value={employeeSearch}
+																	class="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-500 rounded-md bg-gray-50 dark:bg-gray-600 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-amber-400"
+																	placeholder="Cari nama karyawan..." />
+															</div>
+															<div class="overflow-y-auto flex-1">
+																{#if filteredEmployees.length === 0}
+																	<p class="text-xs text-gray-400 text-center py-3">Tidak ada karyawan ditemukan</p>
+																{:else}
+																	{#each filteredEmployees as emp (emp.id)}
+																		<button onclick={() => {
+																			stepForm.approver_employee_id = emp.id;
+																			stepForm.approver_employee_name = emp.full_name;
+																			showEmployeePicker = false;
+																		}}
+																			class="w-full text-left px-3 py-2 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 transition cursor-pointer flex items-center justify-between {stepForm.approver_employee_id === emp.id ? 'bg-amber-50 dark:bg-amber-900/20' : ''}">
+																			<span class="font-medium text-gray-900 dark:text-white">{emp.full_name}</span>
+																			{#if emp.department_name}
+																				<span class="text-gray-400">{emp.department_name}</span>
+																			{/if}
+																		</button>
+																	{/each}
+																{/if}
+															</div>
+														</div>
+													{/if}
+												</div>
+											</div>
+											{/if}
+
+											<div>
+												<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Eskalasi (jam)</label>
+														<input type="number" bind:value={stepForm.escalation_hours} min="0" max="168"
+															class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+															placeholder="0" />
+													</div>
+													<div>
+														<label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Mode</label>
+														<div class="flex items-center gap-2">
+															<label class="flex items-center gap-1.5 px-3 py-2 border rounded-lg cursor-pointer transition-all text-xs {stepForm.step_mode === 'single' ? 'border-[#1A56DB] bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'}">
+																<input type="radio" name="step_mode_{wf.id}" value="single" bind:group={stepForm.step_mode} class="sr-only" />
+																<div class="w-3 h-3 rounded-full border-2 flex items-center justify-center {stepForm.step_mode === 'single' ? 'border-[#1A56DB]' : 'border-gray-300 dark:border-gray-500'}">
+																	{#if stepForm.step_mode === 'single'}<div class="w-1.5 h-1.5 rounded-full bg-[#1A56DB]"></div>{/if}
+																</div>
+																Single
+															</label>
+															<label class="flex items-center gap-1.5 px-3 py-2 border rounded-lg cursor-pointer transition-all text-xs {stepForm.step_mode === 'any' ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'}">
+																<input type="radio" name="step_mode_{wf.id}" value="any" bind:group={stepForm.step_mode} class="sr-only" />
+																<div class="w-3 h-3 rounded-full border-2 flex items-center justify-center {stepForm.step_mode === 'any' ? 'border-amber-400' : 'border-gray-300 dark:border-gray-500'}">
+																	{#if stepForm.step_mode === 'any'}<div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div>{/if}
+																</div>
+																Parallel
+															</label>
+														</div>
+													</div>
+												</div>
+												<div class="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-amber-200/50 dark:border-amber-800/30">
+													<button onclick={() => addingStepForId = null} disabled={isAddingStep}
+														class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">Batal</button>
+													<button onclick={handleAddStep} disabled={isAddingStep}
+														class="px-3 py-1.5 text-xs font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer">
+														{#if isAddingStep}
+															<svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+														{/if}
+														Tambah Step
+													</button>
+												</div>
+											</div>
+										{/if}
+
+										<!-- Action buttons -->
 										<div class="flex items-center justify-between pt-2">
-											<button onclick={() => openAddStepModal(wf.id, wf.name)}
-												class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition cursor-pointer">
+											<button onclick={() => toggleAddStep(wf.id)}
+												class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition cursor-pointer">
 												<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-												Tambah Step
+												{addingStepForId === wf.id ? 'Tutup' : 'Tambah Step'}
 											</button>
-											<button onclick={() => openDeleteModal(wf.id, wf.name)}
-												class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition cursor-pointer">
-												<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
-												Hapus Workflow
-											</button>
+
+											<!-- ═══ INLINE DELETE CONFIRMATION ═══ -->
+											{#if confirmingDeleteId === wf.id}
+												<div class="flex items-center gap-2 animate-in fade-in">
+													<span class="text-[10px] text-red-600 dark:text-red-400 font-medium">Yakin hapus workflow ini?</span>
+													<button onclick={() => confirmingDeleteId = null} disabled={isDeleting}
+														class="px-2.5 py-1 text-[10px] font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition cursor-pointer">Batal</button>
+													<button onclick={handleDeleteWorkflow} disabled={isDeleting}
+														class="px-2.5 py-1 text-[10px] font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer">
+														{#if isDeleting}
+															<svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+														{/if}
+														Ya, Hapus
+													</button>
+												</div>
+											{:else}
+												<button onclick={() => toggleDeleteConfirm(wf.id)}
+													class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition cursor-pointer">
+													<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+													Hapus Workflow
+												</button>
+											{/if}
 										</div>
 									</div>
 								{/if}
@@ -574,196 +1009,3 @@
 		</div>
 	{/if}
 </div>
-
-<!-- Create Workflow Modal -->
-<AnimatedPresence show={showCreateModal} type="scale" duration={200}>
-	<div onclick={() => { if (!isCreating) showCreateModal = false; }} onkeydown={(e) => { if (e.key === 'Escape') showCreateModal = false; }}
-		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Buat workflow baru" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
-			<div class="px-6 py-6">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
-					<svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-				</div>
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-white text-center mb-5">Buat Workflow Baru</h3>
-
-				{#if createError}
-					<div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2.5 text-sm text-red-700 dark:text-red-300">{createError}</div>
-				{/if}
-
-				<div class="space-y-4">
-					<div>
-						<label for="wf-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nama Workflow <span class="text-red-500">*</span></label>
-						<input id="wf-name" type="text" bind:value={createForm.name}
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400"
-							placeholder="Contoh: Workflow Cuti Tahunan" />
-					</div>
-					<div>
-						<label for="wf-entity" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipe Module <span class="text-red-500">*</span></label>
-						<select id="wf-entity" bind:value={createForm.entity_type}
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-							{#each ENTITY_ORDER as type (type)}
-								<option value={type}>{ENTITY_LABELS[type]}</option>
-							{/each}
-						</select>
-					</div>
-					<div>
-						<label for="wf-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Deskripsi</label>
-						<textarea id="wf-desc" bind:value={createForm.description} rows="2"
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 resize-none"
-							placeholder="Deskripsi workflow (opsional)"></textarea>
-					</div>
-				</div>
-
-				<div class="flex items-center justify-center gap-3 mt-6">
-					<button onclick={() => showCreateModal = false} disabled={isCreating}
-						class="px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer">Batal</button>
-					<button onclick={handleCreate} disabled={isCreating}
-						class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
-						{#if isCreating}
-							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-							Menyimpan...
-						{:else}
-							Buat Workflow
-						{/if}
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-</AnimatedPresence>
-
-<!-- Edit Workflow Modal -->
-<AnimatedPresence show={showEditModal} type="scale" duration={200}>
-	<div onclick={() => { if (!isEditing) showEditModal = false; }} onkeydown={(e) => { if (e.key === 'Escape') showEditModal = false; }}
-		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Edit workflow" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
-			<div class="px-6 py-6">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
-					<svg class="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
-				</div>
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-white text-center mb-5">Edit Workflow</h3>
-
-				{#if editError}
-					<div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2.5 text-sm text-red-700 dark:text-red-300">{editError}</div>
-				{/if}
-
-				<div class="space-y-4">
-					<div>
-						<label for="edit-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nama Workflow <span class="text-red-500">*</span></label>
-						<input id="edit-name" type="text" bind:value={editForm.name}
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400" />
-					</div>
-					<div>
-						<label for="edit-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Deskripsi</label>
-						<textarea id="edit-desc" bind:value={editForm.description} rows="2"
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 resize-none"
-							placeholder="Deskripsi workflow (opsional)"></textarea>
-					</div>
-				</div>
-
-				<div class="flex items-center justify-center gap-3 mt-6">
-					<button onclick={() => showEditModal = false} disabled={isEditing}
-						class="px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer">Batal</button>
-					<button onclick={handleEdit} disabled={isEditing}
-						class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
-						{#if isEditing}
-							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-							Menyimpan...
-						{:else}
-							Simpan Perubahan
-						{/if}
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-</AnimatedPresence>
-
-<!-- Add Step Modal -->
-<AnimatedPresence show={showAddStepModal} type="scale" duration={200}>
-	<div onclick={() => { if (!isAddingStep) showAddStepModal = false; }} onkeydown={(e) => { if (e.key === 'Escape') showAddStepModal = false; }}
-		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Tambah step workflow" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
-			<div class="px-6 py-6">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
-					<svg class="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15M12 4.5l-3 3m3-3l3 3" /></svg>
-				</div>
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-white text-center mb-1">Tambah Step Approval</h3>
-				<p class="text-sm text-gray-500 dark:text-gray-400 text-center mb-5">Untuk: <strong class="text-gray-700 dark:text-gray-300">{addStepWorkflowName}</strong></p>
-
-				{#if stepError}
-					<div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2.5 text-sm text-red-700 dark:text-red-300">{stepError}</div>
-				{/if}
-
-				<div class="space-y-4">
-					<div>
-						<label for="step-order" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Urutan Step</label>
-						<input id="step-order" type="number" bind:value={stepForm.step_order} min="1" max="10"
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-					</div>
-					<div>
-						<label for="step-approver" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipe Approver <span class="text-red-500">*</span></label>
-						<select id="step-approver" bind:value={stepForm.approver_type}
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-							{#each Object.entries(APPROVER_LABELS) as [value, label] (value)}
-								<option value={value}>{label}</option>
-							{/each}
-						</select>
-					</div>
-					<div>
-						<label for="step-escalation" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Eskalasi (jam)</label>
-						<input id="step-escalation" type="number" bind:value={stepForm.escalation_hours} min="0" max="168"
-							class="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/20 focus:border-[#1A56DB] transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-							placeholder="0 = tidak ada eskalasi" />
-					</div>
-				</div>
-
-				<div class="flex items-center justify-center gap-3 mt-6">
-					<button onclick={() => showAddStepModal = false} disabled={isAddingStep}
-						class="px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer">Batal</button>
-					<button onclick={handleAddStep} disabled={isAddingStep}
-						class="px-5 py-2.5 bg-[#1A56DB] text-white rounded-lg text-sm font-semibold hover:bg-[#1e40af] transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
-						{#if isAddingStep}
-							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-							Menyimpan...
-						{:else}
-							Tambah Step
-						{/if}
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-</AnimatedPresence>
-
-<!-- Delete Confirmation Modal -->
-<AnimatedPresence show={showDeleteModal} type="scale" duration={200}>
-	<div onclick={() => { if (!isDeleting) showDeleteModal = false; }} onkeydown={(e) => { if (e.key === 'Escape') showDeleteModal = false; }}
-		role="presentation" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-		<div onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true" aria-label="Hapus workflow" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
-			<div class="px-6 py-6 text-center">
-				<div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
-					<svg class="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
-				</div>
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Hapus Workflow</h3>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Apakah Anda yakin ingin menghapus workflow:</p>
-				<p class="text-sm font-bold text-gray-900 dark:text-white mb-4">"{deleteTarget?.name}"</p>
-				<p class="text-xs text-red-600 dark:text-red-400 mb-5">Tindakan ini tidak dapat dibatalkan. Semua step workflow akan ikut terhapus.</p>
-
-				<div class="flex items-center justify-center gap-3">
-					<button onclick={() => { showDeleteModal = false; deleteTarget = null; }} disabled={isDeleting}
-						class="px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer">Batal</button>
-					<button onclick={handleDeleteWorkflow} disabled={isDeleting}
-						class="px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer">
-						{#if isDeleting}
-							<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-							Menghapus...
-						{:else}
-							Ya, Hapus
-						{/if}
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-</AnimatedPresence>

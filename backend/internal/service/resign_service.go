@@ -36,7 +36,7 @@ func (s *ResignService) Create(ctx context.Context, employeeID string, req *mode
 
 	// Initiate approval workflow if configured
 	wfSvc := NewApprovalWorkflowService()
-	_, wfErr := wfSvc.ResolveWorkflowForRequest(ctx, "resign", r.ID.String(), employeeID, 0)
+	_, wfErr := wfSvc.ResolveWorkflowForRequest(ctx, "resign", r.ID.String(), employeeID)
 	if wfErr != nil {
 		// If no workflow, auto-approve (HR processes it directly)
 	}
